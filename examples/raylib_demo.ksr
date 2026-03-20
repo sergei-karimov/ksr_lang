@@ -1,0 +1,87 @@
+// KSR Raylib Demo — draws primitives at 1920×1080
+// Run: ksr examples/raylib_demo.ksr
+//
+// Member names are camelCase in KSR; the compiler auto-PascalCases them
+// for C#, so  initWindow → InitWindow,  Color.red → Color.Red, etc.
+
+use Raylib_cs
+
+fun main() {
+    Raylib.initWindow(1920, 1080, "KSR — Raylib Primitives Demo")
+    Raylib.setTargetFPS(60)
+
+    while (!Raylib.windowShouldClose()) {
+        Raylib.beginDrawing()
+        Raylib.clearBackground(Color.rayWhite)
+
+        // ── Title ─────────────────────────────────────────────────────────────
+        Raylib.drawText("KSR Language  —  Raylib Primitives Demo", 50, 30, 48, Color.darkGray)
+        Raylib.drawText("Press [ESC] to quit", 50, 95, 24, Color.gray)
+
+        // ── Horizontal divider ────────────────────────────────────────────────
+        Raylib.drawRectangle(50, 140, 1820, 4, Color.darkGray)
+
+        // ── Filled circles (row 1) ────────────────────────────────────────────
+        Raylib.drawText("Circles", 50, 175, 28, Color.darkGray)
+        Raylib.drawCircle(200,  320, 100, Color.red)
+        Raylib.drawCircle(470,  320, 100, Color.orange)
+        Raylib.drawCircle(740,  320, 100, Color.yellow)
+        Raylib.drawCircle(1010, 320, 100, Color.lime)
+        Raylib.drawCircle(1280, 320, 100, Color.skyBlue)
+        Raylib.drawCircle(1550, 320, 100, Color.blue)
+        Raylib.drawCircle(1820, 320, 100, Color.violet)
+
+        // ── Circle outlines ───────────────────────────────────────────────────
+        Raylib.drawCircleLines(200,  320, 110, Color.maroon)
+        Raylib.drawCircleLines(470,  320, 110, Color.darkBrown)
+        Raylib.drawCircleLines(740,  320, 110, Color.gold)
+        Raylib.drawCircleLines(1010, 320, 110, Color.darkGreen)
+        Raylib.drawCircleLines(1280, 320, 110, Color.darkBlue)
+        Raylib.drawCircleLines(1550, 320, 110, Color.darkBlue)
+        Raylib.drawCircleLines(1820, 320, 110, Color.purple)
+
+        // ── Filled rectangles (row 2) ─────────────────────────────────────────
+        Raylib.drawText("Rectangles", 50, 470, 28, Color.darkGray)
+        Raylib.drawRectangle(50,   510, 240, 140, Color.red)
+        Raylib.drawRectangle(320,  510, 240, 140, Color.orange)
+        Raylib.drawRectangle(590,  510, 240, 140, Color.yellow)
+        Raylib.drawRectangle(860,  510, 240, 140, Color.lime)
+        Raylib.drawRectangle(1130, 510, 240, 140, Color.skyBlue)
+        Raylib.drawRectangle(1400, 510, 240, 140, Color.blue)
+        Raylib.drawRectangle(1670, 510, 240, 140, Color.violet)
+
+        // ── Rectangle outlines ────────────────────────────────────────────────
+        Raylib.drawRectangleLines(50,   510, 240, 140, Color.maroon)
+        Raylib.drawRectangleLines(320,  510, 240, 140, Color.darkBrown)
+        Raylib.drawRectangleLines(590,  510, 240, 140, Color.gold)
+        Raylib.drawRectangleLines(860,  510, 240, 140, Color.darkGreen)
+        Raylib.drawRectangleLines(1130, 510, 240, 140, Color.darkBlue)
+        Raylib.drawRectangleLines(1400, 510, 240, 140, Color.darkBlue)
+        Raylib.drawRectangleLines(1670, 510, 240, 140, Color.purple)
+
+        // ── Lines (row 3) ─────────────────────────────────────────────────────
+        Raylib.drawText("Lines", 50, 690, 28, Color.darkGray)
+        Raylib.drawLine(50,  730, 1870, 730, Color.red)
+        Raylib.drawLine(50,  760, 1870, 760, Color.orange)
+        Raylib.drawLine(50,  790, 1870, 790, Color.yellow)
+        Raylib.drawLine(50,  820, 1870, 820, Color.lime)
+        Raylib.drawLine(50,  850, 1870, 850, Color.skyBlue)
+        Raylib.drawLine(50,  880, 1870, 880, Color.blue)
+        Raylib.drawLine(50,  910, 1870, 910, Color.violet)
+
+        // ── Diagonal cross lines ──────────────────────────────────────────────
+        Raylib.drawLine(50,  940, 1870, 1030, Color.maroon)
+        Raylib.drawLine(1870, 940, 50, 1030, Color.darkGreen)
+
+        // ── Footer ────────────────────────────────────────────────────────────
+        Raylib.drawRectangle(0, 1040, 1920, 40, Color.darkGray)
+        Raylib.drawText("KSR → C# → Roslyn → Raylib-cs  |  1920 × 1080", 50, 1048, 24, Color.rayWhite)
+
+        // ── FPS counter ───────────────────────────────────────────────────────
+        Raylib.drawFPS(1820, 10)
+
+        Raylib.endDrawing()
+    }
+
+    Raylib.closeWindow()
+}

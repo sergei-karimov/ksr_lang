@@ -1,0 +1,84 @@
+// ── data types (Rust-like: sealed value types, no inheritance) ────────────────
+
+data class Point(x: Int, y: Int)
+data class User(name: String, age: Int)
+
+// ── extension functions (behaviour added outside the type) ────────────────────
+
+fun Point.distanceSq(other: Point): Int {
+    val dx = this.x - other.x
+    val dy = this.y - other.y
+    return dx * dx + dy * dy
+}
+
+fun User.greet() {
+    println("Hello, ${this.name}! You are ${this.age} years old.")
+}
+
+fun User.isAdult(): Bool {
+    return this.age >= 18
+}
+
+// ── functions ─────────────────────────────────────────────────────────────────
+
+fun sumRange(from: Int, to: Int): Int {
+    var sum = 0
+    for (i in from..to) {
+        sum += i
+    }
+    return sum
+}
+
+fun countdown(start: Int) {
+    var i = start
+    while (i > 0) {
+        println("  ${i}...")
+        i -= 1
+    }
+    println("  Go!")
+}
+
+fun classify(n: Int): String {
+    if (n < 0) {
+        return "negative"
+    } else {
+        if (n == 0) {
+            return "zero"
+        } else {
+            return "positive"
+        }
+    }
+}
+
+fun main() {
+    // val = immutable binding
+    val u = User("Sergei", 51)
+    u.greet()
+    println("Adult: ${u.isAdult()}")
+
+    // arithmetic + string template
+    val p1 = Point(0, 0)
+    val p2 = Point(3, 4)
+    val dsq = p1.distanceSq(p2)
+    println("Squared distance: ${dsq}")
+
+    // for-range loop + arithmetic
+    val total = sumRange(1, 10)
+    println("Sum 1..10 = ${total}")
+
+    // while loop + compound assignment
+    println("Countdown:")
+    countdown(3)
+
+    // if / else + comparison
+    println(classify(-5))
+    println(classify(0))
+    println(classify(7))
+
+    // building a string in a for loop
+    var line = ""
+    for (i in 1..5) {
+        line = line + "${i} "
+    }
+    println("Numbers: ${line}")
+}

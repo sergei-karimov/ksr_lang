@@ -1,0 +1,45 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <AssemblyName>ksr</AssemblyName>
+    <RootNamespace>KSR</RootNamespace>
+    <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
+    <Optimize>false</Optimize>
+  </PropertyGroup>
+
+  <!-- ── Standalone publish settings ──────────────────────────────────────── -->
+  <!--
+    Framework-dependent single-file (default):
+      dotnet publish -c Release -r win-x64 -p:PublishSingleFile=true
+
+    Fully self-contained (no runtime required, ~80 MB):
+      dotnet publish -c Release -r win-x64 -p:PublishSingleFile=true -p:SelfContained=true
+      NOTE: self-contained mode requires .NET 8 to also be installed for the
+            embedded Roslyn compiler to locate framework reference assemblies.
+            Framework-dependent is recommended for developer tools.
+  -->
+  <PropertyGroup Condition="'$(PublishSingleFile)' == 'true'">
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <DebugType>embedded</DebugType>
+    <Optimize>true</Optimize>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.8.0" />
+    <PackageReference Include="Raylib-cs" Version="6.0.0" />
+  </ItemGroup>
+
+  <!-- Copy examples folder next to the output binary so ksr.exe can find them -->
+  <ItemGroup>
+    <None Update="examples\**\*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </None>
+  </ItemGroup>
+
+</Project>

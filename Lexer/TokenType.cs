@@ -1,0 +1,76 @@
+namespace KSR.Lexer;
+
+public enum TokenType
+{
+    // ── Literals ──────────────────────────────────────────────────────────────
+    IntLiteral,
+    StringLiteral,
+    StringTemplate,     // string containing ${...} interpolations
+
+    // ── Keywords ──────────────────────────────────────────────────────────────
+    Use,        // use  (namespace import)
+    Val,        // val  (immutable binding)
+    Var,        // var  (mutable binding)
+    Fun,        // fun
+    Data,       // data
+    Class,      // class
+    If,         // if
+    Else,       // else
+    Return,     // return
+    While,      // while
+    For,        // for
+    In,         // in
+    This,       // this (receiver in extension functions)
+    True,       // true
+    False,      // false
+    Null,       // null
+
+    // ── Identifier ────────────────────────────────────────────────────────────
+    Identifier,
+
+    // ── Assignment ────────────────────────────────────────────────────────────
+    Equals,     // =
+    PlusEq,     // +=
+    MinusEq,    // -=
+
+    // ── Arithmetic ────────────────────────────────────────────────────────────
+    Plus,       // +
+    Minus,      // -
+    Star,       // *
+    Slash,      // /
+    Percent,    // %
+
+    // ── Comparison ────────────────────────────────────────────────────────────
+    EqEq,       // ==
+    BangEq,     // !=
+    Lt,         // <
+    Gt,         // >
+    LtEq,       // <=
+    GtEq,       // >=
+
+    // ── Logical ───────────────────────────────────────────────────────────────
+    Bang,       // !
+    AmpAmp,     // &&
+    PipePipe,   // ||
+
+    // ── Null-safety ───────────────────────────────────────────────────────────
+    Question,   // ?   (nullable type marker)
+    SafeCall,   // ?.  (safe member access)
+    Elvis,      // ?:  (null coalescing)
+
+    // ── Range ─────────────────────────────────────────────────────────────────
+    DotDot,     // ..  (inclusive range)
+    DotDotLt,   // ..< (exclusive range)
+
+    // ── Punctuation ───────────────────────────────────────────────────────────
+    Colon,      // :
+    Comma,      // ,
+    Dot,        // .
+    LParen,     // (
+    RParen,     // )
+    LBrace,     // {
+    RBrace,     // }
+
+    // ── Meta ──────────────────────────────────────────────────────────────────
+    Eof
+}
