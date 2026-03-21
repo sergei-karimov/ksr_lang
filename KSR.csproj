@@ -8,8 +8,15 @@
     <LangVersion>latest</LangVersion>
     <AssemblyName>ksr</AssemblyName>
     <RootNamespace>KSR</RootNamespace>
-    <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
-    <Optimize>false</Optimize>
+
+    <!-- Publish as a dotnet global tool: dotnet tool install -g KSR -->
+    <PackageId>KSR</PackageId>
+    <Version>0.1.0</Version>
+    <Authors>KSR Authors</Authors>
+    <Description>KSR language — CLI tool (ksr run, ksr new, ksr add)</Description>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>ksr</ToolCommandName>
+    <PackageTags>ksr;language;cli;tool</PackageTags>
   </PropertyGroup>
 
   <!-- ── Standalone publish settings ──────────────────────────────────────── -->
@@ -17,11 +24,8 @@
     Framework-dependent single-file (default):
       dotnet publish -c Release -r win-x64 -p:PublishSingleFile=true
 
-    Fully self-contained (no runtime required, ~80 MB):
-      dotnet publish -c Release -r win-x64 -p:PublishSingleFile=true -p:SelfContained=true
-      NOTE: self-contained mode requires .NET 8 to also be installed for the
-            embedded Roslyn compiler to locate framework reference assemblies.
-            Framework-dependent is recommended for developer tools.
+    Fully self-contained (~80 MB):
+      dotnet publish -c Release -r win-x64 -p:SelfContained=true -o ./publish
   -->
   <PropertyGroup Condition="'$(PublishSingleFile)' == 'true'">
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
@@ -29,9 +33,30 @@
     <Optimize>true</Optimize>
   </PropertyGroup>
 
+  <!-- ── Exclude files owned by KSR.Core from this project ──────────────── -->
+  <!--
+    KSR.Core.csproj lives at the root and explicitly claims these files.
+    The default glob here would double-include them without these removes.
+  -->
   <ItemGroup>
+    <Compile Remove="Lexer\**\*.cs" />
+    <Compile Remove="Parser\**\*.cs" />
+    <Compile Remove="AST\**\*.cs" />
+    <Compile Remove="CodeGen\CodeGenerator.cs" />
+    <!-- sdk/ and all obj/ sub-dirs are built separately; exclude them entirely -->
+    <Compile Remove="sdk\**\*.cs" />
+    <Compile Remove="obj\**\*.cs" />
+  </ItemGroup>
+
+  <!-- ── Project and package references ────────────────────────────────── -->
+  <ItemGroup>
+    <ProjectReference Include="KSR.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Roslyn is needed only by Compiler.cs (in-memory run) in the CLI -->
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.8.0" />
-    <PackageReference Include="Raylib-cs" Version="6.0.0" />
+    <!-- Raylib-cs removed: it is a user-space dependency, not a CLI dependency -->
   </ItemGroup>
 
   <!-- Copy examples folder next to the output binary so ksr.exe can find them -->

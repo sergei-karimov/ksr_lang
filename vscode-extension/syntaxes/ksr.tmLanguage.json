@@ -1,0 +1,195 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "KSR",
+  "scopeName": "source.ksr",
+  "patterns": [
+    { "include": "#comment" },
+    { "include": "#string" },
+    { "include": "#use-decl" },
+    { "include": "#data-class-decl" },
+    { "include": "#ext-function-decl" },
+    { "include": "#function-decl" },
+    { "include": "#keyword" },
+    { "include": "#builtin-type" },
+    { "include": "#constant" },
+    { "include": "#number" },
+    { "include": "#brackets" },
+    { "include": "#operator" }
+  ],
+
+  "repository": {
+
+    "comment": {
+      "name": "comment.line.double-slash.ksr",
+      "match": "//.*$"
+    },
+
+    "string": {
+      "name": "string.quoted.double.ksr",
+      "begin": "\"",
+      "end": "\"",
+      "beginCaptures": { "0": { "name": "punctuation.definition.string.begin.ksr" } },
+      "endCaptures":   { "0": { "name": "punctuation.definition.string.end.ksr"   } },
+      "patterns": [
+        { "include": "#string-escape" },
+        { "include": "#string-interpolation" }
+      ]
+    },
+
+    "string-escape": {
+      "name": "constant.character.escape.ksr",
+      "match": "\\\\[nrt\"\\\\$]"
+    },
+
+    "string-interpolation": {
+      "name": "meta.interpolation.ksr",
+      "begin": "\\$\\{",
+      "end": "\\}",
+      "beginCaptures": {
+        "0": { "name": "punctuation.definition.template-expression.begin.ksr" }
+      },
+      "endCaptures": {
+        "0": { "name": "punctuation.definition.template-expression.end.ksr" }
+      },
+      "patterns": [
+        { "include": "#comment" },
+        { "include": "#keyword" },
+        { "include": "#builtin-type" },
+        { "include": "#constant" },
+        { "include": "#number" },
+        { "include": "#operator" }
+      ]
+    },
+
+    "use-decl": {
+      "comment": "use Raylib_cs  /  use System.Collections.Generic",
+      "match": "\\b(use)\\s+([A-Za-z_][A-Za-z0-9_.]*)\\b",
+      "captures": {
+        "1": { "name": "keyword.control.import.ksr" },
+        "2": { "name": "entity.name.namespace.ksr"  }
+      }
+    },
+
+    "data-class-decl": {
+      "comment": "data class Point(…)",
+      "match": "\\b(data)\\s+(class)\\s+([A-Za-z_][A-Za-z0-9_]*)\\b",
+      "captures": {
+        "1": { "name": "keyword.declaration.ksr"   },
+        "2": { "name": "keyword.declaration.ksr"   },
+        "3": { "name": "entity.name.type.class.ksr" }
+      }
+    },
+
+    "ext-function-decl": {
+      "comment": "fun ReceiverType.methodName(…)  — receiver starts with uppercase",
+      "match": "\\b(fun)\\s+([A-Z][A-Za-z0-9_]*)(\\.)([A-Za-z_][A-Za-z0-9_]*)\\b",
+      "captures": {
+        "1": { "name": "keyword.declaration.ksr"    },
+        "2": { "name": "entity.name.type.ksr"       },
+        "3": { "name": "punctuation.accessor.ksr"   },
+        "4": { "name": "entity.name.function.ksr"   }
+      }
+    },
+
+    "function-decl": {
+      "comment": "fun functionName(…)",
+      "match": "\\b(fun)\\s+([A-Za-z_][A-Za-z0-9_]*)\\b",
+      "captures": {
+        "1": { "name": "keyword.declaration.ksr"  },
+        "2": { "name": "entity.name.function.ksr" }
+      }
+    },
+
+    "keyword": {
+      "patterns": [
+        {
+          "name": "keyword.control.ksr",
+          "match": "\\b(if|else|while|for|return)\\b"
+        },
+        {
+          "name": "keyword.declaration.ksr",
+          "match": "\\b(val|var|fun|data|class|use|new)\\b"
+        },
+        {
+          "name": "keyword.operator.ksr",
+          "match": "\\b(in)\\b"
+        },
+        {
+          "name": "variable.language.this.ksr",
+          "match": "\\b(this)\\b"
+        }
+      ]
+    },
+
+    "builtin-type": {
+      "name": "support.type.ksr",
+      "match": "\\b(Int|String|Bool|Double|Float|Long|Unit)\\b"
+    },
+
+    "constant": {
+      "patterns": [
+        {
+          "name": "constant.language.boolean.ksr",
+          "match": "\\b(true|false)\\b"
+        },
+        {
+          "name": "constant.language.null.ksr",
+          "match": "\\bnull\\b"
+        }
+      ]
+    },
+
+    "number": {
+      "name": "constant.numeric.integer.ksr",
+      "match": "\\b[0-9]+\\b"
+    },
+
+    "brackets": {
+      "patterns": [
+        { "name": "punctuation.section.brackets.begin.ksr", "match": "\\[" },
+        { "name": "punctuation.section.brackets.end.ksr",   "match": "\\]" }
+      ]
+    },
+
+    "operator": {
+      "patterns": [
+        {
+          "name": "keyword.operator.null-safety.ksr",
+          "match": "\\?\\.|\\.\\?|\\?:"
+        },
+        {
+          "name": "keyword.operator.range.ksr",
+          "match": "\\.\\.<|\\.\\."
+        },
+        {
+          "name": "keyword.operator.comparison.ksr",
+          "match": "==|!=|<=|>="
+        },
+        {
+          "name": "keyword.operator.logical.ksr",
+          "match": "&&|\\|\\||!"
+        },
+        {
+          "name": "keyword.operator.arrow.ksr",
+          "match": "->"
+        },
+        {
+          "name": "keyword.operator.assignment.ksr",
+          "match": "\\+=|-=|="
+        },
+        {
+          "name": "keyword.operator.arithmetic.ksr",
+          "match": "[+\\-*/%]"
+        },
+        {
+          "name": "keyword.operator.comparison.ksr",
+          "match": "[<>]"
+        },
+        {
+          "name": "keyword.operator.nullable.ksr",
+          "match": "\\?"
+        }
+      ]
+    }
+  }
+}

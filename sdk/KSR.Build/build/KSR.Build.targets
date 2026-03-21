@@ -1,0 +1,44 @@
+<Project>
+
+  <!--
+    Auto-imported by NuGet into every project that references KSR.Build.
+    Declares the KsrCompileTask and wires it into the build pipeline.
+  -->
+
+  <!-- ── Task declaration ──────────────────────────────────────────────────── -->
+
+  <!--
+    AssemblyFile points to the task DLL inside the NuGet package cache.
+    $(MSBuildThisFileDirectory) resolves to the build\ folder in the package,
+    so build\net8.0\KSR.Build.dll is the compiled task assembly.
+  -->
+  <UsingTask
+    TaskName="KSR.Build.KsrCompileTask"
+    AssemblyFile="$(MSBuildThisFileDirectory)net8.0\KSR.Build.dll" />
+
+  <!-- ── Main compile target ───────────────────────────────────────────────── -->
+
+  <Target Name="KsrCompile"
+          BeforeTargets="CoreCompile"
+          Inputs="@(KsrCompile)"
+          Outputs="$(KsrGeneratedFile)"
+          Condition="'@(KsrCompile)' != ''">
+
+    <KsrCompileTask
+      KsrCompile="@(KsrCompile)"
+      OutputFile="$(KsrGeneratedFile)" />
+
+    <!-- Tell Roslyn to compile the generated file -->
+    <ItemGroup>
+      <Compile Include="$(KsrGeneratedFile)" />
+    </ItemGroup>
+
+  </Target>
+
+  <!-- ── Clean target ──────────────────────────────────────────────────────── -->
+
+  <Target Name="CleanKsrGenerated" AfterTargets="CoreClean">
+    <Delete Files="$(KsrGeneratedFile)" Condition="Exists('$(KsrGeneratedFile)')" />
+  </Target>
+
+</Project>

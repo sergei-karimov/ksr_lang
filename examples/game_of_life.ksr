@@ -1,0 +1,179 @@
+// Conway's Game of Life — KSR + Raylib-cs
+//
+// Controls:
+//   SPACE   pause / resume
+//   R       randomise grid
+//   +/-     speed up / slow down
+//
+// Grid: 160 × 90 cells × 12 px = 1920 × 1080
+//
+// KSR features used here:
+//   new Bool[size]   zero-initialised array allocation
+//   Bool[]           array type annotation in fun signatures
+//   cells[i]         index read
+//   cells[i] = v     index write
+
+use Raylib_cs
+
+// ── grid dimensions ───────────────────────────────────────────────────────────
+
+fun cols(): Int  { return 160 }
+fun rows(): Int  { return 90  }
+fun cell(): Int  { return 12  }
+
+// ── helpers ───────────────────────────────────────────────────────────────────
+
+fun idx(x: Int, y: Int): Int {
+    return y * cols() + x
+}
+
+// Wrapping neighbor count (toroidal grid)
+fun countNeighbors(cells: Bool[], x: Int, y: Int): Int {
+    val W = cols()
+    val H = rows()
+    var count = 0
+    var dy = -1
+    while (dy <= 1) {
+        var dx = -1
+        while (dx <= 1) {
+            if (dx != 0 || dy != 0) {
+                val nx = (x + dx + W) % W
+                val ny = (y + dy + H) % H
+                if (cells[ny * W + nx]) {
+                    count += 1
+                }
+            }
+            dx += 1
+        }
+        dy += 1
+    }
+    return count
+}
+
+// ── life rules ────────────────────────────────────────────────────────────────
+
+fun step(cells: Bool[]): Bool[] {
+    val W    = cols()
+    val H    = rows()
+    val next = new Bool[W * H]
+    var y = 0
+    while (y < H) {
+        var x = 0
+        while (x < W) {
+            val n     = countNeighbors(cells, x, y)
+            val alive = cells[y * W + x]
+            next[y * W + x] = (alive && (n == 2 || n == 3)) || (!alive && n == 3)
+            x += 1
+        }
+        y += 1
+    }
+    return next
+}
+
+// ── random seed ───────────────────────────────────────────────────────────────
+
+fun randomGrid(): Bool[] {
+    val W     = cols()
+    val H     = rows()
+    val cells = new Bool[W * H]
+    var i = 0
+    while (i < W * H) {
+        cells[i] = Random.shared.next(100) < 30    // ~30% fill
+        i += 1
+    }
+    return cells
+}
+
+// ── drawing ───────────────────────────────────────────────────────────────────
+
+fun drawCells(cells: Bool[]) {
+    val W = cols()
+    val H = rows()
+    val C = cell()
+    var y = 0
+    while (y < H) {
+        var x = 0
+        while (x < W) {
+            if (cells[y * W + x]) {
+                Raylib.drawRectangle(x * C, y * C, C - 1, C - 1, Color.lime)
+            }
+            x += 1
+        }
+        y += 1
+    }
+}
+
+fun drawHud(cells: Bool[], paused: Bool, gen: Int) {
+    val barH  = 28
+    val winW  = cols() * cell()
+    val winH  = rows() * cell()
+    val alive = cells.count { it }
+
+    Raylib.drawRectangle(0, winH - barH, winW, barH, Color.darkGray)
+    Raylib.drawText("SPACE pause  R reset  +/- speed", 10, winH - barH + 5, 18, Color.lightGray)
+
+    if (paused) {
+        Raylib.drawText("PAUSED", winW - 390, winH - barH + 5, 18, Color.yellow)
+    }
+
+    Raylib.drawText("Alive:", winW - 310, winH - barH + 5, 18, Color.lightGray)
+    Raylib.drawText(alive.toString(), winW - 260, winH - barH + 5, 18, Color.lime)
+    Raylib.drawText("Gen:", winW - 185, winH - barH + 5, 18, Color.lightGray)
+    Raylib.drawText(gen.toString(), winW - 145, winH - barH + 5, 18, Color.white)
+    Raylib.drawFPS(winW - 80, winH - barH + 5)
+}
+
+// ── entry point ───────────────────────────────────────────────────────────────
+
+fun main() {
+    val W = cols()
+    val H = rows()
+    val C = cell()
+
+    Raylib.initWindow(W * C, H * C, "Game of Life — KSR")
+    // Raylib.setTargetFPS(15)
+
+    var cells  = randomGrid()
+    var paused = false
+    var gen    = 0
+    var speed  = 15
+
+    while (!Raylib.windowShouldClose()) {
+
+        // ── input ─────────────────────────────────────────────────────────────
+        if (Raylib.isKeyPressed(KeyboardKey.space)) {
+            paused = !paused
+        }
+        if (Raylib.isKeyPressed(KeyboardKey.r)) {
+            cells  = randomGrid()
+            gen    = 0
+        }
+        if (Raylib.isKeyPressed(KeyboardKey.kpAdd) || Raylib.isKeyPressed(KeyboardKey.equal)) {
+            if (speed < 60) {
+                speed += 5
+            }
+            Raylib.setTargetFPS(speed)
+        }
+        if (Raylib.isKeyPressed(KeyboardKey.kpSubtract) || Raylib.isKeyPressed(KeyboardKey.minus)) {
+            if (speed > 5) {
+                speed -= 5
+            }
+            Raylib.setTargetFPS(speed)
+        }
+
+        // ── update ────────────────────────────────────────────────────────────
+        if (!paused) {
+            cells = step(cells)
+            gen  += 1
+        }
+
+        // ── draw ──────────────────────────────────────────────────────────────
+        Raylib.beginDrawing()
+        Raylib.clearBackground(Color.black)
+        drawCells(cells)
+        drawHud(cells, paused, gen)
+        Raylib.endDrawing()
+    }
+
+    Raylib.closeWindow()
+}

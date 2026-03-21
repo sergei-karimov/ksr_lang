@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <AssemblyName>KSR.Core</AssemblyName>
+    <RootNamespace>KSR</RootNamespace>
+
+    <!-- NuGet package metadata -->
+    <PackageId>KSR.Core</PackageId>
+    <Version>0.1.0</Version>
+    <Authors>KSR Authors</Authors>
+    <Description>KSR language compiler library — Lexer, Parser, AST and C# code generator.</Description>
+    <PackageTags>ksr;language;compiler</PackageTags>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>1570;1591</NoWarn>
+
+    <!--
+      This project lives in the same directory as KSR.csproj and shares the
+      source tree.  Disable the default glob so only explicitly listed files
+      are compiled — the CLI project removes the same files from its own glob.
+    -->
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+
+  <!-- ── Compiler source files (no CLI / Roslyn runner code) ─────────────── -->
+  <ItemGroup>
+    <Compile Include="Lexer\**\*.cs" />
+    <Compile Include="Parser\**\*.cs" />
+    <Compile Include="AST\**\*.cs" />
+    <Compile Include="CodeGen\CodeGenerator.cs" />
+  </ItemGroup>
+
+</Project>

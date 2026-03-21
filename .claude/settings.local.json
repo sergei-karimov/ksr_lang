@@ -4,7 +4,13 @@
       "Bash(cd:*)",
       "Bash(dotnet restore:*)",
       "Bash(/mnt/c/Windows/System32/cmd.exe /c \"dotnet restore\")",
-      "Bash(/mnt/c/Windows/System32/cmd.exe /c \"dotnet build -c Release 2>&1\")"
+      "Bash(/mnt/c/Windows/System32/cmd.exe /c \"dotnet build -c Release 2>&1\")",
+      "Bash(/mnt/c/Windows/System32/cmd.exe /c \"dotnet build C:\\\\Users\\\\serge\\\\source\\\\repos\\\\ksr_lang\\\\KSR.Core.csproj -c Release 2>&1\")",
+      "Bash(/mnt/c/Windows/System32/cmd.exe /c \"dotnet build C:\\\\Users\\\\serge\\\\source\\\\repos\\\\ksr_lang\\\\KSR.csproj -c Release 2>&1\")",
+      "Bash(DOTNET=\"/mnt/c/Program Files/dotnet/dotnet.exe\" REPO=/mnt/c/Users/serge/source/repos/ksr_lang __NEW_LINE_4b31334e50593753__ \"$DOTNET\" pack sdk/KSR.Build/KSR.Build.csproj -c Release -o artifacts/ -v q)",
+      "Bash(grep -v \"/$\")",
+      "Bash(DOTNET=\"/mnt/c/Program Files/dotnet/dotnet.exe\" \"$DOTNET\" pack sdk/KSR.Build/KSR.Build.csproj -c Release -o artifacts/ -v q)",
+      "Bash(unzip -l artifacts/KSR.Build.0.1.0.nupkg)"
     ]
   }
 }

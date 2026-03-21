@@ -69,6 +69,9 @@ public record AssignStmt(string Name, Expr Value) : Stmt;
 /// <summary>x += expr  |  x -= expr</summary>
 public record CompoundAssignStmt(string Name, string Op, Expr Value) : Stmt;
 
+/// <summary>name[index] = expr  (indexed assignment)</summary>
+public record IndexAssignStmt(string Name, Expr Index, Expr Value) : Stmt;
+
 /// <summary>return expr?</summary>
 public record ReturnStmt(Expr? Value) : Stmt;
 
@@ -123,6 +126,26 @@ public record ElvisExpr(Expr Left, Expr Right) : Expr;
 
 /// <summary>Binary operation: +  -  *  /  %  ==  !=  &lt;  &gt;  &lt;=  &gt;=  &amp;&amp;  ||</summary>
 public record BinaryExpr(Expr Left, string Op, Expr Right) : Expr;
+
+/// <summary>target[index]</summary>
+public record IndexExpr(Expr Target, Expr Index) : Expr;
+
+/// <summary>new Bool[size]  →  new bool[size]</summary>
+public record NewArrayExpr(TypeRef ElementType, Expr Size) : Expr;
+
+/// <summary>
+/// Lambda literal.
+/// <list type="bullet">
+///   <item>{ it }        → (it =&gt; it)           — implicit "it" parameter</item>
+///   <item>{ x -&gt; expr } → (x =&gt; expr)          — single named parameter</item>
+///   <item>{ x, y -&gt; e } → ((x, y) =&gt; e)        — multiple named parameters</item>
+///   <item>{ -&gt; expr }   → (() =&gt; expr)          — zero parameters</item>
+/// </list>
+/// </summary>
+public record LambdaExpr(List<string> Params, Expr Body) : Expr;
+
+/// <summary>new Random()  →  new Random()   (for non-data-class types)</summary>
+public record NewObjectExpr(string TypeName, List<Expr> Arguments) : Expr;
 
 /// <summary>Unary operation: !  -</summary>
 public record UnaryExpr(string Op, Expr Operand) : Expr;

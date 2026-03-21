@@ -1,0 +1,8 @@
+// KSR library entry point
+// Add your data classes and functions here.
+
+data class Greeting(message: String)
+
+fun greet(name: String): String {
+    return "Hello, ${name}!"
+}

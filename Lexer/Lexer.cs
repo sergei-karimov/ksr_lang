@@ -22,6 +22,7 @@ public class Lexer
     private static readonly Dictionary<string, TokenType> Keywords = new()
     {
         ["use"]    = TokenType.Use,
+        ["new"]    = TokenType.New,
         ["val"]    = TokenType.Val,
         ["var"]    = TokenType.Var,
         ["fun"]    = TokenType.Fun,
@@ -101,7 +102,8 @@ public class Lexer
                                   : Tok(TokenType.Plus,          "+",  line, col),
 
             '-' => Current == '=' ? StepTok(TokenType.MinusEq,  "-=", line, col)
-                                  : Tok(TokenType.Minus,         "-",  line, col),
+                 : Current == '>' ? StepTok(TokenType.Arrow,    "->", line, col)
+                 :                  Tok(TokenType.Minus,         "-",  line, col),
 
             '!' => Current == '=' ? StepTok(TokenType.BangEq,   "!=", line, col)
                                   : Tok(TokenType.Bang,          "!",  line, col),
@@ -142,8 +144,10 @@ public class Lexer
             ',' => Tok(TokenType.Comma,   ",",  line, col),
             '(' => Tok(TokenType.LParen,  "(",  line, col),
             ')' => Tok(TokenType.RParen,  ")",  line, col),
-            '{' => Tok(TokenType.LBrace,  "{",  line, col),
-            '}' => Tok(TokenType.RBrace,  "}",  line, col),
+            '{' => Tok(TokenType.LBrace,    "{",  line, col),
+            '}' => Tok(TokenType.RBrace,    "}",  line, col),
+            '[' => Tok(TokenType.LBracket,  "[",  line, col),
+            ']' => Tok(TokenType.RBracket,  "]",  line, col),
 
             _ => throw new KsrLexException($"Unexpected character '{c}'", line, col)
         };

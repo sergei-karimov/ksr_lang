@@ -1,0 +1,12 @@
+<Project>
+  <!--
+    Two projects (KSR.csproj and KSR.Core.csproj) live in the same directory.
+    MSBuildProjectExtensionsPath must be set here — before Microsoft.Common.props
+    is imported — so that each project gets its own NuGet restore assets folder,
+    preventing them from overwriting each other's project.assets.json.
+  -->
+  <PropertyGroup>
+    <MSBuildProjectExtensionsPath>obj\$(MSBuildProjectName)\</MSBuildProjectExtensionsPath>
+    <BaseIntermediateOutputPath>obj\$(MSBuildProjectName)\</BaseIntermediateOutputPath>
+  </PropertyGroup>
+</Project>

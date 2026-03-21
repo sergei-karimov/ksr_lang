@@ -14,6 +14,7 @@ public enum TokenType
     Fun,        // fun
     Data,       // data
     Class,      // class
+    New,        // new
     If,         // if
     Else,       // else
     Return,     // return
@@ -32,6 +33,7 @@ public enum TokenType
     Equals,     // =
     PlusEq,     // +=
     MinusEq,    // -=
+    Arrow,      // ->  (lambda parameter separator)
 
     // ── Arithmetic ────────────────────────────────────────────────────────────
     Plus,       // +
@@ -70,6 +72,8 @@ public enum TokenType
     RParen,     // )
     LBrace,     // {
     RBrace,     // }
+    LBracket,   // [
+    RBracket,   // ]
 
     // ── Meta ──────────────────────────────────────────────────────────────────
     Eof

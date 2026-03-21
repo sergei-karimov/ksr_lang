@@ -1,55 +1,104 @@
+using System.Text.Json;
 using KSR.CodeGen;
 using KSR.Parser;
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  KSR — Kotlin-Style Runtime language
-//  Usage:
-//      dotnet run                       # runs the built-in demo
-//      dotnet run -- file.ksr           # compiles + runs a .ksr source file
-//      dotnet run -- file.ksr --debug   # also prints generated C#
+//
+//  USAGE
+//    ksr <file.ksr> [--debug]     compile and run a single .ksr file
+//    ksr check <file>             output JSON diagnostics (for editors)
+//
+//  PROJECT WORKFLOW  (standard .NET commands)
+//    dotnet new ksr-console -n MyApp
+//    dotnet add package Raylib-cs
+//    dotnet run / dotnet build / dotnet publish
 // ─────────────────────────────────────────────────────────────────────────────
 
-bool   debugMode = args.Contains("--debug");
-string source;
+bool debugMode = args.Contains("--debug");
+var  positional = args.Where(a => !a.StartsWith("--")).ToArray();
 
-if (args.Length > 0 && !args[0].StartsWith("--"))
-{
-    var path = args[0];
-    if (!File.Exists(path))
-    {
-        Console.Error.WriteLine($"ksr: file not found: {path}");
-        Environment.Exit(1);
-    }
-    source = File.ReadAllText(path);
-}
-else
+if (positional.Length == 0)
 {
     PrintHelp();
     Environment.Exit(0);
-    source = ""; // unreachable
 }
 
 try
 {
-    // ── Lex ──────────────────────────────────────────────────────────────────
-    var lexer  = new KSR.Lexer.Lexer(source);
-    var tokens = lexer.Tokenize();
+    switch (positional[0])
+    {
+        case "check":
+            CheckFile(positional.ElementAtOrDefault(1) ?? "");
+            break;
 
-    // ── Parse ─────────────────────────────────────────────────────────────────
-    var parser  = new Parser(tokens);
-    var program = parser.Parse();
-
-    // ── Generate C# ──────────────────────────────────────────────────────────
-    var codegen  = new CodeGenerator();
-    var csharpSrc = codegen.Generate(program);
-
-    // ── Compile & Run via Roslyn ─────────────────────────────────────────────
-    KsrCompiler.CompileAndRun(csharpSrc, debugMode);
+        default:
+        {
+            var path = positional[0];
+            if (!File.Exists(path))
+            {
+                Console.Error.WriteLine($"ksr: file not found: {path}");
+                PrintHelp();
+                Environment.Exit(1);
+            }
+            RunSingleFile(path, debugMode);
+            break;
+        }
+    }
 }
 catch (KSR.Lexer.KsrLexException   ex) { Fail(ex.Message); }
 catch (KsrParseException            ex) { Fail(ex.Message); }
 catch (KsrCompileException          ex) { Fail(ex.Message); }
 catch (Exception                    ex) { Fail($"Internal error: {ex}"); }
+
+// ── helpers ───────────────────────────────────────────────────────────────────
+
+static void CheckFile(string path)
+{
+    if (!File.Exists(path))
+    {
+        Console.WriteLine("[]");
+        return;
+    }
+
+    try
+    {
+        var source = File.ReadAllText(path);
+        var tokens = new KSR.Lexer.Lexer(source).Tokenize();
+        new KSR.Parser.Parser(tokens).Parse();
+        Console.WriteLine("[]");
+    }
+    catch (KSR.Lexer.KsrLexException ex)
+    {
+        Console.WriteLine(JsonSerializer.Serialize(new[]
+        {
+            new { message = ex.Message, line = ex.Line, col = ex.Col }
+        }));
+    }
+    catch (KsrParseException ex)
+    {
+        Console.WriteLine(JsonSerializer.Serialize(new[]
+        {
+            new { message = ex.Message, line = ex.Line, col = ex.Col }
+        }));
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine(JsonSerializer.Serialize(new[]
+        {
+            new { message = ex.Message, line = 1, col = 1 }
+        }));
+    }
+}
+
+static void RunSingleFile(string path, bool debugMode)
+{
+    var source    = File.ReadAllText(path);
+    var tokens    = new KSR.Lexer.Lexer(source).Tokenize();
+    var program   = new Parser(tokens).Parse();
+    var csharpSrc = new KSR.CodeGen.CodeGenerator().Generate(program);
+    KsrCompiler.CompileAndRun(csharpSrc, debugMode);
+}
 
 static void Fail(string msg)
 {
@@ -62,38 +111,36 @@ static void PrintHelp()
     Console.WriteLine("""
         KSR — Kotlin-Style Runtime language
 
-        USAGE
-          ksr <file.ksr> [--debug]
+        SINGLE-FILE MODE
+          ksr <file.ksr>               Compile and run a .ksr file
+          ksr <file.ksr> --debug       Also print the generated C# source
 
-        ARGUMENTS
-          file.ksr      Path to the KSR source file to compile and run
-          --debug       Print the generated C# before executing
+        EDITOR INTEGRATION
+          ksr check <file>             Output JSON diagnostics
 
-        EXAMPLES
-          ksr hello.ksr
-          ksr hello.ksr --debug
+        PROJECT WORKFLOW  (standard .NET)
+          dotnet new ksr-console -n MyApp
+          cd MyApp
+          dotnet add package Raylib-cs
+          dotnet run
+          dotnet build
+          dotnet publish
 
         LANGUAGE FEATURES
-          data class Point(x: Int, y: Int)       value type (no inheritance)
-
+          data class Point(x: Int, y: Int)       value type
           val x = 42                             immutable binding
           var n = 0                              mutable binding
-          n += 1                                 compound assignment
-
           fun add(a: Int, b: Int): Int { ... }   function
-          fun Point.len(): Int { ... }           extension function (this = receiver)
-
+          fun Point.len(): Int { ... }           extension function
+          use Raylib_cs                          namespace import
           "Hello, ${name}!"                      string template
-          if (x > 0) { ... } else { ... }        conditional
-          while (n < 10) { n += 1 }              while loop
-          for (i in 1..10) { ... }               inclusive range loop
-          for (i in 0..<10) { ... }              exclusive range loop
-          for (item in list) { ... }             collection loop
-
+          if / while / for (i in 1..10) { }      control flow
           user?.name ?: "default"                null-safe access + elvis
+          new Bool[size]                         array allocation
+          cells[i] = v                           array write
 
         TYPES
-          Int   String   Bool   Double   Float   Long
-          Append ? for nullable:  String?  User?
+          Int   String   Bool   Double   Float   Long   Unit
+          Append ? for nullable:  String?   User?
         """);
 }

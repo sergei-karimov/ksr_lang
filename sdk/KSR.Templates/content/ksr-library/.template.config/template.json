@@ -1,0 +1,28 @@
+{
+  "$schema": "http://json.schemastore.org/template",
+  "author": "KSR Authors",
+  "classifications": [ "KSR", "Library" ],
+  "identity": "KSR.Library",
+  "name": "KSR Class Library",
+  "shortName": "ksr-lib",
+  "description": "A KSR language class library.",
+  "tags": {
+    "language": "KSR",
+    "type": "project"
+  },
+  "sourceName": "MyLibrary",
+  "preferNameDirectory": true,
+  "symbols": {
+    "Framework": {
+      "type": "parameter",
+      "description": "The target framework for the project.",
+      "datatype": "choice",
+      "choices": [
+        { "choice": "net8.0", "description": ".NET 8" },
+        { "choice": "net9.0", "description": ".NET 9" }
+      ],
+      "defaultValue": "net8.0",
+      "replaces": "net8.0"
+    }
+  }
+}

@@ -8,7 +8,7 @@ use Raylib_cs
 
 fun main() {
     Raylib.initWindow(1920, 1080, "KSR — Raylib Primitives Demo")
-    Raylib.setTargetFPS(60)
+//    Raylib.setTargetFPS(60)
 
     while (!Raylib.windowShouldClose()) {
         Raylib.beginDrawing()

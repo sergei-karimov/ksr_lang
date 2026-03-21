@@ -1,0 +1,73 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <AssemblyName>KSR.Build</AssemblyName>
+    <RootNamespace>KSR.Build</RootNamespace>
+
+    <!-- NuGet metadata -->
+    <PackageId>KSR.Build</PackageId>
+    <Version>0.1.0</Version>
+    <Authors>KSR Authors</Authors>
+    <Description>MSBuild task package — compiles .ksr source files into C# during dotnet build.</Description>
+    <PackageTags>ksr;language;msbuild;task</PackageTags>
+
+    <!--
+      Place the DLL in build/net8.0/ so MSBuild can load the task.
+      "lib/" would make it a compile reference, which we do NOT want.
+    -->
+    <BuildOutputTargetFolder>build</BuildOutputTargetFolder>
+
+    <!--
+      Copy KSR.Core.dll next to KSR.Build.dll in the output folder so the
+      task assembly can resolve it at runtime without needing a separate
+      PackageReference in the user's project.
+    -->
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    <!-- MSBuild packages are build-time only; suppress known-vulnerability noise -->
+    <!-- NU5128: no lib/ folder expected for task packages -->
+    <NoWarn>NU1903;NU5128</NoWarn>
+
+    <!-- Suppress default content inclusion; we manage it explicitly -->
+    <NoDefaultExcludes>true</NoDefaultExcludes>
+  </PropertyGroup>
+
+  <!-- Reference the compiler library -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\KSR.Core.csproj" />
+  </ItemGroup>
+
+  <!-- MSBuild itself — provided at runtime, so PrivateAssets=all -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Build.Framework" Version="17.11.4" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.Build.Utilities.Core" Version="17.11.4" PrivateAssets="all" />
+  </ItemGroup>
+
+  <!--
+    Pack the auto-import props/targets into the NuGet package.
+    NuGet automatically imports build/<PackageId>.props and build/<PackageId>.targets
+    into every project that references this package.
+  -->
+  <ItemGroup>
+    <None Include="build\KSR.Build.props"   Pack="true" PackagePath="build\KSR.Build.props"   />
+    <None Include="build\KSR.Build.targets" Pack="true" PackagePath="build\KSR.Build.targets" />
+  </ItemGroup>
+
+  <!--
+    Bundle KSR.Core.dll alongside KSR.Build.dll in build/net8.0/ so the
+    MSBuild task can load it at runtime without any extra setup in the
+    user's project.
+  -->
+  <Target Name="IncludeKsrCoreInPack" BeforeTargets="_GetPackageFiles">
+    <ItemGroup>
+      <None Include="$(OutputPath)KSR.Core.dll"
+            Pack="true"
+            PackagePath="build/net8.0/KSR.Core.dll"
+            Visible="false" />
+    </ItemGroup>
+  </Target>
+
+</Project>

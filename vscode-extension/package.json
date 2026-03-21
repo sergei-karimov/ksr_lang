@@ -1,0 +1,58 @@
+{
+  "name": "ksr-lang",
+  "displayName": "KSR Language",
+  "description": "Syntax highlighting and error reporting for the KSR language",
+  "version": "0.1.0",
+  "publisher": "ksr",
+  "engines": { "vscode": "^1.80.0" },
+  "categories": ["Programming Languages"],
+  "activationEvents": [],
+  "main": "./out/extension.js",
+
+  "contributes": {
+    "languages": [
+      {
+        "id": "ksr",
+        "aliases": ["KSR", "ksr"],
+        "extensions": [".ksr"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "ksr",
+        "scopeName": "source.ksr",
+        "path": "./syntaxes/ksr.tmLanguage.json"
+      }
+    ],
+    "configuration": {
+      "title": "KSR",
+      "properties": {
+        "ksr.executablePath": {
+          "type": "string",
+          "default": "ksr",
+          "description": "Path to the ksr executable. Defaults to 'ksr' (must be on PATH)."
+        },
+        "ksr.enableDiagnostics": {
+          "type": "boolean",
+          "default": true,
+          "description": "Run ksr check on save and show errors in the Problems panel."
+        }
+      }
+    }
+  },
+
+  "scripts": {
+    "compile":          "tsc -p .",
+    "watch":            "tsc -watch -p .",
+    "vscode:prepublish": "npm run compile",
+    "package":          "vsce package"
+  },
+
+  "devDependencies": {
+    "@types/node":   "^20.0.0",
+    "@types/vscode": "^1.80.0",
+    "typescript":    "^5.3.0",
+    "@vscode/vsce":  "^2.24.0"
+  }
+}

@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+
+    <!-- NuGet metadata -->
+    <PackageId>KSR.Sdk</PackageId>
+    <Version>0.1.0</Version>
+    <Authors>KSR Authors</Authors>
+    <Description>MSBuild SDK for the KSR language — use Sdk="KSR.Sdk/0.1.0" in your .csproj.</Description>
+    <PackageTags>ksr;language;sdk;msbuild</PackageTags>
+
+    <!--
+      PackageType=MSBuildSdk tells NuGet/MSBuild that this package is an SDK.
+      The Sdk/ folder inside it is the SDK root.
+    -->
+    <PackageType>MSBuildSdk</PackageType>
+
+    <!-- No compiled output — this is metadata/props/targets only -->
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <NoDefaultExcludes>true</NoDefaultExcludes>
+    <NoWarn>NU5128</NoWarn>
+  </PropertyGroup>
+
+  <!-- Pack the Sdk props/targets into the package -->
+  <ItemGroup>
+    <None Include="Sdk\Sdk.props"   Pack="true" PackagePath="Sdk\Sdk.props"   />
+    <None Include="Sdk\Sdk.targets" Pack="true" PackagePath="Sdk\Sdk.targets" />
+  </ItemGroup>
+
+</Project>

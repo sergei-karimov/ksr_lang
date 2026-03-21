@@ -166,8 +166,17 @@ public class Parser
 
     private TypeRef ParseTypeRef()
     {
-        var name     = Expect(TokenType.Identifier).Value;
-        var nullable = Match(TokenType.Question);   // '?' but not ?. or ?:
+        var name = Expect(TokenType.Identifier).Value;
+
+        // Array type: Bool[]  Int[]  etc.
+        if (Check(TokenType.LBracket))
+        {
+            Consume(); // [
+            Expect(TokenType.RBracket); // ]
+            name += "[]";
+        }
+
+        var nullable = Match(TokenType.Question);
         return new TypeRef(name, nullable);
     }
 
@@ -192,13 +201,14 @@ public class Parser
         if (Check(TokenType.While))  return ParseWhileStmt();
         if (Check(TokenType.For))    return ParseForStmt();
 
-        // x = expr   or   x += expr / x -= expr
+        // x = expr  /  x += expr  /  x -= expr  /  x[idx] = expr
         if (Check(TokenType.Identifier))
         {
             var next = Peek().Type;
-            if (next == TokenType.Equals)   return ParseAssign();
+            if (next == TokenType.Equals)    return ParseAssign();
             if (next == TokenType.PlusEq ||
-                next == TokenType.MinusEq)  return ParseCompoundAssign();
+                next == TokenType.MinusEq)   return ParseCompoundAssign();
+            if (next == TokenType.LBracket)  return ParseIndexAssign();
         }
 
         return new ExprStmt(ParseExpr());
@@ -236,6 +246,16 @@ public class Parser
         var name = Consume().Value; // identifier
         var op   = Consume().Value; // += or -=
         return new CompoundAssignStmt(name, op, ParseExpr());
+    }
+
+    private IndexAssignStmt ParseIndexAssign()
+    {
+        var name = Consume().Value;          // identifier
+        Expect(TokenType.LBracket);
+        var index = ParseExpr();
+        Expect(TokenType.RBracket);
+        Expect(TokenType.Equals);
+        return new IndexAssignStmt(name, index, ParseExpr());
     }
 
     private ReturnStmt ParseReturnStmt()
@@ -416,15 +436,73 @@ public class Parser
                 var member = Expect(TokenType.Identifier).Value;
                 expr = new MemberAccessExpr(expr, member);
             }
+            else if (Check(TokenType.LBracket))
+            {
+                Consume(); // [
+                var index = ParseExpr();
+                Expect(TokenType.RBracket);
+                expr = new IndexExpr(expr, index);
+            }
             else if (Check(TokenType.SafeCall))
             {
                 Consume();
                 var member = Expect(TokenType.Identifier).Value;
                 expr = new SafeCallExpr(expr, member);
             }
+            // Trailing lambda: expr { ... }  or  expr.method { ... }
+            // Appended as the last argument to the preceding call.
+            else if (Check(TokenType.LBrace))
+            {
+                var lambda = ParseLambdaExpr();
+                // Wrap in a call if not already one, or append to existing call
+                expr = expr is CallExpr ce
+                    ? new CallExpr(ce.Callee, [..ce.Arguments, lambda])
+                    : new CallExpr(expr, [lambda]);
+            }
             else break;
         }
         return expr;
+    }
+
+    // ── lambda ────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Parses a lambda literal starting at <c>{</c>.
+    /// <code>
+    ///   { expr }           — implicit "it" parameter
+    ///   { x → expr }       — single named parameter
+    ///   { x, y → expr }    — multiple named parameters
+    ///   { → expr }         — zero parameters (e.g. for Func&lt;T&gt;)
+    /// </code>
+    /// </summary>
+    private LambdaExpr ParseLambdaExpr()
+    {
+        Expect(TokenType.LBrace);
+        var parms = new List<string>();
+
+        if (Check(TokenType.Arrow))
+        {
+            // { -> expr }  — zero parameters
+            Consume();
+        }
+        else if (Check(TokenType.Identifier) &&
+                 (Peek().Type == TokenType.Arrow || Peek().Type == TokenType.Comma))
+        {
+            // { x -> expr }  or  { x, y -> expr }
+            parms.Add(Consume().Value);
+            while (Match(TokenType.Comma))
+                parms.Add(Expect(TokenType.Identifier).Value);
+            Expect(TokenType.Arrow);
+        }
+        else
+        {
+            // { expr }  — implicit "it"
+            parms.Add("it");
+        }
+
+        var body = ParseExpr();
+        Expect(TokenType.RBrace);
+        return new LambdaExpr(parms, body);
     }
 
     private Expr ParsePrimary()
@@ -453,6 +531,38 @@ public class Parser
             case TokenType.Identifier:
                 Consume();
                 return new IdentifierExpr(tok.Value);
+
+            case TokenType.New:
+            {
+                Consume(); // new
+                var typeName = Expect(TokenType.Identifier).Value;
+                if (Check(TokenType.LBracket))
+                {
+                    // new Bool[size]  →  array creation
+                    Consume(); // [
+                    var size = ParseExpr();
+                    Expect(TokenType.RBracket);
+                    return new NewArrayExpr(new TypeRef(typeName, false), size);
+                }
+                else
+                {
+                    // new Random(args)  →  object creation
+                    Expect(TokenType.LParen);
+                    var args = new List<Expr>();
+                    if (!Check(TokenType.RParen))
+                    {
+                        args.Add(ParseExpr());
+                        while (Match(TokenType.Comma))
+                            args.Add(ParseExpr());
+                    }
+                    Expect(TokenType.RParen);
+                    return new NewObjectExpr(typeName, args);
+                }
+            }
+
+            // Lambda literal  { expr }  /  { x -> expr }  /  { x, y -> expr }  /  { -> expr }
+            case TokenType.LBrace:
+                return ParseLambdaExpr();
 
             case TokenType.LParen:
                 Consume();

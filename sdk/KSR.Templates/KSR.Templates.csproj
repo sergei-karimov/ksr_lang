@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+
+    <!-- NuGet metadata -->
+    <PackageId>KSR.Templates</PackageId>
+    <Version>0.1.0</Version>
+    <Authors>KSR Authors</Authors>
+    <Description>dotnet new templates for KSR language projects.</Description>
+    <PackageTags>ksr;language;template;dotnet-new</PackageTags>
+
+    <!-- Templates package — no compiled output -->
+    <PackageType>Template</PackageType>
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <ContentTargetFolders>content</ContentTargetFolders>
+    <NoDefaultExcludes>true</NoDefaultExcludes>
+    <NoWarn>NU5128</NoWarn>
+  </PropertyGroup>
+
+  <!-- Pack all template content -->
+  <ItemGroup>
+    <Content Include="content\**\*" />
+  </ItemGroup>
+
+</Project>

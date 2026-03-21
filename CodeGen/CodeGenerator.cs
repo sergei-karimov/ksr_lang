@@ -140,6 +140,10 @@ public class CodeGenerator
                 Line($"{cas.Name} {cas.Op} {EmitExpr(cas.Value)};");
                 break;
 
+            case IndexAssignStmt ias:
+                Line($"{ias.Name}[{EmitExpr(ias.Index)}] = {EmitExpr(ias.Value)};");
+                break;
+
             case ExprStmt es:
                 Line($"{EmitExpr(es.Expression)};");
                 break;
@@ -211,6 +215,17 @@ public class CodeGenerator
 
         IdentifierExpr id => id.Name,
 
+        IndexExpr    ie  => $"{EmitExpr(ie.Target)}[{EmitExpr(ie.Index)}]",
+        NewArrayExpr na  => $"new {MapType(na.ElementType)}[{EmitExpr(na.Size)}]",
+        NewObjectExpr no => $"new {no.TypeName}({string.Join(", ", no.Arguments.Select(EmitExpr))})",
+
+        LambdaExpr le when le.Params.Count == 0
+            => $"(() => {EmitExpr(le.Body)})",
+        LambdaExpr le when le.Params.Count == 1
+            => $"({le.Params[0]} => {EmitExpr(le.Body)})",
+        LambdaExpr le
+            => $"(({string.Join(", ", le.Params)}) => {EmitExpr(le.Body)})",
+
         BinaryExpr be  => $"({EmitExpr(be.Left)} {be.Op} {EmitExpr(be.Right)})",
         UnaryExpr  ue  => $"({ue.Op}{EmitExpr(ue.Operand)})",
 
@@ -271,6 +286,13 @@ public class CodeGenerator
 
     private static string MapType(TypeRef t)
     {
+        // Array types: Bool[] → bool[], Int[] → int[], etc.
+        if (t.Name.EndsWith("[]"))
+        {
+            var elem = MapType(new TypeRef(t.Name[..^2], false));
+            return t.Nullable ? $"{elem}[]?" : $"{elem}[]";
+        }
+
         var base_ = t.Name switch
         {
             "Int"    => "int",

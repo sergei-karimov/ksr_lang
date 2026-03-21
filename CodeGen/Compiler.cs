@@ -11,7 +11,10 @@ namespace KSR.CodeGen;
 /// </summary>
 public static class KsrCompiler
 {
-    public static void CompileAndRun(string csharpSource, bool debugMode = false)
+    public static void CompileAndRun(
+        string csharpSource,
+        bool debugMode = false,
+        IEnumerable<string>? extraReferencePaths = null)
     {
         if (debugMode)
         {
@@ -25,6 +28,14 @@ public static class KsrCompiler
 
         // ── 2. References ────────────────────────────────────────────────────
         var references = ResolveReferences(debugMode);
+
+        // Add package DLLs (from NuGet resolution)
+        if (extraReferencePaths is not null)
+        {
+            foreach (var path in extraReferencePaths)
+                if (File.Exists(path))
+                    references.Add(MetadataReference.CreateFromFile(path));
+        }
 
         // ── 3. Compile ───────────────────────────────────────────────────────
         var compilation = CSharpCompilation.Create(

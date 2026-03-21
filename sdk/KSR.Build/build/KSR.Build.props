@@ -1,0 +1,21 @@
+<Project>
+
+  <!--
+    Auto-imported by NuGet into every project that references KSR.Build.
+    Sets up the KsrCompile item group and the generated-file path.
+  -->
+
+  <PropertyGroup>
+    <!-- Path of the merged C# file that KsrCompileTask writes into obj/ -->
+    <KsrGeneratedFile>$(MSBuildProjectDirectory)\obj\$(MSBuildProjectName).ksr.g.cs</KsrGeneratedFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- All .ksr files in the project tree become KsrCompile items by default -->
+    <KsrCompile Include="**\*.ksr" />
+
+    <!-- Exclude any files the user has explicitly removed -->
+    <KsrCompile Remove="@(KsrCompileRemove)" />
+  </ItemGroup>
+
+</Project>
