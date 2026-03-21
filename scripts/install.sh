@@ -107,6 +107,8 @@ ok "Feed '$FEED_NAME' → $ARTIFACTS"
 
 # ── 4. Install ksr global tool ────────────────────────────────────────────────
 step "Installing ksr global tool"
+# Remove from NuGet cache so the fresh local build is always used
+rm -rf "$HOME/.nuget/packages/ksr/0.1.0" 2>/dev/null || true
 dotnet tool uninstall -g KSR 2>/dev/null || true
 dotnet tool install -g KSR --add-source "$ARTIFACTS" --version 0.1.0
 ok "ksr tool installed"
@@ -125,17 +127,33 @@ dotnet new uninstall KSR.Templates 2>/dev/null || true
 dotnet new install "$ARTIFACTS/KSR.Templates.0.1.0.nupkg"
 ok "KSR templates installed  (dotnet new ksr-console)"
 
-# ── 6. Install VS Code extension (optional) ──────────────────────────────────
+# ── 6. Build & install VS Code extension (optional) ─────────────────────────
 if [[ $SKIP_VSCODE -eq 0 ]]; then
+    VSIX_DIR="$REPO_ROOT/vscode-extension"
+    VSIX="$VSIX_DIR/ksr-lang-0.1.0.vsix"
+
+    # Build the .vsix from source if npm is available
+    if command -v npm &>/dev/null; then
+        step "Building VS Code extension"
+        pushd "$VSIX_DIR" >/dev/null
+        npm install --silent
+        npm run bundle -- --minify
+        npx vsce package --out ksr-lang-0.1.0.vsix --allow-missing-repository
+        popd >/dev/null
+        ok "VS Code extension built"
+    else
+        warn "npm not found — using pre-built .vsix (if present)"
+    fi
+
     step "Installing VS Code extension"
-    VSIX="$REPO_ROOT/vscode-extension/ksr-lang-0.1.0.vsix"
     if command -v code &>/dev/null && [[ -f "$VSIX" ]]; then
         code --install-extension "$VSIX"
         ok "VS Code extension installed"
     elif ! command -v code &>/dev/null; then
-        warn "VS Code ('code') not found on PATH — skipping extension"
+        warn "VS Code ('code') not found on PATH — skipping extension install"
+        warn "To install manually:  code --install-extension $VSIX"
     else
-        warn ".vsix not found at $VSIX — skipping extension"
+        warn ".vsix not found at $VSIX — skipping extension install"
     fi
 fi
 

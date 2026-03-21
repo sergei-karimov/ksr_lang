@@ -178,5 +178,17 @@ public record RangeExpr(Expr Start, Expr End, bool Inclusive) : Expr;
 /// <summary>List literal: [a, b, c]  →  new List&lt;T&gt; { a, b, c }</summary>
 public record ListLiteralExpr(List<Expr> Elements) : Expr;
 
+/// <summary>
+/// A single arm of a when expression: pattern -&gt; body
+/// Pattern == null means the else arm.
+/// </summary>
+public record WhenArm(Expr? Pattern, Expr Body);
+
+/// <summary>
+/// when (subject) { p1 -&gt; e1  p2 -&gt; e2  else -&gt; eN }
+/// when           { cond1 -&gt; e1  else -&gt; eN }   (subject-less / guard form)
+/// </summary>
+public record WhenExpr(Expr? Subject, List<WhenArm> Arms) : Expr;
+
 /// <summary>Map literal: ["k1": v1, "k2": v2]  →  new Dictionary&lt;K, V&gt; { ["k1"] = v1, … }</summary>
 public record MapLiteralExpr(List<(Expr Key, Expr Value)> Entries) : Expr;

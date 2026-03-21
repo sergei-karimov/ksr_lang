@@ -4,17 +4,25 @@
   "description": "Syntax highlighting and error reporting for the KSR language",
   "version": "0.1.0",
   "publisher": "ksr",
-  "engines": { "vscode": "^1.80.0" },
-  "categories": ["Programming Languages"],
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
   "activationEvents": [],
   "main": "./out/extension.js",
-
   "contributes": {
     "languages": [
       {
         "id": "ksr",
-        "aliases": ["KSR", "ksr"],
-        "extensions": [".ksr"],
+        "aliases": [
+          "KSR",
+          "ksr"
+        ],
+        "extensions": [
+          ".ksr"
+        ],
         "configuration": "./language-configuration.json"
       }
     ],
@@ -31,28 +39,26 @@
         "ksr.executablePath": {
           "type": "string",
           "default": "ksr",
-          "description": "Path to the ksr executable. Defaults to 'ksr' (must be on PATH)."
-        },
-        "ksr.enableDiagnostics": {
-          "type": "boolean",
-          "default": true,
-          "description": "Run ksr check on save and show errors in the Problems panel."
+          "description": "Path to the ksr executable used to start the Language Server. Defaults to 'ksr' (must be on PATH)."
         }
       }
     }
   },
-
   "scripts": {
-    "compile":          "tsc -p .",
-    "watch":            "tsc -watch -p .",
-    "vscode:prepublish": "npm run compile",
-    "package":          "vsce package"
+    "compile": "tsc -p .",
+    "bundle": "esbuild src/extension.ts --bundle --outfile=out/extension.js --external:vscode --format=cjs --platform=node",
+    "watch": "npm run bundle -- --watch",
+    "vscode:prepublish": "npm run bundle -- --minify",
+    "package": "vsce package"
   },
-
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  },
   "devDependencies": {
-    "@types/node":   "^20.0.0",
+    "@types/node": "^20.0.0",
     "@types/vscode": "^1.80.0",
-    "typescript":    "^5.3.0",
-    "@vscode/vsce":  "^2.24.0"
+    "@vscode/vsce": "^2.24.0",
+    "esbuild": "^0.27.4",
+    "typescript": "^5.3.0"
   }
 }

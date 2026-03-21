@@ -136,32 +136,52 @@ Write-Ok "Feed '$feedName' → $ArtifactsDir"
 # ── 4. Install ksr global tool ────────────────────────────────────────────────
 
 Write-Step "Installing ksr global tool"
-# Uninstall first in case a previous version is installed
-& dotnet tool uninstall -g KSR 2>$null | Out-Null
+# Remove from NuGet HTTP cache so the fresh local build is always used
+$cacheDir = Join-Path $env:USERPROFILE ".nuget\packages\ksr\0.1.0"
+if (Test-Path $cacheDir) { Remove-Item -Recurse -Force $cacheDir }
+# Uninstall first in case a previous version is installed (ignore errors)
+try { & dotnet tool uninstall -g KSR *>&1 | Out-Null } catch {}
 Invoke-Cmd dotnet @('tool', 'install', '-g', 'KSR', '--add-source', $ArtifactsDir, '--version', '0.1.0')
 Write-Ok "ksr tool installed"
 
 # ── 5. Install dotnet new templates ──────────────────────────────────────────
 
 Write-Step "Installing dotnet new templates"
-& dotnet new uninstall KSR.Templates 2>$null | Out-Null
+try { & dotnet new uninstall KSR.Templates *>&1 | Out-Null } catch {}
 $templatePkg = Join-Path $ArtifactsDir "KSR.Templates.0.1.0.nupkg"
 Invoke-Cmd dotnet @('new', 'install', $templatePkg)
 Write-Ok "KSR templates installed  (dotnet new ksr-console)"
 
-# ── 6. Install VS Code extension (optional) ──────────────────────────────────
+# ── 6. Build & install VS Code extension (optional) ─────────────────────────
 
 if (-not $SkipVsCode) {
+    $vsixDir  = Join-Path $RepoRoot "vscode-extension"
+    $vsix     = Join-Path $vsixDir  "ksr-lang-0.1.0.vsix"
+    $codeCmd  = Get-Command 'code' -ErrorAction SilentlyContinue
+    $npmCmd   = Get-Command 'npm'  -ErrorAction SilentlyContinue
+
+    # Build the .vsix from source if npm is available
+    if ($npmCmd) {
+        Write-Step "Building VS Code extension"
+        Push-Location $vsixDir
+        Invoke-Cmd npm @('install', '--silent')
+        Invoke-Cmd npm @('run', 'bundle', '--', '--minify')
+        Invoke-Cmd npx @('vsce', 'package', '--out', 'ksr-lang-0.1.0.vsix', '--allow-missing-repository')
+        Pop-Location
+        Write-Ok "VS Code extension built"
+    } else {
+        Write-Warn "npm not found - using pre-built .vsix (if present)"
+    }
+
     Write-Step "Installing VS Code extension"
-    $vsix = Join-Path $RepoRoot "vscode-extension\ksr-lang-0.1.0.vsix"
-    $codeCmd = Get-Command 'code' -ErrorAction SilentlyContinue
     if ($codeCmd -and (Test-Path $vsix)) {
         Invoke-Cmd code @('--install-extension', $vsix)
         Write-Ok "VS Code extension installed"
     } elseif (-not $codeCmd) {
-        Write-Warn "VS Code ('code') not found on PATH — skipping extension"
+        Write-Warn "VS Code not found on PATH - skipping extension install"
+        Write-Warn "To install manually:  code --install-extension $vsix"
     } else {
-        Write-Warn ".vsix not found at $vsix — skipping extension"
+        Write-Warn ".vsix not found at $vsix - skipping extension install"
     }
 }
 

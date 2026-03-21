@@ -2,8 +2,7 @@ using Xunit;
 
 namespace KSR.Tests;
 
-public class CodeGenTests
-{
+public class CodeGenTests {
     private static string Gen(string src) => KsrHelper.Generate(src);
     private static string Flat(string src) => KsrHelper.Flatten(Gen(src));
 
@@ -24,14 +23,13 @@ public class CodeGenTests
     // ── type mapping ──────────────────────────────────────────────────────────
 
     [Theory]
-    [InlineData("Int",    "int")]
+    [InlineData("Int", "int")]
     [InlineData("String", "string")]
-    [InlineData("Bool",   "bool")]
+    [InlineData("Bool", "bool")]
     [InlineData("Double", "double")]
-    [InlineData("Float",  "float")]
-    [InlineData("Long",   "long")]
-    public void TypeMapping_PrimitiveTypes(string ksrType, string csType)
-    {
+    [InlineData("Float", "float")]
+    [InlineData("Long", "long")]
+    public void TypeMapping_PrimitiveTypes(string ksrType, string csType) {
         var cs = Gen($"fun f(x: {ksrType}) {{ }}");
         Assert.Contains(csType, cs);
         Assert.DoesNotContain(ksrType + " ", cs); // original type not leaked
@@ -65,8 +63,7 @@ public class CodeGenTests
     // ── data classes ──────────────────────────────────────────────────────────
 
     [Fact]
-    public void DataClass_EmitsRecord()
-    {
+    public void DataClass_EmitsRecord() {
         var cs = Gen("data class Point(x: Int, y: Int)");
         Assert.Contains("record Point(", cs);
         Assert.Contains("int X", cs);
@@ -74,8 +71,7 @@ public class CodeGenTests
     }
 
     [Fact]
-    public void DataClass_PropertiesArePascalCase()
-    {
+    public void DataClass_PropertiesArePascalCase() {
         var cs = Gen("data class User(firstName: String)");
         Assert.Contains("string FirstName", cs);
     }
@@ -97,15 +93,13 @@ public class CodeGenTests
     // ── extension functions ───────────────────────────────────────────────────
 
     [Fact]
-    public void ExtFunction_EmitsStaticExtensionMethod()
-    {
+    public void ExtFunction_EmitsStaticExtensionMethod() {
         var cs = Gen("fun Point.len(): Int { return 0 }");
         Assert.Contains("public static int Len(this Point self", cs);
     }
 
     [Fact]
-    public void ExtFunction_ThisCompilesAsSelf()
-    {
+    public void ExtFunction_ThisCompilesAsSelf() {
         var cs = Gen("data class Point(x: Int)\nfun Point.getX(): Int { return this.x }");
         Assert.Contains("self.X", cs);
     }
@@ -147,22 +141,19 @@ public class CodeGenTests
         Assert.Contains("while ((i > 0))", Flat("fun f() { while (i > 0) { } }"));
 
     [Fact]
-    public void ForInStmt_InclusiveRange_EmitsForLoop()
-    {
+    public void ForInStmt_InclusiveRange_EmitsForLoop() {
         var flat = Flat("fun f() { for (i in 1..10) { } }");
         Assert.Contains("for (var i = 1; i <= 10; i++)", flat);
     }
 
     [Fact]
-    public void ForInStmt_ExclusiveRange_EmitsForLoop()
-    {
+    public void ForInStmt_ExclusiveRange_EmitsForLoop() {
         var flat = Flat("fun f() { for (i in 0..<n) { } }");
         Assert.Contains("for (var i = 0; i < n; i++)", flat);
     }
 
     [Fact]
-    public void ForInStmt_Collection_EmitsForeach()
-    {
+    public void ForInStmt_Collection_EmitsForeach() {
         var flat = Flat("fun f() { for (item in items) { } }");
         Assert.Contains("foreach (var item in items)", flat);
     }
@@ -174,8 +165,7 @@ public class CodeGenTests
         Assert.Contains("(a + b)", Flat("fun f(): Int { return a + b }"));
 
     [Fact]
-    public void MemberAccess_IsPascalCased()
-    {
+    public void MemberAccess_IsPascalCased() {
         var cs = Gen("fun f() { val n = user.firstName }");
         Assert.Contains(".FirstName", cs);
     }
@@ -200,8 +190,7 @@ public class CodeGenTests
             Flat("fun f() { println(\"Hello, ${name}!\") }"));
 
     [Fact]
-    public void StringTemplate_EscapesBraces()
-    {
+    public void StringTemplate_EscapesBraces() {
         // A string template with a literal '{' in the non-interpolated part must
         // have it doubled to {{ so it doesn't trigger C# interpolation syntax.
         var cs = Gen("fun f() { println(\"count: { ${x} }\") }");
@@ -227,8 +216,7 @@ public class CodeGenTests
             Flat("fun f() { val xs: List<Int> = [] }"));
 
     [Fact]
-    public void MapLiteral_NonEmpty_EmitsDictionary()
-    {
+    public void MapLiteral_NonEmpty_EmitsDictionary() {
         var flat = Flat("fun f() { val m = [\"a\": 1, \"b\": 2] }");
         Assert.Contains("new Dictionary<string, int>", flat);
         Assert.Contains("[\"a\"] = 1", flat);
@@ -257,30 +245,26 @@ public class CodeGenTests
     // ── #line directives ──────────────────────────────────────────────────────
 
     [Fact]
-    public void LineDirective_EmittedWhenSourceFileProvided()
-    {
+    public void LineDirective_EmittedWhenSourceFileProvided() {
         var cs = KsrHelper.Generate("fun f() { val x = 1 }", "test.ksr");
         Assert.Contains("#line", cs);
         Assert.Contains("test.ksr", cs);
     }
 
     [Fact]
-    public void LineDirective_NotEmittedWithoutSourceFile()
-    {
+    public void LineDirective_NotEmittedWithoutSourceFile() {
         var cs = KsrHelper.Generate("fun f() { val x = 1 }");
         Assert.DoesNotContain("#line", cs);
     }
 
     [Fact]
-    public void LineDirective_DefaultAtEndOfFunction()
-    {
+    public void LineDirective_DefaultAtEndOfFunction() {
         var cs = KsrHelper.Generate("fun f() { val x = 1 }", "test.ksr");
         Assert.Contains("#line default", cs);
     }
 
     [Fact]
-    public void LineDirective_ContainsCorrectLineNumber()
-    {
+    public void LineDirective_ContainsCorrectLineNumber() {
         var cs = KsrHelper.Generate("fun f() {\n    val x = 1\n}", "test.ksr");
         Assert.Contains("#line 2", cs);
     }
@@ -288,15 +272,13 @@ public class CodeGenTests
     // ── constructor calls ─────────────────────────────────────────────────────
 
     [Fact]
-    public void DataClassConstructor_EmitsNewKeyword()
-    {
+    public void DataClassConstructor_EmitsNewKeyword() {
         var cs = Gen("data class Point(x: Int, y: Int)\nfun f() { val p = Point(1, 2) }");
         Assert.Contains("new Point(", cs);
     }
 
     [Fact]
-    public void KnownDataClass_CallEmitsNew()
-    {
+    public void KnownDataClass_CallEmitsNew() {
         var flat = Flat("data class Vec(x: Int)\nfun f() { val v = Vec(0) }");
         Assert.Contains("new Vec(0)", flat);
     }

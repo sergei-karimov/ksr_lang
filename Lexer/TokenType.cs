@@ -28,6 +28,7 @@ public enum TokenType
     Null,       // null
     Interface,  // interface
     Implement,  // implement
+    When,       // when   (pattern-matching expression)
 
     // ── Identifier ────────────────────────────────────────────────────────────
     Identifier,

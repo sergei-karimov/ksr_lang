@@ -40,6 +40,7 @@ public class Lexer
         ["null"]      = TokenType.Null,
         ["interface"] = TokenType.Interface,
         ["implement"] = TokenType.Implement,
+        ["when"]      = TokenType.When,
     };
 
     public Lexer(string source) => _src = source;

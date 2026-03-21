@@ -8,6 +8,7 @@ using KSR.Parser;
 //  USAGE
 //    ksr <file.ksr> [--debug]     compile and run a single .ksr file
 //    ksr check <file>             output JSON diagnostics (for editors)
+//    ksr lsp                      start Language Server (JSON-RPC over stdio)
 //
 //  PROJECT WORKFLOW  (standard .NET commands)
 //    dotnet new ksr-console -n MyApp
@@ -30,6 +31,10 @@ try
     {
         case "check":
             CheckFile(positional.ElementAtOrDefault(1) ?? "");
+            break;
+
+        case "lsp":
+            KSR.LSP.LspServer.Run();
             break;
 
         default:
@@ -117,6 +122,7 @@ static void PrintHelp()
 
         EDITOR INTEGRATION
           ksr check <file>             Output JSON diagnostics
+          ksr lsp                      Language Server (JSON-RPC/stdio)
 
         PROJECT WORKFLOW  (standard .NET)
           dotnet new ksr-console -n MyApp
@@ -135,6 +141,7 @@ static void PrintHelp()
           use Raylib_cs                          namespace import
           "Hello, ${name}!"                      string template
           if / while / for (i in 1..10) { }      control flow
+          when (x) { 1 -> "one"  else -> "?" }  pattern matching
           user?.name ?: "default"                null-safe access + elvis
           new Bool[size]                         array allocation
           cells[i] = v                           array write

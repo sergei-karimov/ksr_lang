@@ -104,15 +104,15 @@
       "patterns": [
         {
           "name": "keyword.control.ksr",
-          "match": "\\b(if|else|while|for|return)\\b"
+          "match": "\\b(if|else|while|for|return|when)\\b"
         },
         {
           "name": "keyword.declaration.ksr",
-          "match": "\\b(val|var|fun|data|class|use|new)\\b"
+          "match": "\\b(val|var|fun|data|class|use|new|interface|implement)\\b"
         },
         {
           "name": "keyword.operator.ksr",
-          "match": "\\b(in)\\b"
+          "match": "\\b(in|for)\\b"
         },
         {
           "name": "variable.language.this.ksr",

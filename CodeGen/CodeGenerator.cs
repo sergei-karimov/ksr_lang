@@ -14,8 +14,8 @@ namespace KSR.CodeGen;
 /// </summary>
 public class CodeGenerator
 {
-    private readonly StringBuilder _out    = new();
-    private int                    _indent = 0;
+    private readonly StringBuilder _out = new();
+    private int _indent = 0;
 
     // Names declared as data classes — used to emit 'new Foo(…)'
     private readonly HashSet<string> _dataClasses = new();
@@ -36,7 +36,7 @@ public class CodeGenerator
         // First pass: collect data class names, interface names, and group impl blocks by type
         foreach (var d in program.Declarations)
         {
-            if (d is DataClassDecl dc)  _dataClasses.Add(dc.Name);
+            if (d is DataClassDecl dc) _dataClasses.Add(dc.Name);
             if (d is InterfaceDecl ifd) _interfaces.Add(ifd.Name);
             if (d is ImplBlock ib)
             {
@@ -69,7 +69,7 @@ public class CodeGenerator
 
         foreach (var d in program.Declarations)
         {
-            if (d is FunctionDecl fd)     EmitFunction(fd);
+            if (d is FunctionDecl fd) EmitFunction(fd);
             if (d is ExtFunctionDecl efd) EmitExtFunction(efd);
         }
 
@@ -88,7 +88,7 @@ public class CodeGenerator
         _indent++;
         foreach (var m in id.Methods)
         {
-            var ret   = m.ReturnType is null ? "void" : MapType(m.ReturnType);
+            var ret = m.ReturnType is null ? "void" : MapType(m.ReturnType);
             var parms = string.Join(", ", m.Parameters.Select(p => $"{MapType(p.Type)} {p.Name}"));
             Line($"{ret} {Pascal(m.Name)}({parms});");
         }
@@ -125,7 +125,7 @@ public class CodeGenerator
 
     private void EmitRecordMethod(FunctionDecl fd)
     {
-        var ret   = fd.ReturnType is null ? "void" : MapType(fd.ReturnType);
+        var ret = fd.ReturnType is null ? "void" : MapType(fd.ReturnType);
         var parms = string.Join(", ",
             fd.Parameters.Select(p => $"{MapType(p.Type)} {p.Name}"));
 
@@ -141,9 +141,9 @@ public class CodeGenerator
 
     private void EmitFunction(FunctionDecl fd)
     {
-        var ret    = fd.ReturnType is null ? "void" : MapType(fd.ReturnType);
+        var ret = fd.ReturnType is null ? "void" : MapType(fd.ReturnType);
         var method = fd.Name == "main" ? "Main" : fd.Name;
-        var parms  = string.Join(", ",
+        var parms = string.Join(", ",
             fd.Parameters.Select(p => $"{MapType(p.Type)} {p.Name}"));
 
         Line($"static {ret} {method}({parms})");
@@ -162,8 +162,8 @@ public class CodeGenerator
     /// </summary>
     private void EmitExtFunction(ExtFunctionDecl efd)
     {
-        var ret      = efd.ReturnType is null ? "void" : MapType(efd.ReturnType);
-        var csType   = MapType(new TypeRef(efd.ReceiverType, false));
+        var ret = efd.ReturnType is null ? "void" : MapType(efd.ReturnType);
+        var csType = MapType(new TypeRef(efd.ReceiverType, false));
 
         // First parameter is the receiver: "this TypeName self"
         var paramParts = new List<string> { $"this {csType} self" };
@@ -200,17 +200,17 @@ public class CodeGenerator
         {
             // val / var  →  var (C# infers type; mutability tracked at KSR level only)
             case ValDecl vd:
-            {
-                var t = vd.Type is null ? "var" : MapType(vd.Type);
-                Line($"{t} {vd.Name} = {EmitExprWithHint(vd.Value, vd.Type)};");
-                break;
-            }
+                {
+                    var t = vd.Type is null ? "var" : MapType(vd.Type);
+                    Line($"{t} {vd.Name} = {EmitExprWithHint(vd.Value, vd.Type)};");
+                    break;
+                }
             case VarDecl vd:
-            {
-                var t = vd.Type is null ? "var" : MapType(vd.Type);
-                Line($"{t} {vd.Name} = {EmitExprWithHint(vd.Value, vd.Type)};");
-                break;
-            }
+                {
+                    var t = vd.Type is null ? "var" : MapType(vd.Type);
+                    Line($"{t} {vd.Name} = {EmitExprWithHint(vd.Value, vd.Type)};");
+                    break;
+                }
 
             case AssignStmt ass:
                 Line($"{ass.Name} = {EmitExpr(ass.Value)};");
@@ -222,6 +222,11 @@ public class CodeGenerator
 
             case IndexAssignStmt ias:
                 Line($"{ias.Name}[{EmitExpr(ias.Index)}] = {EmitExpr(ias.Value)};");
+                break;
+
+            // when used as a statement — emit if/else chain (switch expression not valid as stmt)
+            case ExprStmt { Expression: WhenExpr we }:
+                EmitWhenStmt(we);
                 break;
 
             case ExprStmt es:
@@ -287,17 +292,17 @@ public class CodeGenerator
 
     private string EmitExpr(Expr expr) => expr switch
     {
-        IntLiteral    il => il.Value.ToString(),
+        IntLiteral il => il.Value.ToString(),
         DoubleLiteral dl => dl.Value.ToString(System.Globalization.CultureInfo.InvariantCulture),
         StringLiteral sl => $"\"{Escape(sl.Value)}\"",
-        BoolLiteral   bl => bl.Value ? "true" : "false",
-        NullLiteral      => "null",
-        ThisExpr         => _inRecordMethod ? "this" : "self",
+        BoolLiteral bl => bl.Value ? "true" : "false",
+        NullLiteral => "null",
+        ThisExpr => _inRecordMethod ? "this" : "self",
 
         IdentifierExpr id => id.Name,
 
-        IndexExpr    ie  => $"{EmitExpr(ie.Target)}[{EmitExpr(ie.Index)}]",
-        NewArrayExpr na  => $"new {MapType(na.ElementType)}[{EmitExpr(na.Size)}]",
+        IndexExpr ie => $"{EmitExpr(ie.Target)}[{EmitExpr(ie.Index)}]",
+        NewArrayExpr na => $"new {MapType(na.ElementType)}[{EmitExpr(na.Size)}]",
         NewObjectExpr no => $"new {no.TypeName}({string.Join(", ", no.Arguments.Select(EmitExpr))})",
 
         LambdaExpr le when le.Params.Count == 0
@@ -307,23 +312,24 @@ public class CodeGenerator
         LambdaExpr le
             => $"(({string.Join(", ", le.Params)}) => {EmitExpr(le.Body)})",
 
-        BinaryExpr be  => $"({EmitExpr(be.Left)} {be.Op} {EmitExpr(be.Right)})",
-        UnaryExpr  ue  => $"({ue.Op}{EmitExpr(ue.Operand)})",
+        BinaryExpr be => $"({EmitExpr(be.Left)} {be.Op} {EmitExpr(be.Right)})",
+        UnaryExpr ue => $"({ue.Op}{EmitExpr(ue.Operand)})",
 
         MemberAccessExpr ma => $"{EmitExpr(ma.Target)}.{Pascal(ma.Member)}",
-        SafeCallExpr     sc => $"{EmitExpr(sc.Target)}?.{Pascal(sc.Member)}",
-        ElvisExpr        ev => $"({EmitExpr(ev.Left)} ?? {EmitExpr(ev.Right)})",
+        SafeCallExpr sc => $"{EmitExpr(sc.Target)}?.{Pascal(sc.Member)}",
+        ElvisExpr ev => $"({EmitExpr(ev.Left)} ?? {EmitExpr(ev.Right)})",
 
         // Range used as a value (outside for-in) → Enumerable.Range
-        RangeExpr re when re.Inclusive  =>
+        RangeExpr re when re.Inclusive =>
             $"Enumerable.Range({EmitExpr(re.Start)}, {EmitExpr(re.End)} - {EmitExpr(re.Start)} + 1)",
         RangeExpr re =>
             $"Enumerable.Range({EmitExpr(re.Start)}, {EmitExpr(re.End)} - {EmitExpr(re.Start)})",
 
         StringTemplateExpr ste => EmitStringTemplate(ste),
-        CallExpr           ce  => EmitCall(ce),
-        ListLiteralExpr    ll  => EmitListLiteral(ll),
-        MapLiteralExpr     ml  => EmitMapLiteral(ml),
+        CallExpr ce => EmitCall(ce),
+        ListLiteralExpr ll => EmitListLiteral(ll),
+        MapLiteralExpr ml => EmitMapLiteral(ml),
+        WhenExpr we => EmitWhenExpr(we),
 
         _ => throw new InvalidOperationException($"Unknown expression: {expr.GetType().Name}")
     };
@@ -352,8 +358,8 @@ public class CodeGenerator
             {
                 // Escape { } in literal text so they don't trigger C# interpolation
                 sb.Append(lp.Text
-                    .Replace("{",  "{{")
-                    .Replace("}",  "}}")
+                    .Replace("{", "{{")
+                    .Replace("}", "}}")
                     .Replace("\"", "\\\""));
             }
             else if (part is ExprPart ep)
@@ -392,7 +398,7 @@ public class CodeGenerator
         if (ml.Entries.Count == 0)
             return "new Dictionary<object, object>()";
 
-        var keyType = InferPrimitiveType(ml.Entries[0].Key)   ?? "object";
+        var keyType = InferPrimitiveType(ml.Entries[0].Key) ?? "object";
         var valType = InferPrimitiveType(ml.Entries[0].Value) ?? "object";
         var entries = string.Join(", ",
             ml.Entries.Select(e => $"[{EmitExpr(e.Key)}] = {EmitExpr(e.Value)}"));
@@ -402,13 +408,74 @@ public class CodeGenerator
     /// <summary>Infer a C# primitive type name from a literal expression, or null if unknown.</summary>
     private static string? InferPrimitiveType(Expr e) => e switch
     {
-        IntLiteral         => "int",
-        DoubleLiteral      => "double",
-        BoolLiteral        => "bool",
-        StringLiteral      => "string",
+        IntLiteral => "int",
+        DoubleLiteral => "double",
+        BoolLiteral => "bool",
+        StringLiteral => "string",
         StringTemplateExpr => "string",
-        _                  => null
+        _ => null
     };
+
+    // ── when expression ──────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Emit <c>when</c> as a C# expression value.
+    /// Subject form   → switch expression:  (x switch { 1 =&gt; a, 2 =&gt; b, _ =&gt; c })
+    /// Subject-less   → ternary chain:      (cond1 ? a : (cond2 ? b : c))
+    /// </summary>
+    private string EmitWhenExpr(WhenExpr we)
+    {
+        if (we.Subject is not null)
+        {
+            var subject = EmitExpr(we.Subject);
+            var arms = we.Arms.Select(arm =>
+                arm.Pattern is null
+                    ? $"_ => {EmitExpr(arm.Body)}"
+                    : $"{EmitExpr(arm.Pattern)} => {EmitExpr(arm.Body)}");
+            return $"({subject} switch {{ {string.Join(", ", arms)} }})";
+        }
+        return EmitWhenTernary(we.Arms, 0);
+    }
+
+    private string EmitWhenTernary(List<WhenArm> arms, int i)
+    {
+        if (i >= arms.Count)
+            return "throw new InvalidOperationException(\"when: no arm matched\")";
+        var arm = arms[i];
+        if (arm.Pattern is null) return EmitExpr(arm.Body); // else arm
+        return $"({EmitExpr(arm.Pattern)} ? {EmitExpr(arm.Body)} : {EmitWhenTernary(arms, i + 1)})";
+    }
+
+    /// <summary>
+    /// Emit <c>when</c> as a C# statement (if / else-if / else chain).
+    /// Used when <c>when</c> appears as an <see cref="ExprStmt"/>.
+    /// </summary>
+    private void EmitWhenStmt(WhenExpr we)
+    {
+        bool first = true;
+        var subject = we.Subject is not null ? EmitExpr(we.Subject) : null;
+
+        foreach (var arm in we.Arms)
+        {
+            if (arm.Pattern is null) // else arm
+            {
+                Line("else");
+            }
+            else
+            {
+                var cond = subject is not null
+                    ? $"{subject} == {EmitExpr(arm.Pattern)}"
+                    : EmitExpr(arm.Pattern);
+                Line(first ? $"if ({cond})" : $"else if ({cond})");
+                first = false;
+            }
+            Line("{");
+            _indent++;
+            Line($"{EmitExpr(arm.Body)};");
+            _indent--;
+            Line("}");
+        }
+    }
 
     // ── type mapping ──────────────────────────────────────────────────────────
 
@@ -425,25 +492,25 @@ public class CodeGenerator
         var angleIdx = t.Name.IndexOf('<');
         if (angleIdx >= 0)
         {
-            var outer    = t.Name[..angleIdx];
-            var argsStr  = t.Name[(angleIdx + 1)..^1];
-            var args     = SplitTypeArgs(argsStr)
+            var outer = t.Name[..angleIdx];
+            var argsStr = t.Name[(angleIdx + 1)..^1];
+            var args = SplitTypeArgs(argsStr)
                                .Select(a => MapType(new TypeRef(a.Trim(), false)));
-            var csOuter  = outer switch { "Map" => "Dictionary", _ => outer };
-            var result   = $"{csOuter}<{string.Join(", ", args)}>";
+            var csOuter = outer switch { "Map" => "Dictionary", _ => outer };
+            var result = $"{csOuter}<{string.Join(", ", args)}>";
             return t.Nullable ? $"{result}?" : result;
         }
 
         var base_ = t.Name switch
         {
-            "Int"    => "int",
+            "Int" => "int",
             "String" => "string",
-            "Bool"   => "bool",
+            "Bool" => "bool",
             "Double" => "double",
-            "Float"  => "float",
-            "Long"   => "long",
-            "Unit"   => "void",
-            _        => _interfaces.Contains(t.Name) ? "I" + t.Name : t.Name
+            "Float" => "float",
+            "Long" => "long",
+            "Unit" => "void",
+            _ => _interfaces.Contains(t.Name) ? "I" + t.Name : t.Name
         };
         return t.Nullable ? $"{base_}?" : base_;
     }
@@ -458,7 +525,7 @@ public class CodeGenerator
         int depth = 0, start = 0;
         for (int i = 0; i < args.Length; i++)
         {
-            if      (args[i] == '<') depth++;
+            if (args[i] == '<') depth++;
             else if (args[i] == '>') depth--;
             else if (args[i] == ',' && depth == 0)
             {

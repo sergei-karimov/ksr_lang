@@ -639,6 +639,10 @@ public class Parser
             case TokenType.LBracket:
                 return ParseCollectionLiteral();
 
+            // when expression
+            case TokenType.When:
+                return ParseWhenExpr();
+
             // Lambda literal  { expr }  /  { x -> expr }  /  { x, y -> expr }  /  { -> expr }
             case TokenType.LBrace:
                 return ParseLambdaExpr();
@@ -654,6 +658,50 @@ public class Parser
                     $"Unexpected token '{tok.Value}' ({tok.Type}) in expression",
                     tok.Line, tok.Col);
         }
+    }
+
+    // ── when expression ───────────────────────────────────────────────────────
+
+    /// <summary>
+    /// when (expr) { arm* }   — subject form (match by value)
+    /// when { arm* }          — subject-less form (guard conditions)
+    ///
+    /// arm ::= expr -> expr
+    ///       | else -> expr
+    /// </summary>
+    private WhenExpr ParseWhenExpr()
+    {
+        Expect(TokenType.When);
+
+        Expr? subject = null;
+        if (Match(TokenType.LParen))
+        {
+            subject = ParseExpr();
+            Expect(TokenType.RParen);
+        }
+
+        Expect(TokenType.LBrace);
+        var arms = new List<WhenArm>();
+
+        while (!Check(TokenType.RBrace) && !Check(TokenType.Eof))
+        {
+            Expr? pattern;
+            if (Check(TokenType.Else))
+            {
+                Consume(); // else
+                pattern = null;
+            }
+            else
+            {
+                pattern = ParseExpr();
+            }
+            Expect(TokenType.Arrow);
+            var body = ParseExpr();
+            arms.Add(new WhenArm(pattern, body));
+        }
+
+        Expect(TokenType.RBrace);
+        return new WhenExpr(subject, arms);
     }
 
     // ── collection literals ───────────────────────────────────────────────────

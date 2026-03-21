@@ -9,15 +9,12 @@ namespace KSR.CodeGen;
 /// Uses Roslyn to compile a C# source string in memory, then invokes
 /// the <c>KsrProgram.Main()</c> method via reflection.
 /// </summary>
-public static class KsrCompiler
-{
+public static class KsrCompiler {
     public static void CompileAndRun(
         string csharpSource,
         bool debugMode = false,
-        IEnumerable<string>? extraReferencePaths = null)
-    {
-        if (debugMode)
-        {
+        IEnumerable<string>? extraReferencePaths = null) {
+        if (debugMode) {
             Console.Error.WriteLine("══════════ Generated C# ══════════");
             Console.Error.WriteLine(csharpSource);
             Console.Error.WriteLine("══════════════════════════════════");
@@ -30,8 +27,7 @@ public static class KsrCompiler
         var references = ResolveReferences(debugMode);
 
         // Add package DLLs (from NuGet resolution)
-        if (extraReferencePaths is not null)
-        {
+        if (extraReferencePaths is not null) {
             foreach (var path in extraReferencePaths)
                 if (File.Exists(path))
                     references.Add(MetadataReference.CreateFromFile(path));
@@ -40,15 +36,14 @@ public static class KsrCompiler
         // ── 3. Compile ───────────────────────────────────────────────────────
         var compilation = CSharpCompilation.Create(
             assemblyName: "KsrOutput",
-            syntaxTrees:  new[] { syntaxTree },
-            references:   references,
-            options:      new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+            syntaxTrees: new[] { syntaxTree },
+            references: references,
+            options: new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
 
         using var ms = new MemoryStream();
         var emitResult = compilation.Emit(ms);
 
-        if (!emitResult.Success)
-        {
+        if (!emitResult.Success) {
             var errors = emitResult.Diagnostics
                 .Where(d => d.Severity == DiagnosticSeverity.Error)
                 .Select(d => $"  {d}")
@@ -92,12 +87,10 @@ public static class KsrCompiler
     ///   3. AppDomain loaded assemblies — picks up Roslyn dlls with real paths
     ///   4. .NET install directory discovery — single-file publish fallback
     /// </summary>
-    private static List<MetadataReference> ResolveReferences(bool debugMode)
-    {
+    private static List<MetadataReference> ResolveReferences(bool debugMode) {
         var paths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        void ScanDir(string? dir)
-        {
+        void ScanDir(string? dir) {
             if (string.IsNullOrEmpty(dir) || !Directory.Exists(dir)) return;
             foreach (var dll in Directory.EnumerateFiles(dir, "*.dll"))
                 paths.Add(dll);
@@ -147,24 +140,20 @@ public static class KsrCompiler
     /// Finds the directory containing .NET BCL assemblies (System.Runtime.dll etc.)
     /// by probing DOTNET_ROOT and well-known installation paths.
     /// </summary>
-    private static string? FindDotNetRuntimeDir()
-    {
+    private static string? FindDotNetRuntimeDir() {
         // Probe list: env vars, then well-known Windows + Linux paths
         var roots = new List<string?>();
         roots.Add(Environment.GetEnvironmentVariable("DOTNET_ROOT"));
         roots.Add(Environment.GetEnvironmentVariable("DOTNET_ROOT_X64"));
         roots.Add(Environment.GetEnvironmentVariable("DOTNET_INSTALL_DIR"));
 
-        if (OperatingSystem.IsWindows())
-        {
+        if (OperatingSystem.IsWindows()) {
             roots.Add(@"C:\Program Files\dotnet");
             roots.Add(@"C:\Program Files (x86)\dotnet");
             roots.Add(Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
                 "dotnet"));
-        }
-        else
-        {
+        } else {
             roots.Add("/usr/share/dotnet");
             roots.Add("/usr/local/share/dotnet");
             roots.Add(Path.Combine(
@@ -172,8 +161,7 @@ public static class KsrCompiler
                 ".dotnet"));
         }
 
-        foreach (var root in roots)
-        {
+        foreach (var root in roots) {
             if (string.IsNullOrEmpty(root)) continue;
             var sharedDir = Path.Combine(root, "shared", "Microsoft.NETCore.App");
             if (!Directory.Exists(sharedDir)) continue;
@@ -196,22 +184,17 @@ public static class KsrCompiler
     /// Returns true only if the file is a managed .NET assembly (has CLR metadata).
     /// Filters out native DLLs like coreclr.dll, clrjit.dll, hostfxr.dll, etc.
     /// </summary>
-    private static bool IsManagedAssembly(string path)
-    {
-        try
-        {
+    private static bool IsManagedAssembly(string path) {
+        try {
             using var stream = File.OpenRead(path);
             using var peReader = new PEReader(stream);
             return peReader.HasMetadata;
-        }
-        catch
-        {
+        } catch {
             return false;
         }
     }
 
-    private static Version? TryParseVersion(string? s)
-    {
+    private static Version? TryParseVersion(string? s) {
         if (s is null) return null;
         // Strip pre-release suffix (e.g. "8.0.0-preview") before parsing
         var clean = s.Split('-')[0];
@@ -219,7 +202,6 @@ public static class KsrCompiler
     }
 }
 
-public class KsrCompileException : Exception
-{
+public class KsrCompileException : Exception {
     public KsrCompileException(string message) : base(message) { }
 }

@@ -62,6 +62,7 @@ Hello from KSR!
 val name = "Alice"         // immutable
 var count = 0              // mutable
 var score: Double = 9.5    // explicit type
+val pi = 3.14159           // float literal
 ```
 
 ### Functions
@@ -158,6 +159,35 @@ println("The answer is ${x}!")
 println("Sum: ${a + b}")
 ```
 
+### Pattern Matching (`when`)
+
+`when` is an expression that works like Kotlin's `when` / Rust's `match`.
+
+```kotlin
+// Subject form — match a value
+val label = when (n) {
+    1    -> "one"
+    2    -> "two"
+    else -> "many"
+}
+
+// Subject-less form — guard conditions
+val sign = when {
+    x > 0  -> "positive"
+    x < 0  -> "negative"
+    else   -> "zero"
+}
+
+// As a statement (side effects per arm)
+when (code) {
+    200 -> println("OK")
+    404 -> println("not found")
+    else -> println("error")
+}
+```
+
+`when` compiles to a C# switch expression (subject form) or ternary chain (subject-less form) in value context, and to an `if / else-if / else` chain when used as a statement.
+
 ### Interfaces
 
 Define a trait with `interface`, implement it with `implement ... for ...`.
@@ -201,13 +231,6 @@ val empty: List<String> = []
 val scores: Map<String, Int> = ["alice": 10, "bob": 7]
 ```
 
-### Float Literals
-
-```kotlin
-val pi = 3.14159
-val e: Double = 2.71828
-```
-
 ### Lambdas & LINQ
 
 ```kotlin
@@ -227,27 +250,49 @@ use System.Collections.Generic
 ## Complete Example
 
 ```kotlin
-data class Point(x: Int, y: Int)
-
-fun Point.distanceSq(other: Point): Int {
-    val dx = this.x - other.x
-    val dy = this.y - other.y
-    return dx * dx + dy * dy
+// Interfaces
+interface Shape {
+    fun area(): Double
+    fun describe(): String
 }
 
-fun sumRange(from: Int, to: Int): Int {
-    var sum = 0
-    for (i in from..to) {
-        sum += i
+// Data classes
+data class Circle(r: Double)
+data class Rect(w: Double, h: Double)
+
+// Implement the interface for each type
+implement Shape for Circle {
+    fun area(): Double { return 3.14159 * this.r * this.r }
+    fun describe(): String { return "circle r=${this.r}" }
+}
+
+implement Shape for Rect {
+    fun area(): Double { return this.w * this.h }
+    fun describe(): String { return "rect ${this.w}x${this.h}" }
+}
+
+// Extension function
+fun Circle.diameter(): Double { return this.r * 2.0 }
+
+// when expression
+fun classify(s: Shape): String {
+    return when {
+        s.area() > 100.0 -> "large"
+        s.area() > 10.0  -> "medium"
+        else             -> "small"
     }
-    return sum
 }
 
 fun main() {
-    val p1 = Point(0, 0)
-    val p2 = Point(3, 4)
-    println("Squared distance: ${p1.distanceSq(p2)}")
-    println("Sum 1..10 = ${sumRange(1, 10)}")
+    val shapes: List<Shape> = [Circle(5.0), Rect(3.0, 4.0), Circle(1.0)]
+
+    for (s in shapes) {
+        val size = classify(s)
+        println("${s.describe()} — area=${s.area()}, size=${size}")
+    }
+
+    val c = Circle(7.0)
+    println("diameter = ${c.diameter()}")
 }
 ```
 
@@ -353,12 +398,24 @@ ksr examples/game_of_life.ksr
 The `ksr-lang` extension provides:
 
 - **Syntax highlighting** — keywords, types, strings, operators, lambdas
-- **Live diagnostics** — parse errors shown inline as you type
+- **Real-time diagnostics** — parse errors shown inline as you type (powered by the LSP server)
+- **Completions** — keywords, data class names, interface names
+- **Hover documentation** — describes keywords, literals, and identifiers on hover
 
-Installed automatically by the installer. To install manually:
+The extension connects to the KSR Language Server (`ksr lsp`) via JSON-RPC over stdio using the standard Language Server Protocol. It works with VS Code and any other LSP-compatible editor.
+
+Installed automatically by the installer scripts. After installation, reload VS Code (`Ctrl+Shift+P` → **Reload Window**) to activate the Language Server.
+
+To install manually:
 
 ```bash
 code --install-extension vscode-extension/ksr-lang-0.1.0.vsix
+```
+
+If the Language Server fails to start, verify `ksr` is on your PATH:
+
+```bash
+ksr lsp   # should hang waiting for input, not print an error
 ```
 
 ---
@@ -424,10 +481,10 @@ This works in both single-file mode (`ksr file.ksr`) and full project mode (`dot
 - [x] Source mapping — errors point to `.ksr` line numbers (`#line` directives)
 - [x] `List<T>` and `Map<K, V>` collection literals
 - [x] Interfaces / trait-style polymorphism (`interface` + `implement … for …`)
-- [ ] Pattern matching (`when` expression)
+- [x] Pattern matching — `when` expression (switch expr / ternary / if-else)
+- [x] Language server (LSP) — real-time diagnostics, completion, hover (`ksr lsp`)
 - [ ] Coroutines / async-await
 - [ ] Standard library (`ksr.io`, `ksr.collections`)
-- [ ] Language server (LSP) for full IDE support
 
 ---
 
@@ -451,13 +508,14 @@ dotnet pack KSR.csproj                                   -o artifacts/
 
 Or just run the installer script which does all of this automatically.
 
-The compiler is ~1 700 lines of C# across four layers:
+The compiler and toolchain is ~2 600 lines of C# across five layers:
 
 ```
-Lexer/      tokeniser
-Parser/     recursive-descent parser
-AST/        node definitions (C# records)
-CodeGen/    C# emitter + Roslyn in-memory runner
+Lexer/        tokeniser
+Parser/       recursive-descent parser
+AST/          node definitions (C# records)
+CodeGen/      C# emitter + Roslyn in-memory runner
+LspServer.cs  Language Server Protocol (JSON-RPC over stdio)
 ```
 
 ---
