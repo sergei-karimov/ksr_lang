@@ -49,15 +49,23 @@ public class CodeGenTests {
 
     [Fact]
     public void TypeMapping_ListOfInt() =>
-        Assert.Contains("List<int>", Gen("fun f(xs: List<Int>) { }"));
+        Assert.Contains("IReadOnlyList<int>", Gen("fun f(xs: List<Int>) { }"));
+
+    [Fact]
+    public void TypeMapping_MutableListOfInt() =>
+        Assert.Contains("List<int>", Gen("fun f(xs: MutableList<Int>) { }"));
 
     [Fact]
     public void TypeMapping_MapStringInt() =>
-        Assert.Contains("Dictionary<string, int>", Gen("fun f(m: Map<String, Int>) { }"));
+        Assert.Contains("IReadOnlyDictionary<string, int>", Gen("fun f(m: Map<String, Int>) { }"));
+
+    [Fact]
+    public void TypeMapping_MutableMapStringInt() =>
+        Assert.Contains("Dictionary<string, int>", Gen("fun f(m: MutableMap<String, Int>) { }"));
 
     [Fact]
     public void TypeMapping_NestedGeneric() =>
-        Assert.Contains("Dictionary<string, List<int>>",
+        Assert.Contains("IReadOnlyDictionary<string, IReadOnlyList<int>>",
             Gen("fun f(m: Map<String, List<Int>>) { }"));
 
     // ── data classes ──────────────────────────────────────────────────────────
@@ -201,19 +209,29 @@ public class CodeGenTests {
     // ── collection literals ───────────────────────────────────────────────────
 
     [Fact]
-    public void ListLiteral_NonEmpty_EmitsToList() =>
-        Assert.Contains("new[] { 1, 2, 3 }.ToList()",
+    public void ListLiteral_NonEmpty_EmitsArray() =>
+        Assert.Contains("new[] { 1, 2, 3 }",
             Flat("fun f() { val nums = [1, 2, 3] }"));
 
     [Fact]
     public void ListLiteral_StringElements() =>
-        Assert.Contains("new[] { \"Alice\", \"Bob\" }.ToList()",
+        Assert.Contains("new[] { \"Alice\", \"Bob\" }",
             Flat("fun f() { val names = [\"Alice\", \"Bob\"] }"));
 
     [Fact]
     public void ListLiteral_EmptyWithTypeHint() =>
-        Assert.Contains("new List<int>()",
+        Assert.Contains("Array.Empty<int>()",
             Flat("fun f() { val xs: List<Int> = [] }"));
+
+    [Fact]
+    public void ListLiteral_EmptyMutableListHint() =>
+        Assert.Contains("new List<int>()",
+            Flat("fun f() { val xs: MutableList<Int> = [] }"));
+
+    [Fact]
+    public void ListLiteral_NonEmptyMutableList() =>
+        Assert.Contains("new List<int> { 1, 2, 3 }",
+            Flat("fun f() { val xs: MutableList<Int> = [1, 2, 3] }"));
 
     [Fact]
     public void MapLiteral_NonEmpty_EmitsDictionary() {

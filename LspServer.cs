@@ -36,9 +36,47 @@ public static class LspServer {
 
     private static readonly string[] _keywords =
     [
-        "val", "var", "fun", "data", "class", "interface", "implement",
+        "val", "var", "fun", "async", "await", "data", "class", "interface", "implement",
         "use", "new", "if", "else", "while", "for", "in", "return", "when",
         "this", "true", "false", "null",
+    ];
+
+    // ── built-in type names for completion ────────────────────────────────────
+
+    private static readonly (string Name, string Detail)[] _builtinTypes =
+    [
+        ("Int",          "32-bit integer"),
+        ("Long",         "64-bit integer"),
+        ("Double",       "64-bit float"),
+        ("Float",        "32-bit float"),
+        ("Bool",         "boolean"),
+        ("String",       "string"),
+        ("Unit",         "void / no return value"),
+        ("List",         "immutable list — List<T>"),
+        ("MutableList",  "mutable list — MutableList<T>"),
+        ("Map",          "immutable map — Map<K,V>"),
+        ("MutableMap",   "mutable map — MutableMap<K,V>"),
+    ];
+
+    // ── stdlib symbols for completion ─────────────────────────────────────────
+
+    private static readonly (string Name, string Detail)[] _stdlibSymbols =
+    [
+        ("IO",   "ksr.io — console I/O: readLine, readInt, readDouble, print"),
+        ("File", "ksr.io — file operations: read, write, append, lines, exists, delete, copy"),
+        ("Path", "ksr.io — path helpers: join, extension, fileName, fileStem, directory, absolute"),
+        ("Text", "ksr.text — string utilities: toInt, toDouble, trim, split, join, replace, …"),
+        ("Lst",  "ksr.collections — higher-order list ops: map, filter, fold, sorted, …"),
+        ("Mp",   "ksr.collections — higher-order map ops: keys, values, mapValues, filter, …"),
+    ];
+
+    // ── stdlib module names for 'use' completion ──────────────────────────────
+
+    private static readonly (string Name, string Detail)[] _stdlibModules =
+    [
+        ("ksr.io",          "Standard I/O library — IO, File, Path"),
+        ("ksr.text",        "Standard text library — Text"),
+        ("ksr.collections", "Standard collections library — Lst, Mp"),
     ];
 
     // ── entry point ───────────────────────────────────────────────────────────
@@ -197,7 +235,19 @@ public static class LspServer {
                         .Cast<object>()
                         .ToList();
 
-                    // Add data-class and interface names from the current document
+                    // Built-in types
+                    foreach (var (name, detail) in _builtinTypes)
+                        items.Add(new { label = name, kind = 25 /* TypeParameter */, detail });
+
+                    // Stdlib class symbols
+                    foreach (var (name, detail) in _stdlibSymbols)
+                        items.Add(new { label = name, kind = 7 /* Class */, detail });
+
+                    // Stdlib module names (for 'use' completions)
+                    foreach (var (name, detail) in _stdlibModules)
+                        items.Add(new { label = name, kind = 9 /* Module */, detail });
+
+                    // Data-class, interface, and function names from the current document
                     if (p.TryGetProperty("textDocument", out var td)) {
                         var uri = td.GetProperty("uri").GetString()!;
                         if (_docs.TryGetValue(uri, out var docText)) {
@@ -206,6 +256,8 @@ public static class LspServer {
                                     items.Add(new { label = dc.Name, kind = 7  /* Class */, detail = "data class" });
                                 if (decl is KSR.AST.InterfaceDecl ifd)
                                     items.Add(new { label = ifd.Name, kind = 8 /* Interface */, detail = "interface" });
+                                if (decl is KSR.AST.FunctionDecl fd)
+                                    items.Add(new { label = fd.Name, kind = 3 /* Function */, detail = "fun" });
                             }
                         }
                     }
@@ -281,27 +333,29 @@ public static class LspServer {
             if (tok is null || tok.Type == KSR.Lexer.TokenType.Eof) return null;
 
             var info = tok.Type switch {
-                KSR.Lexer.TokenType.Val => "**val** — immutable binding",
-                KSR.Lexer.TokenType.Var => "**var** — mutable binding",
-                KSR.Lexer.TokenType.Fun => "**fun** — function declaration",
-                KSR.Lexer.TokenType.Data => "**data** — data class keyword",
-                KSR.Lexer.TokenType.Class => "**class** — data class keyword",
+                KSR.Lexer.TokenType.Val       => "**val** — immutable binding",
+                KSR.Lexer.TokenType.Var       => "**var** — mutable binding",
+                KSR.Lexer.TokenType.Fun       => "**fun** — function declaration",
+                KSR.Lexer.TokenType.Async     => "**async** — declares an async function; return type is the inner (unwrapped) type",
+                KSR.Lexer.TokenType.Await     => "**await** — suspends until the async expression completes",
+                KSR.Lexer.TokenType.Data      => "**data** — data class keyword",
+                KSR.Lexer.TokenType.Class     => "**class** — data class keyword",
                 KSR.Lexer.TokenType.Interface => "**interface** — interface declaration",
                 KSR.Lexer.TokenType.Implement => "**implement** — interface implementation block",
-                KSR.Lexer.TokenType.When => "**when** — pattern-matching expression",
-                KSR.Lexer.TokenType.If => "**if** — conditional",
-                KSR.Lexer.TokenType.Else => "**else** — else branch",
-                KSR.Lexer.TokenType.While => "**while** — loop",
-                KSR.Lexer.TokenType.For => "**for** — range / collection loop",
-                KSR.Lexer.TokenType.Return => "**return** — return statement",
-                KSR.Lexer.TokenType.This => "**this** — receiver reference",
-                KSR.Lexer.TokenType.True => "`true` — boolean literal",
-                KSR.Lexer.TokenType.False => "`false` — boolean literal",
-                KSR.Lexer.TokenType.Null => "`null` — null literal",
-                KSR.Lexer.TokenType.IntLiteral => $"Int literal: `{tok.Value}`",
-                KSR.Lexer.TokenType.FloatLiteral => $"Double literal: `{tok.Value}`",
+                KSR.Lexer.TokenType.When      => "**when** — pattern-matching expression",
+                KSR.Lexer.TokenType.If        => "**if** — conditional",
+                KSR.Lexer.TokenType.Else      => "**else** — else branch",
+                KSR.Lexer.TokenType.While     => "**while** — loop",
+                KSR.Lexer.TokenType.For       => "**for** — range / collection loop",
+                KSR.Lexer.TokenType.Return    => "**return** — return statement",
+                KSR.Lexer.TokenType.This      => "**this** — receiver reference",
+                KSR.Lexer.TokenType.True      => "`true` — boolean literal",
+                KSR.Lexer.TokenType.False     => "`false` — boolean literal",
+                KSR.Lexer.TokenType.Null      => "`null` — null literal",
+                KSR.Lexer.TokenType.IntLiteral    => $"Int literal: `{tok.Value}`",
+                KSR.Lexer.TokenType.FloatLiteral  => $"Double literal: `{tok.Value}`",
                 KSR.Lexer.TokenType.StringLiteral => "String literal",
-                KSR.Lexer.TokenType.Identifier => $"Identifier: `{tok.Value}`",
+                KSR.Lexer.TokenType.Identifier    => GetIdentifierHover(tok.Value),
                 _ => null,
             };
 
@@ -312,6 +366,29 @@ public static class LspServer {
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────
+
+    private static string GetIdentifierHover(string name) => name switch {
+        // Built-in types
+        "Int"         => "**Int** — 32-bit integer (`int` in C#)",
+        "Long"        => "**Long** — 64-bit integer (`long` in C#)",
+        "Double"      => "**Double** — 64-bit float (`double` in C#)",
+        "Float"       => "**Float** — 32-bit float (`float` in C#)",
+        "Bool"        => "**Bool** — boolean (`bool` in C#)",
+        "String"      => "**String** — string (`string` in C#)",
+        "Unit"        => "**Unit** — no return value (`void` in C#)",
+        "List"        => "**List\\<T\\>** — immutable list (`IReadOnlyList<T>` in C#). Use `MutableList<T>` for a writable list.",
+        "MutableList" => "**MutableList\\<T\\>** — mutable list (`List<T>` in C#)",
+        "Map"         => "**Map\\<K,V\\>** — immutable map (`IReadOnlyDictionary<K,V>` in C#). Use `MutableMap<K,V>` for a writable map.",
+        "MutableMap"  => "**MutableMap\\<K,V\\>** — mutable map (`Dictionary<K,V>` in C#)",
+        // Stdlib symbols
+        "IO"   => "**IO** (`ksr.io`) — console I/O: `readLine()`, `readInt()`, `readDouble()`, `print(s)`",
+        "File" => "**File** (`ksr.io`) — file operations: `read`, `write`, `append`, `lines`, `exists`, `delete`, `copy`",
+        "Path" => "**Path** (`ksr.io`) — path helpers: `join`, `extension`, `fileName`, `fileStem`, `directory`, `absolute`",
+        "Text" => "**Text** (`ksr.text`) — string utilities: `toInt`, `toDouble`, `trim`, `toUpper`, `toLower`, `split`, `join`, `replace`, …",
+        "Lst"  => "**Lst** (`ksr.collections`) — higher-order list operations: `map`, `filter`, `fold`, `any`, `all`, `sorted`, `take`, `drop`, `groupBy`, …",
+        "Mp"   => "**Mp** (`ksr.collections`) — higher-order map operations: `keys`, `values`, `mapValues`, `filter`, `get`, `getOrDefault`, `toMutable`, …",
+        _      => $"Identifier: `{name}`",
+    };
 
     /// <summary>Parse source text, returning declarations or empty list on error.</summary>
     private static IEnumerable<KSR.AST.AstNode> SafeParse(string text) {

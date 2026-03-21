@@ -1,0 +1,73 @@
+// collections_demo.ksr — demonstrates ksr.collections, immutable List/Map,
+// and mutable MutableList/MutableMap.
+use ksr.collections
+
+fun main() {
+    // ── Immutable List<T> ─────────────────────────────────────────────────────
+
+    val nums: List<Int> = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+    val evens = Lst.filter(nums, { n -> n % 2 == 0 })
+    println("evens: ${Lst.joinToString(evens, \", \")}")    // 2, 4, 6, 8, 10
+
+    val doubled = Lst.map(evens, { n -> n * 2 })
+    println("doubled: ${Lst.joinToString(doubled, \", \")}")  // 4, 8, 12, 16, 20
+
+    val total = Lst.fold(nums, 0, { acc, n -> acc + n })
+    println("sum 1..10 = ${total}")                          // 55
+
+    val sorted = Lst.sorted(Lst.reversed(nums))
+    println("sorted after reverse: ${Lst.joinToString(sorted, \", \")}")
+
+    val top3 = Lst.take(Lst.sortedBy(nums, { n -> -n }), 3)
+    println("top 3: ${Lst.joinToString(top3, \", \")}")      // 10, 9, 8
+
+    println("any > 9? ${Lst.any(nums, { n -> n > 9 })}")
+    println("all > 0? ${Lst.all(nums, { n -> n > 0 })}")
+    println("size = ${Lst.size(nums)}")
+
+    // ── MutableList<T> ────────────────────────────────────────────────────────
+
+    var scores: MutableList<Int> = [100, 90, 85]
+    scores.add(95)                                           // standard List<T>.Add
+    println("scores count = ${scores.count}")                // 4
+
+    val mCopy = Lst.toMutable(nums)                         // IReadOnlyList → MutableList
+    mCopy.add(11)
+    println("mCopy has ${mCopy.count} elements")
+
+    // ── Immutable Map<K,V> ────────────────────────────────────────────────────
+
+    val ages: Map<String, Int> = ["alice": 30, "bob": 25, "carol": 28]
+
+    val names = Mp.keys(ages)
+    println("names: ${Lst.joinToString(names, \", \")}")
+
+    println("alice age = ${Mp.getOrDefault(ages, \"alice\", 0)}")
+    println("dave age  = ${Mp.getOrDefault(ages, \"dave\", -1)}")
+
+    val doubled2 = Mp.mapValues(ages, { a -> a * 2 })
+    println("alice doubled = ${Mp.getOrDefault(doubled2, \"alice\", 0)}")  // 60
+
+    val seniors = Mp.filter(ages, { k, v -> v >= 28 })
+    println("seniors count = ${Mp.size(seniors)}")           // 2
+
+    // ── MutableMap<K,V> ───────────────────────────────────────────────────────
+
+    var inventory: MutableMap<String, Int> = ["apples": 5, "bananas": 3]
+    inventory["oranges"] = 8                                 // standard Dictionary indexer
+    println("inventory size = ${inventory.count}")           // 3
+
+    val mMap = Mp.toMutable(ages)                           // IReadOnlyDictionary → MutableMap
+    mMap["dave"] = 22
+    println("mMap has ${mMap.count} entries")
+
+    // ── GroupBy / Distinct ────────────────────────────────────────────────────
+
+    val words: List<String> = ["apple", "ant", "banana", "cherry", "avocado"]
+    val byFirst = Lst.groupBy(words, { w -> w.charAt(0) })
+    println("words starting with 'a': ${Mp.size(byFirst)}")
+
+    val dups: List<Int> = [1, 2, 2, 3, 3, 3]
+    println("distinct: ${Lst.joinToString(Lst.distinct(dups), \", \")}")  // 1, 2, 3
+}

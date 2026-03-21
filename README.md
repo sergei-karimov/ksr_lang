@@ -269,11 +269,27 @@ ksr myapp.ksr --async-return=valuetask
 
 ### Collections
 
+KSR has immutable and mutable variants of list and map.
+
+| KSR type | C# type | Semantics |
+|---|---|---|
+| `List<T>` | `IReadOnlyList<T>` | Immutable — default |
+| `MutableList<T>` | `List<T>` | Mutable — call `.add()`, `.remove()`, etc. |
+| `Map<K,V>` | `IReadOnlyDictionary<K,V>` | Immutable — default |
+| `MutableMap<K,V>` | `Dictionary<K,V>` | Mutable — `map[key] = value` |
+
 ```kotlin
+// Immutable (preferred)
 val nums: List<Int> = [1, 2, 3]
 val empty: List<String> = []
-
 val scores: Map<String, Int> = ["alice": 10, "bob": 7]
+
+// Mutable when you need to modify
+var items: MutableList<String> = ["a", "b"]
+items.add("c")                              // standard List<T>.Add
+
+var lookup: MutableMap<String, Int> = []
+lookup["key"] = 42
 ```
 
 ### Lambdas & LINQ
@@ -292,7 +308,7 @@ use System.Collections.Generic
 
 ### Standard Library
 
-KSR ships two built-in modules. Add them with `use`:
+KSR ships three built-in modules. Add them with `use`:
 
 #### `ksr.io` — file system and console I/O
 
@@ -348,6 +364,117 @@ fun main() {
     val len  = Text.length("hello")         // 5
 }
 ```
+
+#### `ksr.collections` — higher-order list and map operations
+
+`Lst` and `Mp` provide a Kotlin-style functional API over `List<T>` and `Map<K,V>`.
+
+```kotlin
+use ksr.collections
+
+fun main() {
+    val nums: List<Int> = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+    // Transform / filter
+    val evens  = Lst.filter(nums, { n -> n % 2 == 0 })    // [2, 4, 6, 8, 10]
+    val sq     = Lst.map(evens, { n -> n * n })            // [4, 16, 36, 64, 100]
+
+    // Aggregation
+    val total  = Lst.fold(nums, 0, { acc, n -> acc + n })  // 55
+    val hasOdd = Lst.any(nums, { n -> n % 2 != 0 })       // true
+    val allPos = Lst.all(nums, { n -> n > 0 })             // true
+
+    // Ordering
+    val sorted = Lst.sorted(nums)
+    val top3   = Lst.take(Lst.sortedBy(nums, { n -> -n }), 3)  // [10, 9, 8]
+
+    // Access
+    val first = Lst.first(nums)       // 1
+    val last  = Lst.last(nums)        // 10
+    val found = Lst.find(nums, { n -> n > 7 })  // 8
+
+    // Combining
+    val a: List<Int> = [1, 2]
+    val b: List<Int> = [3, 4]
+    val ab = Lst.concat(a, b)         // [1, 2, 3, 4]
+    val c  = Lst.plus(ab, 5)          // [1, 2, 3, 4, 5]
+
+    // Grouping
+    val words: List<String> = ["apple", "ant", "cherry"]
+    val byLen = Lst.groupBy(words, { w -> Lst.size([w]) })
+
+    // String
+    println(Lst.joinToString(evens, ", "))   // "2, 4, 6, 8, 10"
+
+    // Conversion
+    val mutable = Lst.toMutable(nums)  // MutableList<Int>
+    mutable.add(11)
+
+    // Map operations
+    val ages: Map<String, Int> = ["alice": 30, "bob": 25]
+
+    val names    = Mp.keys(ages)                               // ["alice", "bob"]
+    val doubled  = Mp.mapValues(ages, { a -> a * 2 })         // ["alice": 60, ...]
+    val seniors  = Mp.filter(ages, { k, v -> v >= 28 })
+    val aliceAge = Mp.getOrDefault(ages, "alice", 0)          // 30
+
+    val mutableMap = Mp.toMutable(ages)   // MutableMap<String, Int>
+    mutableMap["carol"] = 28
+}
+```
+
+**`Lst` methods:**
+
+| Method | Description |
+|---|---|
+| `map(list, fn)` | Transform each element |
+| `filter(list, pred)` | Keep matching elements |
+| `flatMap(list, fn)` | Map then flatten |
+| `flatten(lists)` | Flatten list of lists |
+| `fold(list, init, fn)` | Accumulate with initial value |
+| `forEach(list, fn)` | Side-effect iteration |
+| `any(list, pred)` | Any element matches |
+| `all(list, pred)` | All elements match |
+| `none(list, pred)` | No element matches |
+| `count(list, pred)` | Count matching elements |
+| `find(list, pred)` | First matching element (nullable) |
+| `first(list)` / `last(list)` | First / last element |
+| `get(list, i)` | Element by index |
+| `size(list)` | Element count |
+| `isEmpty(list)` | True if empty |
+| `contains(list, item)` | Membership test |
+| `sum(list)` / `min(list)` / `max(list)` | Numeric aggregates |
+| `sorted(list)` | Natural-order sort (new list) |
+| `sortedBy(list, fn)` | Sort by key (new list) |
+| `reversed(list)` | Reversed (new list) |
+| `take(list, n)` | First n elements |
+| `drop(list, n)` | Skip first n elements |
+| `takeWhile(list, pred)` | Elements while predicate holds |
+| `dropWhile(list, pred)` | Skip while predicate holds |
+| `distinct(list)` | Remove duplicates |
+| `concat(a, b)` | Concatenate two lists |
+| `plus(list, item)` | Append item (new list) |
+| `zip(a, b)` | Pair elements from two lists |
+| `groupBy(list, fn)` | Group into `Map<K, List<T>>` |
+| `joinToString(list, sep)` | Join elements as string |
+| `toMutable(list)` | Convert to `MutableList<T>` |
+| `toList(iterable)` | Wrap `IEnumerable<T>` |
+
+**`Mp` methods:**
+
+| Method | Description |
+|---|---|
+| `keys(map)` | Keys as `List<K>` |
+| `values(map)` | Values as `List<V>` |
+| `containsKey(map, key)` | Key membership test |
+| `get(map, key)` | Nullable value lookup |
+| `getOrDefault(map, key, default)` | Value or fallback |
+| `size(map)` | Entry count |
+| `isEmpty(map)` | True if empty |
+| `mapValues(map, fn)` | Transform values (new map) |
+| `filter(map, fn)` | Keep matching entries (new map) |
+| `forEach(map, fn)` | Side-effect iteration |
+| `toMutable(map)` | Convert to `MutableMap<K,V>` |
 
 ---
 
@@ -482,6 +609,7 @@ The `examples/` directory contains runnable `.ksr` files:
 | `examples/hello.ksr` | Data classes, extension functions, control flow |
 | `examples/stdlib_demo.ksr` | `ksr.io` and `ksr.text` standard library demo |
 | `examples/async_demo.ksr` | async/await with Task and ValueTask |
+| `examples/collections_demo.ksr` | `ksr.collections`, immutable/mutable List and Map |
 | `examples/raylib_demo.ksr` | Raylib primitives demo (circles, rectangles, lines) |
 | `examples/game_of_life.ksr` | Conway's Game of Life at 1920×1080 using Raylib |
 
@@ -506,8 +634,8 @@ The `ksr-lang` extension provides:
 
 - **Syntax highlighting** — keywords, types, strings, operators, lambdas
 - **Real-time diagnostics** — parse errors shown inline as you type (powered by the LSP server)
-- **Completions** — keywords, data class names, interface names
-- **Hover documentation** — describes keywords, literals, and identifiers on hover
+- **Completions** — keywords (`val`, `var`, `fun`, `async`, `await`, …), built-in types (`Int`, `String`, `List`, `MutableList`, …), stdlib symbols (`IO`, `File`, `Text`, `Lst`, `Mp`, …), stdlib module names (`ksr.io`, `ksr.text`, `ksr.collections`), data class names, interface names, and top-level function names from the current file
+- **Hover documentation** — describes keywords, built-in types, stdlib symbols (`Lst`, `Mp`, `IO`, …), and identifiers on hover
 
 The extension connects to the KSR Language Server (`ksr lsp`) via JSON-RPC over stdio using the standard Language Server Protocol. It works with VS Code and any other LSP-compatible editor.
 
@@ -561,7 +689,7 @@ This works in both single-file mode (`ksr file.ksr`) and full project mode (`dot
 | `KSR.Core` | Compiler library — Lexer, Parser, AST, CodeGen |
 | `KSR.Build` | MSBuild task — hooks KSR into `dotnet build` |
 | `KSR.Sdk` | MSBuild SDK — `Sdk="KSR.Sdk/0.1.0"` |
-| `KSR.StdLib` | Standard library — `ksr.io` and `ksr.text` modules |
+| `KSR.StdLib` | Standard library — `ksr.io`, `ksr.text`, and `ksr.collections` modules |
 | `KSR.Templates` | `dotnet new` templates |
 
 ---
@@ -579,8 +707,10 @@ This works in both single-file mode (`ksr file.ksr`) and full project mode (`dot
 | `Unit` | `void` | return type only |
 | `T?` | `T?` | nullable |
 | `T[]` | `T[]` | array |
-| `List<T>` | `List<T>` | mutable list |
-| `Map<K,V>` | `Dictionary<K,V>` | mutable map |
+| `List<T>` | `IReadOnlyList<T>` | immutable list |
+| `MutableList<T>` | `List<T>` | mutable list |
+| `Map<K,V>` | `IReadOnlyDictionary<K,V>` | immutable map |
+| `MutableMap<K,V>` | `Dictionary<K,V>` | mutable map |
 
 ---
 
@@ -593,7 +723,8 @@ This works in both single-file mode (`ksr file.ksr`) and full project mode (`dot
 - [x] Language server (LSP) — real-time diagnostics, completion, hover (`ksr lsp`)
 - [x] Standard library — `ksr.io` (file/console I/O) and `ksr.text` (string utilities)
 - [x] Async/await — `async fun`, `await`, `@ValueTask`, `--async-return=valuetask`
-- [ ] Standard library — `ksr.collections` (higher-order list/map operations)
+- [x] Standard library — `ksr.collections` (`Lst` and `Mp` higher-order operations)
+- [x] Immutable collections by default — `List<T>` / `Map<K,V>` are read-only; `MutableList<T>` / `MutableMap<K,V>` are writable
 
 ---
 

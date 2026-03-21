@@ -68,6 +68,7 @@ public class CodeGenerator
         // Preamble
         Line("#nullable enable");
         Line("using System;");
+        Line("using System.Collections.Generic;");
         Line("using System.Linq;");
         foreach (var d in program.Declarations)
         {
@@ -432,25 +433,52 @@ public class CodeGenerator
     }
 
     /// <summary>
-    /// Like EmitExpr but passes type context for empty collection literals so the
-    /// correct concrete type is used instead of falling back to object.
+    /// Like EmitExpr but passes type context for collection literals so the correct
+    /// concrete or interface type is used (IReadOnlyList vs List, etc.).
     /// </summary>
-    private string EmitExprWithHint(Expr expr, TypeRef? hint) => expr switch
+    private string EmitExprWithHint(Expr expr, TypeRef? hint)
     {
-        ListLiteralExpr { Elements.Count: 0 } when hint is not null
-            => $"new {MapType(hint)}()",
-        MapLiteralExpr { Entries.Count: 0 } when hint is not null
-            => $"new {MapType(hint)}()",
-        _ => EmitExpr(expr)
-    };
+        if (hint is not null)
+        {
+            var outerName = hint.Name.Contains('<') ? hint.Name[..hint.Name.IndexOf('<')] : hint.Name;
+
+            if (expr is ListLiteralExpr ll)
+            {
+                if (ll.Elements.Count == 0)
+                {
+                    if (outerName == "MutableList")
+                        return $"new {MapType(hint)}()"; // new List<T>()
+                    if (outerName == "List")
+                    {
+                        var argStr = hint.Name[(hint.Name.IndexOf('<') + 1)..^1];
+                        var csArg = MapType(new TypeRef(argStr.Trim(), false));
+                        return $"Array.Empty<{csArg}>()";
+                    }
+                    // Empty [] with a Map/MutableMap hint → concrete Dictionary
+                    if (outerName == "Map" || outerName == "MutableMap")
+                        return $"new {MapTypeForNew(hint)}()";
+                }
+                else if (outerName == "MutableList")
+                {
+                    // MutableList<T> non-empty literal → new List<T> { items }
+                    var items = string.Join(", ", ll.Elements.Select(EmitExpr));
+                    return $"new {MapType(hint)} {{ {items} }}";
+                }
+            }
+
+            if (expr is MapLiteralExpr { Entries.Count: 0 })
+                return $"new {MapTypeForNew(hint)}()";
+        }
+        return EmitExpr(expr);
+    }
 
     private string EmitListLiteral(ListLiteralExpr ll)
     {
         if (ll.Elements.Count == 0)
-            return "new List<object>()";
+            return "Array.Empty<object>()";
 
         var items = string.Join(", ", ll.Elements.Select(EmitExpr));
-        return $"new[] {{ {items} }}.ToList()";
+        return $"new[] {{ {items} }}";
     }
 
     private string EmitMapLiteral(MapLiteralExpr ml)
@@ -581,7 +609,7 @@ public class CodeGenerator
             return t.Nullable ? $"{elem}[]?" : $"{elem}[]";
         }
 
-        // Generic types: List<Int> → List<int>,  Map<String, Int> → Dictionary<string, int>
+        // Generic types: List<Int> → IReadOnlyList<int>, MutableList<Int> → List<int>, etc.
         var angleIdx = t.Name.IndexOf('<');
         if (angleIdx >= 0)
         {
@@ -589,7 +617,14 @@ public class CodeGenerator
             var argsStr = t.Name[(angleIdx + 1)..^1];
             var args = SplitTypeArgs(argsStr)
                                .Select(a => MapType(new TypeRef(a.Trim(), false)));
-            var csOuter = outer switch { "Map" => "Dictionary", _ => outer };
+            var csOuter = outer switch
+            {
+                "List"        => "IReadOnlyList",
+                "MutableList" => "List",
+                "Map"         => "IReadOnlyDictionary",
+                "MutableMap"  => "Dictionary",
+                _             => outer
+            };
             var result = $"{csOuter}<{string.Join(", ", args)}>";
             return t.Nullable ? $"{result}?" : result;
         }
@@ -606,6 +641,30 @@ public class CodeGenerator
             _ => _interfaces.Contains(t.Name) ? "I" + t.Name : t.Name
         };
         return t.Nullable ? $"{base_}?" : base_;
+    }
+
+    /// <summary>
+    /// Maps a KSR type to the concrete (constructible) C# type used in <c>new T()</c> or <c>new T { }</c>.
+    /// IReadOnlyList/IReadOnlyDictionary are interfaces; use List/Dictionary for construction instead.
+    /// </summary>
+    private string MapTypeForNew(TypeRef t)
+    {
+        var angleIdx = t.Name.IndexOf('<');
+        if (angleIdx >= 0)
+        {
+            var outer = t.Name[..angleIdx];
+            var argsStr = t.Name[(angleIdx + 1)..^1];
+            var args = SplitTypeArgs(argsStr).Select(a => MapType(new TypeRef(a.Trim(), false)));
+            var csOuter = outer switch
+            {
+                "List" or "MutableList" => "List",
+                "Map" or "MutableMap"   => "Dictionary",
+                _                       => outer
+            };
+            var result = $"{csOuter}<{string.Join(", ", args)}>";
+            return t.Nullable ? $"{result}?" : result;
+        }
+        return MapType(t);
     }
 
     /// <summary>
@@ -649,9 +708,10 @@ public class CodeGenerator
     /// </summary>
     private static string MapUseNamespace(string ns) => ns switch
     {
-        "ksr.io"   => "KSR.Io",
-        "ksr.text" => "KSR.Text",
-        _          => ns,
+        "ksr.io"          => "KSR.Io",
+        "ksr.text"        => "KSR.Text",
+        "ksr.collections" => "KSR.Collections",
+        _                 => ns,
     };
 
     /// KSR camelCase → C# PascalCase for property/member names
