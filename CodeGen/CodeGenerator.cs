@@ -29,6 +29,25 @@ public class CodeGenerator
     // True while emitting a record method body (this → "this", not "self")
     private bool _inRecordMethod = false;
 
+    // ── async state ───────────────────────────────────────────────────────────
+
+    /// <summary>Global default: Task (default) or ValueTask (--async-return=valuetask).</summary>
+    private readonly AsyncReturnKind _globalAsyncReturn;
+
+    /// <summary>True while emitting the body of an async function.</summary>
+    private bool _inAsyncFunction = false;
+
+    /// <summary>
+    /// Effective async return kind for the function currently being emitted.
+    /// Per-function @ValueTask annotation wins; global flag is the tiebreaker.
+    /// </summary>
+    private AsyncReturnKind _currentAsyncReturn = AsyncReturnKind.Task;
+
+    public CodeGenerator(AsyncReturnKind globalAsyncReturn = AsyncReturnKind.Task)
+    {
+        _globalAsyncReturn = globalAsyncReturn;
+    }
+
     // ── public entry ─────────────────────────────────────────────────────────
 
     public string Generate(ProgramNode program)
@@ -91,7 +110,11 @@ public class CodeGenerator
         _indent++;
         foreach (var m in id.Methods)
         {
-            var ret = m.ReturnType is null ? "void" : MapType(m.ReturnType);
+            // C# interface method signatures do NOT use the 'async' keyword;
+            // the return type alone signals the async contract.
+            var ret = m.IsAsync
+                ? BuildAsyncReturnType(m.ReturnType, EffectiveAsyncReturn(m.AsyncReturn))
+                : (m.ReturnType is null ? "void" : MapType(m.ReturnType));
             var parms = string.Join(", ", m.Parameters.Select(p => $"{MapType(p.Type)} {p.Name}"));
             Line($"{ret} {Pascal(m.Name)}({parms});");
         }
@@ -128,11 +151,19 @@ public class CodeGenerator
 
     private void EmitRecordMethod(FunctionDecl fd)
     {
-        var ret = fd.ReturnType is null ? "void" : MapType(fd.ReturnType);
+        var prevAsync = _inAsyncFunction;
+        var prevKind  = _currentAsyncReturn;
+        _inAsyncFunction   = fd.IsAsync;
+        _currentAsyncReturn = EffectiveAsyncReturn(fd.AsyncReturn);
+
+        var ret = fd.IsAsync
+            ? BuildAsyncReturnType(fd.ReturnType, _currentAsyncReturn)
+            : (fd.ReturnType is null ? "void" : MapType(fd.ReturnType));
+        var asyncMod = fd.IsAsync ? "async " : "";
         var parms = string.Join(", ",
             fd.Parameters.Select(p => $"{MapType(p.Type)} {p.Name}"));
 
-        Line($"public {ret} {Pascal(fd.Name)}({parms})");
+        Line($"public {asyncMod}{ret} {Pascal(fd.Name)}({parms})");
         Line("{");
         _indent++;
         EmitBlock(fd.Body);
@@ -140,16 +171,27 @@ public class CodeGenerator
         _indent--;
         Line("}");
         Blank();
+
+        _inAsyncFunction   = prevAsync;
+        _currentAsyncReturn = prevKind;
     }
 
     private void EmitFunction(FunctionDecl fd)
     {
-        var ret = fd.ReturnType is null ? "void" : MapType(fd.ReturnType);
+        var prevAsync = _inAsyncFunction;
+        var prevKind  = _currentAsyncReturn;
+        _inAsyncFunction   = fd.IsAsync;
+        _currentAsyncReturn = EffectiveAsyncReturn(fd.AsyncReturn);
+
+        var ret = fd.IsAsync
+            ? BuildAsyncReturnType(fd.ReturnType, _currentAsyncReturn)
+            : (fd.ReturnType is null ? "void" : MapType(fd.ReturnType));
+        var asyncMod = fd.IsAsync ? "async " : "";
         var method = fd.Name == "main" ? "Main" : fd.Name;
         var parms = string.Join(", ",
             fd.Parameters.Select(p => $"{MapType(p.Type)} {p.Name}"));
 
-        Line($"static {ret} {method}({parms})");
+        Line($"static {asyncMod}{ret} {method}({parms})");
         Line("{");
         _indent++;
         EmitBlock(fd.Body);
@@ -157,6 +199,9 @@ public class CodeGenerator
         _indent--;
         Line("}");
         Blank();
+
+        _inAsyncFunction   = prevAsync;
+        _currentAsyncReturn = prevKind;
     }
 
     /// <summary>
@@ -165,7 +210,15 @@ public class CodeGenerator
     /// </summary>
     private void EmitExtFunction(ExtFunctionDecl efd)
     {
-        var ret = efd.ReturnType is null ? "void" : MapType(efd.ReturnType);
+        var prevAsync = _inAsyncFunction;
+        var prevKind  = _currentAsyncReturn;
+        _inAsyncFunction   = efd.IsAsync;
+        _currentAsyncReturn = EffectiveAsyncReturn(efd.AsyncReturn);
+
+        var ret = efd.IsAsync
+            ? BuildAsyncReturnType(efd.ReturnType, _currentAsyncReturn)
+            : (efd.ReturnType is null ? "void" : MapType(efd.ReturnType));
+        var asyncMod = efd.IsAsync ? "async " : "";
         var csType = MapType(new TypeRef(efd.ReceiverType, false));
 
         // First parameter is the receiver: "this TypeName self"
@@ -173,7 +226,7 @@ public class CodeGenerator
         paramParts.AddRange(efd.Parameters.Select(p => $"{MapType(p.Type)} {p.Name}"));
         var parms = string.Join(", ", paramParts);
 
-        Line($"public static {ret} {Pascal(efd.MethodName)}({parms})");
+        Line($"public static {asyncMod}{ret} {Pascal(efd.MethodName)}({parms})");
         Line("{");
         _indent++;
         EmitBlock(efd.Body);
@@ -181,6 +234,9 @@ public class CodeGenerator
         _indent--;
         Line("}");
         Blank();
+
+        _inAsyncFunction   = prevAsync;
+        _currentAsyncReturn = prevKind;
     }
 
     // ── block & statements ────────────────────────────────────────────────────
@@ -333,6 +389,7 @@ public class CodeGenerator
         ListLiteralExpr ll => EmitListLiteral(ll),
         MapLiteralExpr ml => EmitMapLiteral(ml),
         WhenExpr we => EmitWhenExpr(we),
+        AwaitExpr ae => EmitAwait(ae),
 
         _ => throw new InvalidOperationException($"Unknown expression: {expr.GetType().Name}")
     };
@@ -418,6 +475,39 @@ public class CodeGenerator
         StringTemplateExpr => "string",
         _ => null
     };
+
+    // ── async helpers ─────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Resolves the effective async return kind for one function:
+    /// per-function @ValueTask OR global --async-return=valuetask wins over the default Task.
+    /// </summary>
+    private AsyncReturnKind EffectiveAsyncReturn(AsyncReturnKind perFunction) =>
+        perFunction == AsyncReturnKind.ValueTask || _globalAsyncReturn == AsyncReturnKind.ValueTask
+            ? AsyncReturnKind.ValueTask
+            : AsyncReturnKind.Task;
+
+    /// <summary>
+    /// Builds the C# async return type.
+    ///   innerType=null   → "Task"  or "ValueTask"
+    ///   innerType=String → "Task&lt;string&gt;"  or "ValueTask&lt;string&gt;"
+    /// </summary>
+    private string BuildAsyncReturnType(TypeRef? innerType, AsyncReturnKind kind)
+    {
+        var wrapper = kind == AsyncReturnKind.ValueTask ? "ValueTask" : "Task";
+        return innerType is null ? wrapper : $"{wrapper}<{MapType(innerType)}>";
+    }
+
+    /// <summary>
+    /// Emits an await expression.  If used outside an async function a C# #error
+    /// directive is injected so the Roslyn compile step surfaces a clear message.
+    /// </summary>
+    private string EmitAwait(AwaitExpr ae)
+    {
+        if (!_inAsyncFunction)
+            Line("#error KSR: 'await' used outside an async function");
+        return $"(await {EmitExpr(ae.Operand)})";
+    }
 
     // ── when expression ──────────────────────────────────────────────────────
 

@@ -70,9 +70,41 @@ public class Parser
 
     private AstNode ParseDeclaration()
     {
-        if (Check(TokenType.Use))       return ParseUseDecl();
+        // ── optional @ValueTask annotation ────────────────────────────────────
+        var asyncReturn = AsyncReturnKind.Task;
+        if (Check(TokenType.At))
+        {
+            Consume(); // @
+            var ann = Expect(TokenType.Identifier).Value;
+            if (ann != "ValueTask")
+                throw new KsrParseException(
+                    $"Unknown annotation '@{ann}' — only '@ValueTask' is supported",
+                    Current.Line, Current.Col);
+            asyncReturn = AsyncReturnKind.ValueTask;
+        }
+
+        // ── optional async modifier ───────────────────────────────────────────
+        bool isAsync = false;
+        if (Check(TokenType.Async))
+        {
+            isAsync = true;
+            Consume();
+        }
+
+        // @ValueTask without async is invalid
+        if (asyncReturn == AsyncReturnKind.ValueTask && !isAsync)
+            throw new KsrParseException(
+                "@ValueTask can only be used on async functions",
+                Current.Line, Current.Col);
+
+        if (Check(TokenType.Use))
+        {
+            if (isAsync) throw new KsrParseException(
+                "'async' cannot be applied to 'use'", Current.Line, Current.Col);
+            return ParseUseDecl();
+        }
         if (Check(TokenType.Data))      return ParseDataClass();
-        if (Check(TokenType.Fun))       return ParseFunctionOrExtension();
+        if (Check(TokenType.Fun))       return ParseFunctionOrExtension(isAsync, asyncReturn);
         if (Check(TokenType.Interface)) return ParseInterfaceDecl();
         if (Check(TokenType.Implement)) return ParseImplBlock();
 
@@ -108,7 +140,7 @@ public class Parser
     }
 
     /// <summary>
-    /// interface Shape { fun area(): Double \n fun perimeter(): Double }
+    /// interface Shape { fun area(): Double \n async fun fetch(): String }
     /// </summary>
     private InterfaceDecl ParseInterfaceDecl()
     {
@@ -119,6 +151,20 @@ public class Parser
         var methods = new List<InterfaceMethod>();
         while (!Check(TokenType.RBrace) && !Check(TokenType.Eof))
         {
+            // Optional async modifier on interface methods
+            var mAsyncReturn = AsyncReturnKind.Task;
+            if (Check(TokenType.At))
+            {
+                Consume();
+                var ann = Expect(TokenType.Identifier).Value;
+                if (ann != "ValueTask")
+                    throw new KsrParseException(
+                        $"Unknown annotation '@{ann}'", Current.Line, Current.Col);
+                mAsyncReturn = AsyncReturnKind.ValueTask;
+            }
+            bool mIsAsync = false;
+            if (Check(TokenType.Async)) { mIsAsync = true; Consume(); }
+
             Expect(TokenType.Fun);
             var mname = Expect(TokenType.Identifier).Value;
             Expect(TokenType.LParen);
@@ -126,7 +172,8 @@ public class Parser
             Expect(TokenType.RParen);
             TypeRef? ret = null;
             if (Match(TokenType.Colon)) ret = ParseTypeRef();
-            methods.Add(new InterfaceMethod(mname, parms, ret));
+            if (mIsAsync) ValidateAsyncReturnType(ret, mname);
+            methods.Add(new InterfaceMethod(mname, parms, ret, mIsAsync, mAsyncReturn));
         }
 
         Expect(TokenType.RBrace);
@@ -147,9 +194,22 @@ public class Parser
         var methods = new List<FunctionDecl>();
         while (!Check(TokenType.RBrace) && !Check(TokenType.Eof))
         {
+            var mAsyncReturn = AsyncReturnKind.Task;
+            if (Check(TokenType.At))
+            {
+                Consume();
+                var ann = Expect(TokenType.Identifier).Value;
+                if (ann != "ValueTask")
+                    throw new KsrParseException(
+                        $"Unknown annotation '@{ann}'", Current.Line, Current.Col);
+                mAsyncReturn = AsyncReturnKind.ValueTask;
+            }
+            bool mIsAsync = false;
+            if (Check(TokenType.Async)) { mIsAsync = true; Consume(); }
+
             Expect(TokenType.Fun);
             var mname = Expect(TokenType.Identifier).Value;
-            methods.Add(ParseFunctionTail(mname));
+            methods.Add(ParseFunctionTail(mname, mIsAsync, mAsyncReturn));
         }
 
         Expect(TokenType.RBrace);
@@ -158,10 +218,13 @@ public class Parser
 
     /// <summary>
     /// Handles both:
-    ///   fun name(...)           → FunctionDecl
+    ///   fun name(...)             → FunctionDecl
     ///   fun TypeName.method(...)  → ExtFunctionDecl
+    /// Both may be preceded by async / @ValueTask async.
     /// </summary>
-    private AstNode ParseFunctionOrExtension()
+    private AstNode ParseFunctionOrExtension(
+        bool isAsync = false,
+        AsyncReturnKind asyncReturn = AsyncReturnKind.Task)
     {
         Expect(TokenType.Fun);
         var firstName = Expect(TokenType.Identifier).Value;
@@ -171,13 +234,16 @@ public class Parser
         {
             Consume(); // .
             var methodName = Expect(TokenType.Identifier).Value;
-            return ParseExtFunctionTail(firstName, methodName);
+            return ParseExtFunctionTail(firstName, methodName, isAsync, asyncReturn);
         }
 
-        return ParseFunctionTail(firstName);
+        return ParseFunctionTail(firstName, isAsync, asyncReturn);
     }
 
-    private FunctionDecl ParseFunctionTail(string name)
+    private FunctionDecl ParseFunctionTail(
+        string name,
+        bool isAsync = false,
+        AsyncReturnKind asyncReturn = AsyncReturnKind.Task)
     {
         Expect(TokenType.LParen);
         var parms = new List<Parameter>();
@@ -187,10 +253,16 @@ public class Parser
         TypeRef? retType = null;
         if (Match(TokenType.Colon)) retType = ParseTypeRef();
 
-        return new FunctionDecl(name, parms, retType, ParseBlock());
+        if (isAsync) ValidateAsyncReturnType(retType, name);
+
+        return new FunctionDecl(name, parms, retType, ParseBlock(), isAsync, asyncReturn);
     }
 
-    private ExtFunctionDecl ParseExtFunctionTail(string receiverType, string methodName)
+    private ExtFunctionDecl ParseExtFunctionTail(
+        string receiverType,
+        string methodName,
+        bool isAsync = false,
+        AsyncReturnKind asyncReturn = AsyncReturnKind.Task)
     {
         Expect(TokenType.LParen);
         var parms = new List<Parameter>();
@@ -200,7 +272,27 @@ public class Parser
         TypeRef? retType = null;
         if (Match(TokenType.Colon)) retType = ParseTypeRef();
 
-        return new ExtFunctionDecl(receiverType, methodName, parms, retType, ParseBlock());
+        if (isAsync) ValidateAsyncReturnType(retType, $"{receiverType}.{methodName}");
+
+        return new ExtFunctionDecl(receiverType, methodName, parms, retType,
+                                   ParseBlock(), isAsync, asyncReturn);
+    }
+
+    /// <summary>
+    /// Rejects explicit Task/ValueTask wrapper types in async return annotations.
+    /// The annotation should be the inner type only; the compiler adds the wrapper.
+    /// </summary>
+    private void ValidateAsyncReturnType(TypeRef? ret, string funcName)
+    {
+        if (ret is null) return;
+        var n = ret.Name;
+        if (n == "Task" || n.StartsWith("Task<") ||
+            n == "ValueTask" || n.StartsWith("ValueTask<"))
+            throw new KsrParseException(
+                $"async function '{funcName}': write the inner return type " +
+                $"(e.g. 'String'), not the Task wrapper ('{n}'). " +
+                "The compiler adds Task/ValueTask automatically.",
+                Current.Line, Current.Col);
     }
 
     // ── parameters / types ────────────────────────────────────────────────────
@@ -469,6 +561,11 @@ public class Parser
 
     private Expr ParseUnary()
     {
+        if (Check(TokenType.Await))
+        {
+            Consume();
+            return new AwaitExpr(ParseUnary()); // right-associative: await await x
+        }
         if (Check(TokenType.Bang))
         {
             var op = Consume().Value;

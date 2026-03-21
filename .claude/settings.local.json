@@ -10,7 +10,9 @@
       "Bash(DOTNET=\"/mnt/c/Program Files/dotnet/dotnet.exe\" REPO=/mnt/c/Users/serge/source/repos/ksr_lang __NEW_LINE_4b31334e50593753__ \"$DOTNET\" pack sdk/KSR.Build/KSR.Build.csproj -c Release -o artifacts/ -v q)",
       "Bash(grep -v \"/$\")",
       "Bash(DOTNET=\"/mnt/c/Program Files/dotnet/dotnet.exe\" \"$DOTNET\" pack sdk/KSR.Build/KSR.Build.csproj -c Release -o artifacts/ -v q)",
-      "Bash(unzip -l artifacts/KSR.Build.0.1.0.nupkg)"
+      "Bash(unzip -l artifacts/KSR.Build.0.1.0.nupkg)",
+      "Bash(dotnet test:*)",
+      "Bash(dotnet build:*)"
     ]
   }
 }

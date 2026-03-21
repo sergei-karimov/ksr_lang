@@ -74,7 +74,13 @@ public static class KsrCompiler {
             ? null
             : new object[] { Array.Empty<string>() };
 
-        main.Invoke(null, invokeArgs);
+        var result = main.Invoke(null, invokeArgs);
+
+        // If main() is async it returns Task or ValueTask — await it synchronously.
+        if (result is Task task)
+            task.GetAwaiter().GetResult();
+        else if (result is System.Threading.Tasks.ValueTask vt)
+            vt.GetAwaiter().GetResult();
     }
 
     // ── reference resolution ──────────────────────────────────────────────────

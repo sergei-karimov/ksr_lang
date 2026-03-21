@@ -1,0 +1,38 @@
+// async_demo.ksr — demonstrates async/await in KSR
+use ksr.io
+use System.Threading.Tasks
+
+// ── simple async function returning a value ──────────────────────────────────
+
+async fun fetchGreeting(name: String): String {
+    // Simulate async work (e.g. an HTTP call) with Task.Delay
+    await Task.delay(10)
+    return "Hello, ${name}!"
+}
+
+// ── async void function (fire-and-forget style) ──────────────────────────────
+
+async fun logAsync(msg: String) {
+    await Task.delay(1)
+    println(msg)
+}
+
+// ── @ValueTask for hot-path zero-allocation async ────────────────────────────
+
+@ValueTask
+async fun fastCompute(n: Int): Int {
+    await Task.delay(0)
+    return n * 2
+}
+
+// ── async main ───────────────────────────────────────────────────────────────
+
+async fun main() {
+    val greeting = await fetchGreeting("KSR")
+    println(greeting)
+
+    await logAsync("async logging works")
+
+    val result = await fastCompute(21)
+    println("fastCompute(21) = ${result}")
+}

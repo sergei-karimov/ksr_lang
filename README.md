@@ -75,6 +75,10 @@ fun add(a: Int, b: Int): Int {
 fun greet(name: String) {
     println("Hello, ${name}!")
 }
+
+async fun fetchData(url: String): String {
+    return await httpClient.getAsync(url)
+}
 ```
 
 ### Data Classes
@@ -221,6 +225,47 @@ implement Named for Circle {
 ```
 
 The generated C# uses the standard `I`-prefix convention (`Shape` → `IShape`).
+
+### Async / Await
+
+```kotlin
+// Async function — return type is the inner (unwrapped) type
+async fun fetchGreeting(name: String): String {
+    await Task.delay(100)
+    return "Hello, ${name}!"
+}
+
+// Async void (no return value)
+async fun logAsync(msg: String) {
+    await Task.delay(1)
+    println(msg)
+}
+
+// @ValueTask annotation — zero-allocation hot-path variant
+@ValueTask
+async fun fastCompute(n: Int): Int {
+    await Task.delay(0)
+    return n * 2
+}
+
+// Async main is fully supported
+async fun main() {
+    val greeting = await fetchGreeting("KSR")
+    println(greeting)
+    val result = await fastCompute(21)
+    println("result = ${result}")
+}
+```
+
+`async fun f(): T` compiles to `async Task<T> f()`.
+`async fun f()` compiles to `async Task f()`.
+`@ValueTask async fun f(): T` compiles to `async ValueTask<T> f()`.
+
+The global flag `--async-return=valuetask` makes all async functions use `ValueTask` by default:
+
+```bash
+ksr myapp.ksr --async-return=valuetask
+```
 
 ### Collections
 
@@ -422,7 +467,8 @@ No project needed — run a `.ksr` file directly like a script.
 
 ```bash
 ksr hello.ksr
-ksr hello.ksr --debug    # also prints the generated C# source
+ksr hello.ksr --debug                  # also prints the generated C# source
+ksr hello.ksr --async-return=valuetask # use ValueTask for all async functions
 ```
 
 ---
@@ -435,6 +481,7 @@ The `examples/` directory contains runnable `.ksr` files:
 |---|---|
 | `examples/hello.ksr` | Data classes, extension functions, control flow |
 | `examples/stdlib_demo.ksr` | `ksr.io` and `ksr.text` standard library demo |
+| `examples/async_demo.ksr` | async/await with Task and ValueTask |
 | `examples/raylib_demo.ksr` | Raylib primitives demo (circles, rectangles, lines) |
 | `examples/game_of_life.ksr` | Conway's Game of Life at 1920×1080 using Raylib |
 
@@ -545,7 +592,7 @@ This works in both single-file mode (`ksr file.ksr`) and full project mode (`dot
 - [x] Pattern matching — `when` expression (switch expr / ternary / if-else)
 - [x] Language server (LSP) — real-time diagnostics, completion, hover (`ksr lsp`)
 - [x] Standard library — `ksr.io` (file/console I/O) and `ksr.text` (string utilities)
-- [ ] Coroutines / async-await
+- [x] Async/await — `async fun`, `await`, `@ValueTask`, `--async-return=valuetask`
 - [ ] Standard library — `ksr.collections` (higher-order list/map operations)
 
 ---
@@ -571,13 +618,13 @@ dotnet pack KSR.csproj                                   -o artifacts/
 
 Or just run the installer script which does all of this automatically.
 
-The compiler and toolchain is ~3 000 lines of C# across six layers:
+The compiler and toolchain is ~3 500 lines of C# across six layers:
 
 ```
 Lexer/             tokeniser
-Parser/            recursive-descent parser
+Parser/            recursive-descent parser + semantic validation
 AST/               node definitions (C# records)
-CodeGen/           C# emitter + Roslyn in-memory runner
+CodeGen/           C# emitter (async/await, interfaces, when) + Roslyn in-memory runner
 LspServer.cs       Language Server Protocol (JSON-RPC over stdio)
 sdk/KSR.StdLib/    standard library (ksr.io, ksr.text)
 ```

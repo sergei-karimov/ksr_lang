@@ -41,6 +41,8 @@ public class Lexer
         ["interface"] = TokenType.Interface,
         ["implement"] = TokenType.Implement,
         ["when"]      = TokenType.When,
+        ["async"]     = TokenType.Async,
+        ["await"]     = TokenType.Await,
     };
 
     public Lexer(string source) => _src = source;
@@ -151,6 +153,8 @@ public class Lexer
             '}' => Tok(TokenType.RBrace,    "}",  line, col),
             '[' => Tok(TokenType.LBracket,  "[",  line, col),
             ']' => Tok(TokenType.RBracket,  "]",  line, col),
+
+            '@' => Tok(TokenType.At, "@", line, col),
 
             _ => throw new KsrLexException($"Unexpected character '{c}'", line, col)
         };

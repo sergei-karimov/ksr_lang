@@ -205,13 +205,14 @@ public class LexerTests
     [Fact]
     public void UnexpectedCharacter_ThrowsKsrLexException()
     {
-        Assert.Throws<KsrLexException>(() => Lex("val x = @bad"));
+        // '#' is not a valid KSR character
+        Assert.Throws<KsrLexException>(() => Lex("val x = #bad"));
     }
 
     [Fact]
     public void LexException_CarriesLineAndCol()
     {
-        var ex = Assert.Throws<KsrLexException>(() => Lex("val x = @bad"));
+        var ex = Assert.Throws<KsrLexException>(() => Lex("val x = #bad"));
         Assert.True(ex.Line > 0);
         Assert.True(ex.Col  > 0);
     }

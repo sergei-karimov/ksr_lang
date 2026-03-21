@@ -18,6 +18,13 @@ public abstract record Expr  : AstNode;
 //  Helpers (not nodes — just data bags used inside other nodes)
 // ═══════════════════════════════════════════════════════════════════════════════
 
+/// <summary>
+/// Which Task wrapper to use for async functions.
+/// Per-function default is Task; overridden globally via --async-return=valuetask
+/// or per-function via the @ValueTask annotation.
+/// </summary>
+public enum AsyncReturnKind { Task, ValueTask }
+
 /// <summary>A KSR type reference, e.g. "Int", "String?", "User?"</summary>
 public record TypeRef(string Name, bool Nullable);
 
@@ -32,7 +39,12 @@ public record Parameter(string Name, TypeRef Type);
 public record ProgramNode(List<AstNode> Declarations) : AstNode;
 
 /// <summary>A method signature inside an interface body.</summary>
-public record InterfaceMethod(string Name, List<Parameter> Parameters, TypeRef? ReturnType);
+public record InterfaceMethod(
+    string          Name,
+    List<Parameter> Parameters,
+    TypeRef?        ReturnType,
+    bool            IsAsync     = false,
+    AsyncReturnKind AsyncReturn = AsyncReturnKind.Task);
 
 /// <summary>interface Shape { fun area(): Double }</summary>
 public record InterfaceDecl(string Name, List<InterfaceMethod> Methods) : AstNode;
@@ -49,12 +61,14 @@ public record UseDecl(string Namespace) : AstNode;
 /// <summary>data class Foo(x: Int, y: String)</summary>
 public record DataClassDecl(string Name, List<Parameter> Properties) : AstNode;
 
-/// <summary>fun foo(a: Int): String { … }</summary>
+/// <summary>fun foo(a: Int): String { … }   or   async fun foo(): String { … }</summary>
 public record FunctionDecl(
     string          Name,
     List<Parameter> Parameters,
     TypeRef?        ReturnType,
-    Block           Body) : AstNode;
+    Block           Body,
+    bool            IsAsync     = false,
+    AsyncReturnKind AsyncReturn = AsyncReturnKind.Task) : AstNode;
 
 /// <summary>
 /// Extension function: fun Type.method(params): RetType { … }
@@ -66,7 +80,9 @@ public record ExtFunctionDecl(
     string          MethodName,
     List<Parameter> Parameters,
     TypeRef?        ReturnType,
-    Block           Body) : AstNode;
+    Block           Body,
+    bool            IsAsync     = false,
+    AsyncReturnKind AsyncReturn = AsyncReturnKind.Task) : AstNode;
 
 // ═══════════════════════════════════════════════════════════════════════════════
 //  Statements
@@ -192,3 +208,6 @@ public record WhenExpr(Expr? Subject, List<WhenArm> Arms) : Expr;
 
 /// <summary>Map literal: ["k1": v1, "k2": v2]  →  new Dictionary&lt;K, V&gt; { ["k1"] = v1, … }</summary>
 public record MapLiteralExpr(List<(Expr Key, Expr Value)> Entries) : Expr;
+
+/// <summary>await expr — valid only inside an async function body.</summary>
+public record AwaitExpr(Expr Operand) : Expr;

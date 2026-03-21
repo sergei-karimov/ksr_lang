@@ -29,6 +29,9 @@ public enum TokenType
     Interface,  // interface
     Implement,  // implement
     When,       // when   (pattern-matching expression)
+    Async,      // async  (async function modifier)
+    Await,      // await  (await expression)
+    At,         // @      (annotation sigil: @ValueTask)
 
     // ── Identifier ────────────────────────────────────────────────────────────
     Identifier,

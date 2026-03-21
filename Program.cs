@@ -17,6 +17,9 @@ using KSR.Parser;
 // ─────────────────────────────────────────────────────────────────────────────
 
 bool debugMode = args.Contains("--debug");
+var asyncReturn = args.Contains("--async-return=valuetask")
+    ? KSR.AST.AsyncReturnKind.ValueTask
+    : KSR.AST.AsyncReturnKind.Task;
 var  positional = args.Where(a => !a.StartsWith("--")).ToArray();
 
 if (positional.Length == 0)
@@ -46,7 +49,7 @@ try
                 PrintHelp();
                 Environment.Exit(1);
             }
-            RunSingleFile(path, debugMode);
+            RunSingleFile(path, debugMode, asyncReturn);
             break;
         }
     }
@@ -96,7 +99,10 @@ static void CheckFile(string path)
     }
 }
 
-static void RunSingleFile(string path, bool debugMode)
+static void RunSingleFile(
+    string path,
+    bool debugMode,
+    KSR.AST.AsyncReturnKind asyncReturn = KSR.AST.AsyncReturnKind.Task)
 {
     // Ensure KSR.StdLib assembly is loaded into the AppDomain so that Roslyn
     // (strategy 3 in ResolveReferences) can find it when compiling ksr.io / ksr.text.
@@ -105,7 +111,7 @@ static void RunSingleFile(string path, bool debugMode)
     var source    = File.ReadAllText(path);
     var tokens    = new KSR.Lexer.Lexer(source).Tokenize();
     var program   = new Parser(tokens, Path.GetFullPath(path)).Parse();
-    var csharpSrc = new KSR.CodeGen.CodeGenerator().Generate(program);
+    var csharpSrc = new KSR.CodeGen.CodeGenerator(asyncReturn).Generate(program);
     KsrCompiler.CompileAndRun(csharpSrc, debugMode);
 }
 
@@ -121,8 +127,9 @@ static void PrintHelp()
         KSR — Kotlin-Style Runtime language
 
         SINGLE-FILE MODE
-          ksr <file.ksr>               Compile and run a .ksr file
-          ksr <file.ksr> --debug       Also print the generated C# source
+          ksr <file.ksr>                        Compile and run a .ksr file
+          ksr <file.ksr> --debug                Also print the generated C# source
+          ksr <file.ksr> --async-return=valuetask  Use ValueTask for all async functions
 
         EDITOR INTEGRATION
           ksr check <file>             Output JSON diagnostics
