@@ -98,6 +98,10 @@ static void CheckFile(string path)
 
 static void RunSingleFile(string path, bool debugMode)
 {
+    // Ensure KSR.StdLib assembly is loaded into the AppDomain so that Roslyn
+    // (strategy 3 in ResolveReferences) can find it when compiling ksr.io / ksr.text.
+    _ = typeof(KSR.Io.IO).Assembly;
+
     var source    = File.ReadAllText(path);
     var tokens    = new KSR.Lexer.Lexer(source).Tokenize();
     var program   = new Parser(tokens, Path.GetFullPath(path)).Parse();

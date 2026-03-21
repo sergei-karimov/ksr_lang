@@ -26,11 +26,12 @@
   </PropertyGroup>
 
   <!--
-    Pull in KSR.Build (the task package).
-    Version is pinned here so end users never have to specify it.
+    Pull in KSR.Build (the task package) and KSR.StdLib (the standard library).
+    Versions are pinned here so end users never have to specify them.
   -->
   <ItemGroup>
-    <PackageReference Include="KSR.Build" Version="0.1.0" PrivateAssets="all" />
+    <PackageReference Include="KSR.Build"   Version="0.1.0" PrivateAssets="all" />
+    <PackageReference Include="KSR.StdLib"  Version="0.1.0" />
   </ItemGroup>
 
 </Project>

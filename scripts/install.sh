@@ -87,6 +87,10 @@ step "Building KSR.Sdk"
 dotnet pack "$REPO_ROOT/sdk/KSR.Sdk/KSR.Sdk.csproj" -c Release -o "$ARTIFACTS" -v q --nologo
 ok "KSR.Sdk packed"
 
+step "Building KSR.StdLib"
+dotnet pack "$REPO_ROOT/sdk/KSR.StdLib/KSR.StdLib.csproj" -c Release -o "$ARTIFACTS" -v q --nologo
+ok "KSR.StdLib packed"
+
 step "Building KSR.Templates"
 dotnet pack "$REPO_ROOT/sdk/KSR.Templates/KSR.Templates.csproj" -c Release -o "$ARTIFACTS" -v q --nologo
 ok "KSR.Templates packed"

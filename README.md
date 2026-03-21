@@ -245,6 +245,65 @@ use Raylib_cs
 use System.Collections.Generic
 ```
 
+### Standard Library
+
+KSR ships two built-in modules. Add them with `use`:
+
+#### `ksr.io` — file system and console I/O
+
+```kotlin
+use ksr.io
+
+fun main() {
+    // Console
+    IO.print("Enter your name: ")
+    val name: String? = IO.readLine()
+    val n: Int?       = IO.readInt()
+
+    // Files
+    File.write("out.txt", "hello KSR")
+    val text  = File.read("out.txt")
+    val lines = File.lines("out.txt")
+    val ok    = File.exists("out.txt")
+    File.append("log.txt", "entry\n")
+    File.delete("out.txt")
+
+    // Paths
+    val joined = Path.join("dir", "file.txt")  // "dir/file.txt"
+    val ext    = Path.extension("archive.tar.gz")  // ".gz"
+    val name2  = Path.fileName("/usr/bin/ksr")     // "ksr"
+    val stem   = Path.fileStem("/usr/bin/ksr")     // "ksr"
+    val abs    = Path.absolute("relative/path")
+}
+```
+
+#### `ksr.text` — string utilities
+
+```kotlin
+use ksr.text
+
+fun main() {
+    val n: Int?    = Text.toInt("42")       // nullable parse
+    val d: Double? = Text.toDouble("3.14")
+
+    val s = Text.trim("  hello  ")          // "hello"
+    val u = Text.toUpper("hello")           // "HELLO"
+    val l = Text.toLower("HELLO")           // "hello"
+
+    val ok  = Text.startsWith("hello", "he")
+    val ok2 = Text.endsWith("hello", "lo")
+    val ok3 = Text.contains("hello", "ell")
+
+    val parts  = Text.split("a,b,c", ",")   // List<String>
+    val joined = Text.join(" | ", parts)    // "a | b | c"
+
+    val rep  = Text.repeat("ab", 3)         // "ababab"
+    val repl = Text.replace("hello", "l", "r") // "herro"
+    val sub  = Text.substring("hello", 1, 3)   // "ell"
+    val len  = Text.length("hello")         // 5
+}
+```
+
 ---
 
 ## Complete Example
@@ -375,6 +434,7 @@ The `examples/` directory contains runnable `.ksr` files:
 | File | Description |
 |---|---|
 | `examples/hello.ksr` | Data classes, extension functions, control flow |
+| `examples/stdlib_demo.ksr` | `ksr.io` and `ksr.text` standard library demo |
 | `examples/raylib_demo.ksr` | Raylib primitives demo (circles, rectangles, lines) |
 | `examples/game_of_life.ksr` | Conway's Game of Life at 1920×1080 using Raylib |
 
@@ -454,6 +514,7 @@ This works in both single-file mode (`ksr file.ksr`) and full project mode (`dot
 | `KSR.Core` | Compiler library — Lexer, Parser, AST, CodeGen |
 | `KSR.Build` | MSBuild task — hooks KSR into `dotnet build` |
 | `KSR.Sdk` | MSBuild SDK — `Sdk="KSR.Sdk/0.1.0"` |
+| `KSR.StdLib` | Standard library — `ksr.io` and `ksr.text` modules |
 | `KSR.Templates` | `dotnet new` templates |
 
 ---
@@ -483,8 +544,9 @@ This works in both single-file mode (`ksr file.ksr`) and full project mode (`dot
 - [x] Interfaces / trait-style polymorphism (`interface` + `implement … for …`)
 - [x] Pattern matching — `when` expression (switch expr / ternary / if-else)
 - [x] Language server (LSP) — real-time diagnostics, completion, hover (`ksr lsp`)
+- [x] Standard library — `ksr.io` (file/console I/O) and `ksr.text` (string utilities)
 - [ ] Coroutines / async-await
-- [ ] Standard library (`ksr.io`, `ksr.collections`)
+- [ ] Standard library — `ksr.collections` (higher-order list/map operations)
 
 ---
 
@@ -502,20 +564,22 @@ Pack all NuGet packages to `artifacts/`:
 dotnet pack KSR.Core.csproj                              -o artifacts/
 dotnet pack sdk/KSR.Build/KSR.Build.csproj               -o artifacts/
 dotnet pack sdk/KSR.Sdk/KSR.Sdk.csproj                   -o artifacts/
+dotnet pack sdk/KSR.StdLib/KSR.StdLib.csproj             -o artifacts/
 dotnet pack sdk/KSR.Templates/KSR.Templates.csproj       -o artifacts/
 dotnet pack KSR.csproj                                   -o artifacts/
 ```
 
 Or just run the installer script which does all of this automatically.
 
-The compiler and toolchain is ~2 600 lines of C# across five layers:
+The compiler and toolchain is ~3 000 lines of C# across six layers:
 
 ```
-Lexer/        tokeniser
-Parser/       recursive-descent parser
-AST/          node definitions (C# records)
-CodeGen/      C# emitter + Roslyn in-memory runner
-LspServer.cs  Language Server Protocol (JSON-RPC over stdio)
+Lexer/             tokeniser
+Parser/            recursive-descent parser
+AST/               node definitions (C# records)
+CodeGen/           C# emitter + Roslyn in-memory runner
+LspServer.cs       Language Server Protocol (JSON-RPC over stdio)
+sdk/KSR.StdLib/    standard library (ksr.io, ksr.text)
 ```
 
 ---

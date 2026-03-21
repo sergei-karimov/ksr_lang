@@ -15,6 +15,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\KSR.Core.csproj" />
+    <ProjectReference Include="..\..\sdk\KSR.StdLib\KSR.StdLib.csproj" />
   </ItemGroup>
 
 </Project>

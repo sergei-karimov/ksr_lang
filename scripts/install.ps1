@@ -113,6 +113,10 @@ Write-Step "Building KSR.Sdk"
 Invoke-Cmd dotnet @('pack', (Join-Path $RepoRoot 'sdk\KSR.Sdk\KSR.Sdk.csproj'), '-c', 'Release', '-o', $ArtifactsDir, '-v', 'q', '--nologo')
 Write-Ok "KSR.Sdk packed"
 
+Write-Step "Building KSR.StdLib"
+Invoke-Cmd dotnet @('pack', (Join-Path $RepoRoot 'sdk\KSR.StdLib\KSR.StdLib.csproj'), '-c', 'Release', '-o', $ArtifactsDir, '-v', 'q', '--nologo')
+Write-Ok "KSR.StdLib packed"
+
 Write-Step "Building KSR.Templates"
 Invoke-Cmd dotnet @('pack', (Join-Path $RepoRoot 'sdk\KSR.Templates\KSR.Templates.csproj'), '-c', 'Release', '-o', $ArtifactsDir, '-v', 'q', '--nologo')
 Write-Ok "KSR.Templates packed"

@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+
+    <!-- NuGet metadata -->
+    <PackageId>KSR.StdLib</PackageId>
+    <Version>0.1.0</Version>
+    <Authors>KSR Authors</Authors>
+    <Description>KSR standard library — ksr.io (file/console I/O) and ksr.text (string utilities).</Description>
+    <PackageTags>ksr;language;stdlib</PackageTags>
+  </PropertyGroup>
+
+</Project>

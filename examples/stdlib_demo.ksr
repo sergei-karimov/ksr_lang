@@ -1,0 +1,58 @@
+// stdlib_demo.ksr — demonstrates ksr.io and ksr.text
+use ksr.io
+use ksr.text
+
+fun main() {
+    // ── ksr.text ──────────────────────────────────────────────────────────────
+
+    val s = "  Hello, KSR!  "
+    println("trimmed   : ${Text.trim(s)}")
+    println("upper     : ${Text.toUpper(Text.trim(s))}")
+    println("lower     : ${Text.toLower(Text.trim(s))}")
+    println("length    : ${Text.length(Text.trim(s))}")
+    println("starts-H  : ${Text.startsWith(Text.trim(s), "Hello")}")
+    println("contains  : ${Text.contains(s, "KSR")}")
+    println("replace   : ${Text.replace(Text.trim(s), "KSR", "world")}")
+    println("repeat    : ${Text.repeat("ab", 3)}")
+
+    val parts = Text.split("one,two,three", ",")
+    println("split[0]  : ${parts[0]}")
+    println("split[1]  : ${parts[1]}")
+    println("split[2]  : ${parts[2]}")
+
+    val joined = Text.join(" | ", parts)
+    println("joined    : ${joined}")
+
+    val n = Text.toInt("42")
+    println("toInt     : ${n ?: -1}")
+    val bad = Text.toInt("nope")
+    println("toInt bad : ${bad ?: -1}")
+
+    // ── ksr.io — path ────────────────────────────────────────────────────────
+
+    val p = Path.join("some", "dir")
+    println("path.join : ${p}")
+    println("path.ext  : ${Path.extension("archive.tar.gz")}")
+    println("path.name : ${Path.fileName("/usr/local/bin/ksr")}")
+    println("path.stem : ${Path.fileStem("/usr/local/bin/ksr")}")
+
+    // ── ksr.io — file write / read ────────────────────────────────────────────
+
+    val tmpFile = "ksr_stdlib_demo.tmp"
+    File.write(tmpFile, "line one\nline two\nline three")
+    println("file exists: ${File.exists(tmpFile)}")
+
+    val content = File.read(tmpFile)
+    println("read lines : ${Text.length(content)} chars")
+
+    val lines = File.lines(tmpFile)
+    println("line count : ${lines.count { true }}")
+    println("first line : ${lines[0]}")
+
+    File.append(tmpFile, "\nline four")
+    val lines2 = File.lines(tmpFile)
+    println("after append: ${lines2.count { true }} lines")
+
+    File.delete(tmpFile)
+    println("after delete: ${File.exists(tmpFile)}")
+}

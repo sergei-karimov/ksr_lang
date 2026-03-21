@@ -51,7 +51,10 @@ public class CodeGenerator
         Line("using System;");
         Line("using System.Linq;");
         foreach (var d in program.Declarations)
-            if (d is UseDecl ud) Line($"using {ud.Namespace};");
+        {
+            if (d is UseDecl ud)
+                Line($"using {MapUseNamespace(ud.Namespace)};");
+        }
         Blank();
 
         // Interfaces
@@ -548,6 +551,18 @@ public class CodeGenerator
     private void Blank() => _out.AppendLine();
 
     // ── misc ──────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Maps a KSR <c>use</c> namespace to the C# <c>using</c> directive target.
+    /// Standard library modules use short KSR names (ksr.io, ksr.text) that map
+    /// to the C# namespaces defined in KSR.StdLib.
+    /// </summary>
+    private static string MapUseNamespace(string ns) => ns switch
+    {
+        "ksr.io"   => "KSR.Io",
+        "ksr.text" => "KSR.Text",
+        _          => ns,
+    };
 
     /// KSR camelCase → C# PascalCase for property/member names
     private static string Pascal(string s) =>
