@@ -1,7 +1,7 @@
 # KSR
 
 **KSR** is a statically-typed, Kotlin-inspired language that compiles to C# and runs on the .NET runtime.
-It is designed to feel like Kotlin — concise, expressive, null-safe — while getting full access to the entire .NET ecosystem out of the box.
+It is designed to feel like Kotlin — concise, expressive, null-safe — while giving you full access to the entire .NET and NuGet ecosystem out of the box.
 
 ---
 
@@ -16,6 +16,41 @@ KSR sits in the middle: **Kotlin-style syntax, .NET runtime, zero JVM overhead**
 - Use any NuGet package — Raylib, ASP.NET, Entity Framework, anything
 - Compile to native via `dotnet publish`
 - Zero runtime dependency beyond .NET itself
+- Hooks into the standard `dotnet build` pipeline — no extra tools or steps
+
+---
+
+## Quick Start
+
+### Prerequisites
+
+- [.NET 8 SDK](https://dotnet.microsoft.com/download) or newer
+
+### Install
+
+**Windows (PowerShell):**
+```powershell
+.\scripts\install.ps1
+```
+
+**Linux / macOS:**
+```bash
+./scripts/install.sh
+```
+
+The installer builds all packages from source and installs the `ksr` global tool, `dotnet new` templates, and the VS Code extension.
+
+### Create a project
+
+```bash
+dotnet new ksr-console -n MyApp
+cd MyApp
+dotnet run
+```
+
+```
+Hello from KSR!
+```
 
 ---
 
@@ -24,7 +59,7 @@ KSR sits in the middle: **Kotlin-style syntax, .NET runtime, zero JVM overhead**
 ### Variables
 
 ```kotlin
-val name = "Sergei"        // immutable
+val name = "Alice"         // immutable
 var count = 0              // mutable
 var score: Double = 9.5    // explicit type
 ```
@@ -50,7 +85,7 @@ data class Point(x: Int, y: Int)
 data class User(name: String, age: Int)
 
 val p = Point(3, 4)
-val u = User("Sergei", 30)
+val u = User("Alice", 30)
 ```
 
 ### Extension Functions
@@ -66,6 +101,10 @@ fun Point.distanceSq(other: Point): Int {
 
 fun User.greet() {
     println("Hello, ${this.name}! You are ${this.age} years old.")
+}
+
+fun User.isAdult(): Bool {
+    return this.age >= 18
 }
 ```
 
@@ -164,17 +203,7 @@ fun main() {
 
 ---
 
-## Getting Started
-
-### Prerequisites
-
-- [.NET 8 SDK](https://dotnet.microsoft.com/download) or newer
-
-### Install the KSR template pack
-
-```bash
-dotnet new install KSR.Templates
-```
+## Project Workflow
 
 ### Create a project
 
@@ -184,9 +213,7 @@ cd MyApp
 dotnet run
 ```
 
-```
-Hello from MyApp!
-```
+All `*.ksr` files in the project directory are compiled automatically by `dotnet build`.
 
 ### Add a NuGet package
 
@@ -218,23 +245,55 @@ dotnet build
 dotnet publish -c Release -r win-x64 -p:PublishSingleFile=true
 ```
 
+### Project file
+
+A KSR project is a standard `.csproj` using the KSR SDK:
+
+```xml
+<Project Sdk="KSR.Sdk/0.1.0">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+  </PropertyGroup>
+</Project>
+```
+
+That's it. No boilerplate, no extra build steps.
+
 ---
 
 ## Single-File Mode
 
 No project needed — run a `.ksr` file directly like a script.
 
-Install the CLI:
-
-```bash
-dotnet tool install -g KSR
-```
-
-Run a file:
-
 ```bash
 ksr hello.ksr
 ksr hello.ksr --debug    # also prints the generated C# source
+```
+
+---
+
+## Examples
+
+The `examples/` directory contains runnable `.ksr` files:
+
+| File | Description |
+|---|---|
+| `examples/hello.ksr` | Data classes, extension functions, control flow |
+| `examples/raylib_demo.ksr` | Raylib primitives demo (circles, rectangles, lines) |
+| `examples/game_of_life.ksr` | Conway's Game of Life at 1920×1080 using Raylib |
+
+Run any example:
+
+```bash
+ksr examples/hello.ksr
+```
+
+For the Raylib examples, install the package first:
+
+```bash
+dotnet add package Raylib-cs
+ksr examples/game_of_life.ksr
 ```
 
 ---
@@ -246,10 +305,10 @@ The `ksr-lang` extension provides:
 - **Syntax highlighting** — keywords, types, strings, operators, lambdas
 - **Live diagnostics** — parse errors shown inline as you type
 
-Install from the `.vsix`:
+Installed automatically by the installer. To install manually:
 
 ```bash
-code --install-extension ksr-lang-0.1.0.vsix
+code --install-extension vscode-extension/ksr-lang-0.1.0.vsix
 ```
 
 ---
@@ -266,22 +325,7 @@ KSR is a **source-to-source compiler**: `.ksr` → C# → .NET assembly.
     └── Roslyn        → .NET assembly
 ```
 
-The compiler hooks into `dotnet build` via a custom MSBuild task, so `.ksr` files compile transparently — no extra tools, no extra steps.
-
-### Project file
-
-A KSR project is a standard `.csproj` using the KSR SDK:
-
-```xml
-<Project Sdk="KSR.Sdk/0.1.0">
-  <PropertyGroup>
-    <OutputType>Exe</OutputType>
-    <TargetFramework>net8.0</TargetFramework>
-  </PropertyGroup>
-</Project>
-```
-
-That's it. All `*.ksr` files in the project are compiled automatically.
+The compiler hooks into `dotnet build` via a custom MSBuild task (`KSR.Build`), so `.ksr` files compile transparently alongside any other `.cs` files in your project.
 
 ---
 
@@ -339,7 +383,10 @@ dotnet pack KSR.Core.csproj                              -o artifacts/
 dotnet pack sdk/KSR.Build/KSR.Build.csproj               -o artifacts/
 dotnet pack sdk/KSR.Sdk/KSR.Sdk.csproj                   -o artifacts/
 dotnet pack sdk/KSR.Templates/KSR.Templates.csproj       -o artifacts/
+dotnet pack KSR.csproj                                   -o artifacts/
 ```
+
+Or just run the installer script which does all of this automatically.
 
 The compiler is ~1 700 lines of C# across four layers:
 

@@ -1,0 +1,12 @@
+<Project>
+  <!--
+    Reset the per-project obj\ paths that the root Directory.Build.props sets.
+    Those paths are only needed to separate KSR.csproj from KSR.Core.csproj
+    (which share the repo root directory).  SDK sub-projects each live in their
+    own directory, so the default obj\ layout works fine here.
+  -->
+  <PropertyGroup>
+    <MSBuildProjectExtensionsPath>obj\</MSBuildProjectExtensionsPath>
+    <BaseIntermediateOutputPath>obj\</BaseIntermediateOutputPath>
+  </PropertyGroup>
+</Project>
