@@ -35,9 +35,11 @@ public class Lexer
         ["for"]    = TokenType.For,
         ["in"]     = TokenType.In,
         ["this"]   = TokenType.This,
-        ["true"]   = TokenType.True,
-        ["false"]  = TokenType.False,
-        ["null"]   = TokenType.Null,
+        ["true"]      = TokenType.True,
+        ["false"]     = TokenType.False,
+        ["null"]      = TokenType.Null,
+        ["interface"] = TokenType.Interface,
+        ["implement"] = TokenType.Implement,
     };
 
     public Lexer(string source) => _src = source;
@@ -181,6 +183,15 @@ public class Lexer
     {
         int start = _pos;
         while (_pos < _src.Length && char.IsDigit(Current)) Step();
+
+        // Float literal: digits followed by '.' and more digits (e.g. 3.14, 1.0)
+        if (Current == '.' && _pos + 1 < _src.Length && char.IsDigit(_src[_pos + 1]))
+        {
+            Step(); // consume '.'
+            while (_pos < _src.Length && char.IsDigit(Current)) Step();
+            return new Token(TokenType.FloatLiteral, _src[start.._pos], line, col);
+        }
+
         return new Token(TokenType.IntLiteral, _src[start.._pos], line, col);
     }
 

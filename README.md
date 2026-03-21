@@ -158,6 +158,56 @@ println("The answer is ${x}!")
 println("Sum: ${a + b}")
 ```
 
+### Interfaces
+
+Define a trait with `interface`, implement it with `implement ... for ...`.
+
+```kotlin
+interface Shape {
+    fun area(): Double
+    fun perimeter(): Double
+}
+
+data class Circle(r: Double)
+
+implement Shape for Circle {
+    fun area(): Double { return 3.14159 * this.r * this.r }
+    fun perimeter(): Double { return 2.0 * 3.14159 * this.r }
+}
+
+fun printArea(s: Shape) {
+    println("area = ${s.area()}")
+}
+```
+
+A type can implement multiple interfaces:
+
+```kotlin
+interface Named { fun name(): String }
+
+implement Named for Circle {
+    fun name(): String { return "circle" }
+}
+```
+
+The generated C# uses the standard `I`-prefix convention (`Shape` → `IShape`).
+
+### Collections
+
+```kotlin
+val nums: List<Int> = [1, 2, 3]
+val empty: List<String> = []
+
+val scores: Map<String, Int> = ["alice": 10, "bob": 7]
+```
+
+### Float Literals
+
+```kotlin
+val pi = 3.14159
+val e: Double = 2.71828
+```
+
 ### Lambdas & LINQ
 
 ```kotlin
@@ -320,12 +370,22 @@ KSR is a **source-to-source compiler**: `.ksr` → C# → .NET assembly.
 ```
 .ksr source
     └── Lexer         → tokens
-    └── Parser        → AST
-    └── CodeGenerator → C# source
+    └── Parser        → AST  (with source positions)
+    └── CodeGenerator → C# source  (with #line directives)
     └── Roslyn        → .NET assembly
 ```
 
 The compiler hooks into `dotnet build` via a custom MSBuild task (`KSR.Build`), so `.ksr` files compile transparently alongside any other `.cs` files in your project.
+
+### Source mapping
+
+The compiler embeds `#line` directives in the generated C# so that every error — whether a compile-time type error or a runtime exception — is reported against your `.ksr` file and line number, not the generated C#:
+
+```
+error KSR001: hello.ksr(42,5): undefined variable 'naem'
+```
+
+This works in both single-file mode (`ksr file.ksr`) and full project mode (`dotnet build`).
 
 ---
 
@@ -354,14 +414,17 @@ The compiler hooks into `dotnet build` via a custom MSBuild task (`KSR.Build`), 
 | `Unit` | `void` | return type only |
 | `T?` | `T?` | nullable |
 | `T[]` | `T[]` | array |
+| `List<T>` | `List<T>` | mutable list |
+| `Map<K,V>` | `Dictionary<K,V>` | mutable map |
 
 ---
 
 ## Roadmap
 
-- [ ] `List<T>` and `Map<K, V>` collection literals
+- [x] Source mapping — errors point to `.ksr` line numbers (`#line` directives)
+- [x] `List<T>` and `Map<K, V>` collection literals
+- [x] Interfaces / trait-style polymorphism (`interface` + `implement … for …`)
 - [ ] Pattern matching (`when` expression)
-- [ ] Interfaces / trait-style polymorphism
 - [ ] Coroutines / async-await
 - [ ] Standard library (`ksr.io`, `ksr.collections`)
 - [ ] Language server (LSP) for full IDE support

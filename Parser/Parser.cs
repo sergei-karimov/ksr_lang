@@ -22,9 +22,14 @@ namespace KSR.Parser;
 public class Parser
 {
     private readonly List<Token> _tokens;
+    private readonly string      _sourceFile;
     private int _pos;
 
-    public Parser(List<Token> tokens) => _tokens = tokens;
+    public Parser(List<Token> tokens, string sourceFile = "")
+    {
+        _tokens     = tokens;
+        _sourceFile = sourceFile;
+    }
 
     // ── token helpers ─────────────────────────────────────────────────────────
 
@@ -65,12 +70,14 @@ public class Parser
 
     private AstNode ParseDeclaration()
     {
-        if (Check(TokenType.Use))  return ParseUseDecl();
-        if (Check(TokenType.Data)) return ParseDataClass();
-        if (Check(TokenType.Fun))  return ParseFunctionOrExtension();
+        if (Check(TokenType.Use))       return ParseUseDecl();
+        if (Check(TokenType.Data))      return ParseDataClass();
+        if (Check(TokenType.Fun))       return ParseFunctionOrExtension();
+        if (Check(TokenType.Interface)) return ParseInterfaceDecl();
+        if (Check(TokenType.Implement)) return ParseImplBlock();
 
         throw new KsrParseException(
-            $"Unexpected token '{Current.Value}' — expected 'use', 'data' or 'fun'",
+            $"Unexpected token '{Current.Value}' — expected 'use', 'data', 'fun', 'interface' or 'implement'",
             Current.Line, Current.Col);
     }
 
@@ -95,9 +102,58 @@ public class Parser
         Expect(TokenType.Class);
         var name = Expect(TokenType.Identifier).Value;
         Expect(TokenType.LParen);
-        var props = ParseParamList();
+        var props = Check(TokenType.RParen) ? [] : ParseParamList();
         Expect(TokenType.RParen);
         return new DataClassDecl(name, props);
+    }
+
+    /// <summary>
+    /// interface Shape { fun area(): Double \n fun perimeter(): Double }
+    /// </summary>
+    private InterfaceDecl ParseInterfaceDecl()
+    {
+        Expect(TokenType.Interface);
+        var name = Expect(TokenType.Identifier).Value;
+        Expect(TokenType.LBrace);
+
+        var methods = new List<InterfaceMethod>();
+        while (!Check(TokenType.RBrace) && !Check(TokenType.Eof))
+        {
+            Expect(TokenType.Fun);
+            var mname = Expect(TokenType.Identifier).Value;
+            Expect(TokenType.LParen);
+            var parms = Check(TokenType.RParen) ? [] : ParseParamList();
+            Expect(TokenType.RParen);
+            TypeRef? ret = null;
+            if (Match(TokenType.Colon)) ret = ParseTypeRef();
+            methods.Add(new InterfaceMethod(mname, parms, ret));
+        }
+
+        Expect(TokenType.RBrace);
+        return new InterfaceDecl(name, methods);
+    }
+
+    /// <summary>
+    /// implement Shape for Circle { fun area(): Double { … } … }
+    /// </summary>
+    private ImplBlock ParseImplBlock()
+    {
+        Expect(TokenType.Implement);
+        var interfaceName = Expect(TokenType.Identifier).Value;
+        Expect(TokenType.For);
+        var typeName = Expect(TokenType.Identifier).Value;
+        Expect(TokenType.LBrace);
+
+        var methods = new List<FunctionDecl>();
+        while (!Check(TokenType.RBrace) && !Check(TokenType.Eof))
+        {
+            Expect(TokenType.Fun);
+            var mname = Expect(TokenType.Identifier).Value;
+            methods.Add(ParseFunctionTail(mname));
+        }
+
+        Expect(TokenType.RBrace);
+        return new ImplBlock(interfaceName, typeName, methods);
     }
 
     /// <summary>
@@ -168,6 +224,17 @@ public class Parser
     {
         var name = Expect(TokenType.Identifier).Value;
 
+        // Generic type: List<T>  Map<K, V>
+        if (Check(TokenType.Lt))
+        {
+            Consume(); // <
+            var args = new List<string> { ParseTypeRef().Name };
+            while (Match(TokenType.Comma))
+                args.Add(ParseTypeRef().Name);
+            Expect(TokenType.Gt); // >
+            name = $"{name}<{string.Join(", ", args)}>";
+        }
+
         // Array type: Bool[]  Int[]  etc.
         if (Check(TokenType.LBracket))
         {
@@ -194,24 +261,27 @@ public class Parser
 
     private Stmt ParseStatement()
     {
-        if (Check(TokenType.Val))    return ParseValDecl();
-        if (Check(TokenType.Var))    return ParseVarDecl();
-        if (Check(TokenType.Return)) return ParseReturnStmt();
-        if (Check(TokenType.If))     return ParseIfStmt();
-        if (Check(TokenType.While))  return ParseWhileStmt();
-        if (Check(TokenType.For))    return ParseForStmt();
+        int line = Current.Line;
 
-        // x = expr  /  x += expr  /  x -= expr  /  x[idx] = expr
-        if (Check(TokenType.Identifier))
+        Stmt stmt;
+        if (Check(TokenType.Val))    stmt = ParseValDecl();
+        else if (Check(TokenType.Var))    stmt = ParseVarDecl();
+        else if (Check(TokenType.Return)) stmt = ParseReturnStmt();
+        else if (Check(TokenType.If))     stmt = ParseIfStmt();
+        else if (Check(TokenType.While))  stmt = ParseWhileStmt();
+        else if (Check(TokenType.For))    stmt = ParseForStmt();
+        else if (Check(TokenType.Identifier))
         {
             var next = Peek().Type;
-            if (next == TokenType.Equals)    return ParseAssign();
-            if (next == TokenType.PlusEq ||
-                next == TokenType.MinusEq)   return ParseCompoundAssign();
-            if (next == TokenType.LBracket)  return ParseIndexAssign();
+            if (next == TokenType.Equals)    stmt = ParseAssign();
+            else if (next == TokenType.PlusEq ||
+                     next == TokenType.MinusEq)   stmt = ParseCompoundAssign();
+            else if (next == TokenType.LBracket)  stmt = ParseIndexAssign();
+            else stmt = new ExprStmt(ParseExpr());
         }
+        else stmt = new ExprStmt(ParseExpr());
 
-        return new ExprStmt(ParseExpr());
+        return stmt with { Line = line, SourceFile = _sourceFile };
     }
 
     private ValDecl ParseValDecl()
@@ -515,6 +585,11 @@ public class Parser
                 Consume();
                 return new IntLiteral(int.Parse(tok.Value));
 
+            case TokenType.FloatLiteral:
+                Consume();
+                return new DoubleLiteral(double.Parse(tok.Value,
+                    System.Globalization.CultureInfo.InvariantCulture));
+
             case TokenType.StringLiteral:
                 Consume();
                 return new StringLiteral(tok.Value);
@@ -560,6 +635,10 @@ public class Parser
                 }
             }
 
+            // List / Map literal: [a, b, c]  or  ["k1": v1, "k2": v2]
+            case TokenType.LBracket:
+                return ParseCollectionLiteral();
+
             // Lambda literal  { expr }  /  { x -> expr }  /  { x, y -> expr }  /  { -> expr }
             case TokenType.LBrace:
                 return ParseLambdaExpr();
@@ -575,6 +654,58 @@ public class Parser
                     $"Unexpected token '{tok.Value}' ({tok.Type}) in expression",
                     tok.Line, tok.Col);
         }
+    }
+
+    // ── collection literals ───────────────────────────────────────────────────
+
+    /// <summary>
+    /// Parses a list or map literal starting at <c>[</c>.
+    /// <code>
+    ///   [1, 2, 3]            — list literal
+    ///   ["k1": v1, "k2": v2] — map literal  (distinguished by ':' after first key)
+    ///   []                   — empty list
+    /// </code>
+    /// </summary>
+    private Expr ParseCollectionLiteral()
+    {
+        Expect(TokenType.LBracket);
+
+        // Empty list
+        if (Check(TokenType.RBracket))
+        {
+            Consume();
+            return new ListLiteralExpr(new List<Expr>());
+        }
+
+        var first = ParseExpr();
+
+        // Map literal: first key is followed by ':'
+        if (Check(TokenType.Colon))
+        {
+            Consume(); // :
+            var firstVal = ParseExpr();
+            var entries = new List<(Expr, Expr)> { (first, firstVal) };
+            while (Match(TokenType.Comma))
+            {
+                if (Check(TokenType.RBracket)) break; // trailing comma
+                var k = ParseExpr();
+                Expect(TokenType.Colon);
+                var v = ParseExpr();
+                entries.Add((k, v));
+            }
+            Expect(TokenType.RBracket);
+            return new MapLiteralExpr(entries);
+        }
+
+        // List literal
+        var elems = new List<Expr> { first };
+        while (Match(TokenType.Comma))
+        {
+            if (Check(TokenType.RBracket)) break; // trailing comma
+            elems.Add(ParseExpr());
+        }
+        Expect(TokenType.RBracket);
+        return new ListLiteralExpr(elems);
     }
 
     // ── string template parsing ───────────────────────────────────────────────

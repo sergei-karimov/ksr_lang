@@ -46,6 +46,7 @@
     <!-- sdk/ and all obj/ sub-dirs are built separately; exclude them entirely -->
     <Compile Remove="sdk\**\*.cs" />
     <Compile Remove="obj\**\*.cs" />
+    <Compile Remove="tests\**\*.cs" />
   </ItemGroup>
 
   <!-- ── Project and package references ────────────────────────────────── -->

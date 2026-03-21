@@ -80,7 +80,7 @@ public class KsrCompileTask : Microsoft.Build.Utilities.Task
             ProgramNode ast;
             try
             {
-                var parser = new KSR.Parser.Parser(tokens);
+                var parser = new KSR.Parser.Parser(tokens, path);
                 ast = parser.Parse();
             }
             catch (KsrParseException pex)

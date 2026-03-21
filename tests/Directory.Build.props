@@ -1,0 +1,11 @@
+<Project>
+  <!--
+    Reset the per-project obj\ paths set by the root Directory.Build.props.
+    Test projects each live in their own directory, so the default obj\ layout
+    works fine here — no separation needed.
+  -->
+  <PropertyGroup>
+    <MSBuildProjectExtensionsPath>obj\</MSBuildProjectExtensionsPath>
+    <BaseIntermediateOutputPath>obj\</BaseIntermediateOutputPath>
+  </PropertyGroup>
+</Project>

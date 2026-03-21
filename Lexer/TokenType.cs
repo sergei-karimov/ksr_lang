@@ -4,6 +4,7 @@ public enum TokenType
 {
     // ── Literals ──────────────────────────────────────────────────────────────
     IntLiteral,
+    FloatLiteral,   // numeric literal with a decimal point: 3.14, 1.0
     StringLiteral,
     StringTemplate,     // string containing ${...} interpolations
 
@@ -25,6 +26,8 @@ public enum TokenType
     True,       // true
     False,      // false
     Null,       // null
+    Interface,  // interface
+    Implement,  // implement
 
     // ── Identifier ────────────────────────────────────────────────────────────
     Identifier,

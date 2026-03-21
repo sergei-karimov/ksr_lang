@@ -5,7 +5,13 @@ namespace KSR.AST;
 // ═══════════════════════════════════════════════════════════════════════════════
 
 public abstract record AstNode;
-public abstract record Stmt : AstNode;
+public abstract record Stmt : AstNode
+{
+    /// <summary>1-based line number in the original .ksr source file.</summary>
+    public int    Line       { get; init; }
+    /// <summary>Absolute path of the .ksr source file this statement came from.</summary>
+    public string SourceFile { get; init; } = "";
+}
 public abstract record Expr  : AstNode;
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -24,6 +30,18 @@ public record Parameter(string Name, TypeRef Type);
 
 /// <summary>Root of a KSR compilation unit.</summary>
 public record ProgramNode(List<AstNode> Declarations) : AstNode;
+
+/// <summary>A method signature inside an interface body.</summary>
+public record InterfaceMethod(string Name, List<Parameter> Parameters, TypeRef? ReturnType);
+
+/// <summary>interface Shape { fun area(): Double }</summary>
+public record InterfaceDecl(string Name, List<InterfaceMethod> Methods) : AstNode;
+
+/// <summary>
+/// implement Shape for Circle { fun area(): Double { … } }
+/// Rust-style: attaches an interface's method bodies to a data class.
+/// </summary>
+public record ImplBlock(string InterfaceName, string TypeName, List<FunctionDecl> Methods) : AstNode;
 
 /// <summary>use Raylib_cs  →  using Raylib_cs;</summary>
 public record UseDecl(string Namespace) : AstNode;
@@ -92,6 +110,7 @@ public record ExprStmt(Expr Expression) : Stmt;
 // ═══════════════════════════════════════════════════════════════════════════════
 
 public record IntLiteral(int Value)       : Expr;
+public record DoubleLiteral(double Value) : Expr;
 public record StringLiteral(string Value) : Expr;
 public record BoolLiteral(bool Value)     : Expr;
 public record NullLiteral()               : Expr;
@@ -155,3 +174,9 @@ public record UnaryExpr(string Op, Expr Operand) : Expr;
 /// Used as the iterable of a ForInStmt; also valid as a standalone value.
 /// </summary>
 public record RangeExpr(Expr Start, Expr End, bool Inclusive) : Expr;
+
+/// <summary>List literal: [a, b, c]  →  new List&lt;T&gt; { a, b, c }</summary>
+public record ListLiteralExpr(List<Expr> Elements) : Expr;
+
+/// <summary>Map literal: ["k1": v1, "k2": v2]  →  new Dictionary&lt;K, V&gt; { ["k1"] = v1, … }</summary>
+public record MapLiteralExpr(List<(Expr Key, Expr Value)> Entries) : Expr;

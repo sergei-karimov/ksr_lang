@@ -20,13 +20,31 @@ public class CodeGenerator
     // Names declared as data classes — used to emit 'new Foo(…)'
     private readonly HashSet<string> _dataClasses = new();
 
+    // Names declared as interfaces — used to prefix with 'I' in type references
+    private readonly HashSet<string> _interfaces = new();
+
+    // impl blocks grouped by target type — collected before emitting
+    private readonly Dictionary<string, List<ImplBlock>> _implsByType = new();
+
+    // True while emitting a record method body (this → "this", not "self")
+    private bool _inRecordMethod = false;
+
     // ── public entry ─────────────────────────────────────────────────────────
 
     public string Generate(ProgramNode program)
     {
-        // First pass: collect data class names
+        // First pass: collect data class names, interface names, and group impl blocks by type
         foreach (var d in program.Declarations)
-            if (d is DataClassDecl dc) _dataClasses.Add(dc.Name);
+        {
+            if (d is DataClassDecl dc)  _dataClasses.Add(dc.Name);
+            if (d is InterfaceDecl ifd) _interfaces.Add(ifd.Name);
+            if (d is ImplBlock ib)
+            {
+                if (!_implsByType.TryGetValue(ib.TypeName, out var list))
+                    _implsByType[ib.TypeName] = list = new List<ImplBlock>();
+                list.Add(ib);
+            }
+        }
 
         // Preamble
         Line("#nullable enable");
@@ -36,7 +54,11 @@ public class CodeGenerator
             if (d is UseDecl ud) Line($"using {ud.Namespace};");
         Blank();
 
-        // Records for data classes (sealed by default in C# record syntax)
+        // Interfaces
+        foreach (var d in program.Declarations)
+            if (d is InterfaceDecl id) EmitInterface(id);
+
+        // Records for data classes (with optional interface implementations)
         foreach (var d in program.Declarations)
             if (d is DataClassDecl dc) EmitDataClass(dc);
 
@@ -47,7 +69,7 @@ public class CodeGenerator
 
         foreach (var d in program.Declarations)
         {
-            if (d is FunctionDecl fd)    EmitFunction(fd);
+            if (d is FunctionDecl fd)     EmitFunction(fd);
             if (d is ExtFunctionDecl efd) EmitExtFunction(efd);
         }
 
@@ -59,11 +81,61 @@ public class CodeGenerator
 
     // ── declarations ─────────────────────────────────────────────────────────
 
+    private void EmitInterface(InterfaceDecl id)
+    {
+        Line($"interface I{id.Name}");
+        Line("{");
+        _indent++;
+        foreach (var m in id.Methods)
+        {
+            var ret   = m.ReturnType is null ? "void" : MapType(m.ReturnType);
+            var parms = string.Join(", ", m.Parameters.Select(p => $"{MapType(p.Type)} {p.Name}"));
+            Line($"{ret} {Pascal(m.Name)}({parms});");
+        }
+        _indent--;
+        Line("}");
+        Blank();
+    }
+
     private void EmitDataClass(DataClassDecl dc)
     {
         var props = string.Join(", ",
             dc.Properties.Select(p => $"{MapType(p.Type)} {Pascal(p.Name)}"));
-        Line($"record {dc.Name}({props});");
+
+        if (_implsByType.TryGetValue(dc.Name, out var impls))
+        {
+            // Record implements one or more interfaces
+            var ifaces = string.Join(", ", impls.Select(b => "I" + b.InterfaceName));
+            Line($"record {dc.Name}({props}) : {ifaces}");
+            Line("{");
+            _indent++;
+            _inRecordMethod = true;
+            foreach (var method in impls.SelectMany(b => b.Methods))
+                EmitRecordMethod(method);
+            _inRecordMethod = false;
+            _indent--;
+            Line("}");
+        }
+        else
+        {
+            Line($"record {dc.Name}({props});");
+        }
+        Blank();
+    }
+
+    private void EmitRecordMethod(FunctionDecl fd)
+    {
+        var ret   = fd.ReturnType is null ? "void" : MapType(fd.ReturnType);
+        var parms = string.Join(", ",
+            fd.Parameters.Select(p => $"{MapType(p.Type)} {p.Name}"));
+
+        Line($"public {ret} {Pascal(fd.Name)}({parms})");
+        Line("{");
+        _indent++;
+        EmitBlock(fd.Body);
+        if (HasSourceInfo(fd.Body)) Line("#line default");
+        _indent--;
+        Line("}");
         Blank();
     }
 
@@ -78,6 +150,7 @@ public class CodeGenerator
         Line("{");
         _indent++;
         EmitBlock(fd.Body);
+        if (HasSourceInfo(fd.Body)) Line("#line default");
         _indent--;
         Line("}");
         Blank();
@@ -101,6 +174,7 @@ public class CodeGenerator
         Line("{");
         _indent++;
         EmitBlock(efd.Body);
+        if (HasSourceInfo(efd.Body)) Line("#line default");
         _indent--;
         Line("}");
         Blank();
@@ -116,19 +190,25 @@ public class CodeGenerator
 
     private void EmitStmt(Stmt stmt)
     {
+        if (stmt.Line > 0 && !string.IsNullOrEmpty(stmt.SourceFile))
+        {
+            var path = stmt.SourceFile.Replace('\\', '/');
+            Line($"#line {stmt.Line} \"{path}\"");
+        }
+
         switch (stmt)
         {
             // val / var  →  var (C# infers type; mutability tracked at KSR level only)
             case ValDecl vd:
             {
                 var t = vd.Type is null ? "var" : MapType(vd.Type);
-                Line($"{t} {vd.Name} = {EmitExpr(vd.Value)};");
+                Line($"{t} {vd.Name} = {EmitExprWithHint(vd.Value, vd.Type)};");
                 break;
             }
             case VarDecl vd:
             {
                 var t = vd.Type is null ? "var" : MapType(vd.Type);
-                Line($"{t} {vd.Name} = {EmitExpr(vd.Value)};");
+                Line($"{t} {vd.Name} = {EmitExprWithHint(vd.Value, vd.Type)};");
                 break;
             }
 
@@ -208,10 +288,11 @@ public class CodeGenerator
     private string EmitExpr(Expr expr) => expr switch
     {
         IntLiteral    il => il.Value.ToString(),
+        DoubleLiteral dl => dl.Value.ToString(System.Globalization.CultureInfo.InvariantCulture),
         StringLiteral sl => $"\"{Escape(sl.Value)}\"",
         BoolLiteral   bl => bl.Value ? "true" : "false",
         NullLiteral      => "null",
-        ThisExpr         => "self",                      // receiver in ext functions
+        ThisExpr         => _inRecordMethod ? "this" : "self",
 
         IdentifierExpr id => id.Name,
 
@@ -241,6 +322,8 @@ public class CodeGenerator
 
         StringTemplateExpr ste => EmitStringTemplate(ste),
         CallExpr           ce  => EmitCall(ce),
+        ListLiteralExpr    ll  => EmitListLiteral(ll),
+        MapLiteralExpr     ml  => EmitMapLiteral(ml),
 
         _ => throw new InvalidOperationException($"Unknown expression: {expr.GetType().Name}")
     };
@@ -282,15 +365,73 @@ public class CodeGenerator
         return sb.ToString();
     }
 
+    /// <summary>
+    /// Like EmitExpr but passes type context for empty collection literals so the
+    /// correct concrete type is used instead of falling back to object.
+    /// </summary>
+    private string EmitExprWithHint(Expr expr, TypeRef? hint) => expr switch
+    {
+        ListLiteralExpr { Elements.Count: 0 } when hint is not null
+            => $"new {MapType(hint)}()",
+        MapLiteralExpr { Entries.Count: 0 } when hint is not null
+            => $"new {MapType(hint)}()",
+        _ => EmitExpr(expr)
+    };
+
+    private string EmitListLiteral(ListLiteralExpr ll)
+    {
+        if (ll.Elements.Count == 0)
+            return "new List<object>()";
+
+        var items = string.Join(", ", ll.Elements.Select(EmitExpr));
+        return $"new[] {{ {items} }}.ToList()";
+    }
+
+    private string EmitMapLiteral(MapLiteralExpr ml)
+    {
+        if (ml.Entries.Count == 0)
+            return "new Dictionary<object, object>()";
+
+        var keyType = InferPrimitiveType(ml.Entries[0].Key)   ?? "object";
+        var valType = InferPrimitiveType(ml.Entries[0].Value) ?? "object";
+        var entries = string.Join(", ",
+            ml.Entries.Select(e => $"[{EmitExpr(e.Key)}] = {EmitExpr(e.Value)}"));
+        return $"new Dictionary<{keyType}, {valType}> {{ {entries} }}";
+    }
+
+    /// <summary>Infer a C# primitive type name from a literal expression, or null if unknown.</summary>
+    private static string? InferPrimitiveType(Expr e) => e switch
+    {
+        IntLiteral         => "int",
+        DoubleLiteral      => "double",
+        BoolLiteral        => "bool",
+        StringLiteral      => "string",
+        StringTemplateExpr => "string",
+        _                  => null
+    };
+
     // ── type mapping ──────────────────────────────────────────────────────────
 
-    private static string MapType(TypeRef t)
+    private string MapType(TypeRef t)
     {
         // Array types: Bool[] → bool[], Int[] → int[], etc.
         if (t.Name.EndsWith("[]"))
         {
             var elem = MapType(new TypeRef(t.Name[..^2], false));
             return t.Nullable ? $"{elem}[]?" : $"{elem}[]";
+        }
+
+        // Generic types: List<Int> → List<int>,  Map<String, Int> → Dictionary<string, int>
+        var angleIdx = t.Name.IndexOf('<');
+        if (angleIdx >= 0)
+        {
+            var outer    = t.Name[..angleIdx];
+            var argsStr  = t.Name[(angleIdx + 1)..^1];
+            var args     = SplitTypeArgs(argsStr)
+                               .Select(a => MapType(new TypeRef(a.Trim(), false)));
+            var csOuter  = outer switch { "Map" => "Dictionary", _ => outer };
+            var result   = $"{csOuter}<{string.Join(", ", args)}>";
+            return t.Nullable ? $"{result}?" : result;
         }
 
         var base_ = t.Name switch
@@ -302,10 +443,35 @@ public class CodeGenerator
             "Float"  => "float",
             "Long"   => "long",
             "Unit"   => "void",
-            _        => t.Name
+            _        => _interfaces.Contains(t.Name) ? "I" + t.Name : t.Name
         };
         return t.Nullable ? $"{base_}?" : base_;
     }
+
+    /// <summary>
+    /// Splits top-level type arguments by comma, respecting nested angle brackets.
+    /// e.g. "String, Map&lt;Int, Bool&gt;" → ["String", "Map&lt;Int, Bool&gt;"]
+    /// </summary>
+    private IEnumerable<string> SplitTypeArgs(string args)
+    {
+        var result = new List<string>();
+        int depth = 0, start = 0;
+        for (int i = 0; i < args.Length; i++)
+        {
+            if      (args[i] == '<') depth++;
+            else if (args[i] == '>') depth--;
+            else if (args[i] == ',' && depth == 0)
+            {
+                result.Add(args[start..i]);
+                start = i + 1;
+            }
+        }
+        result.Add(args[start..]);
+        return result;
+    }
+
+    private static bool HasSourceInfo(Block block) =>
+        block.Statements.Any(s => s.Line > 0 && !string.IsNullOrEmpty(s.SourceFile));
 
     // ── output helpers ────────────────────────────────────────────────────────
 

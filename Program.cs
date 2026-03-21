@@ -95,7 +95,7 @@ static void RunSingleFile(string path, bool debugMode)
 {
     var source    = File.ReadAllText(path);
     var tokens    = new KSR.Lexer.Lexer(source).Tokenize();
-    var program   = new Parser(tokens).Parse();
+    var program   = new Parser(tokens, Path.GetFullPath(path)).Parse();
     var csharpSrc = new KSR.CodeGen.CodeGenerator().Generate(program);
     KsrCompiler.CompileAndRun(csharpSrc, debugMode);
 }
