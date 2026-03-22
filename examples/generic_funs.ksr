@@ -1,0 +1,33 @@
+// generic_funs.ksr — demonstrates generic type parameters on functions.
+//
+// fun <T> and fun <T, U> give functions polymorphic types.
+// The type arguments are inferred by the C# compiler from call-site context.
+
+// A simple identity function
+fun <T> identity(x: T): T {
+    return x
+}
+
+// Swap the two elements of a pair
+fun <T, U> swap(a: T, b: U): T {
+    return a
+}
+
+// Generic extension function on List<T>
+fun <T> List<T>.second(): T {
+    return this[1]
+}
+
+// Generic extension that transforms a list element-by-element
+// (mirrors what ksr.collections already provides via C#)
+fun <T, U> List<T>.mapWith(f: T): U {
+    return f
+}
+
+fun main() {
+    println(identity(42))           // 42
+    println(identity("hello"))      // hello
+
+    val nums: List<Int> = [10, 20, 30]
+    println(nums.second())          // 20
+}

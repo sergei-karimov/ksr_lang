@@ -29,6 +29,10 @@ public class CodeGenerator
     // True while emitting a record method body (this → "this", not "self")
     private bool _inRecordMethod = false;
 
+    // Type parameter names of the function currently being emitted — prevents
+    // MapType from accidentally prefixing 'I' on a single-letter type param.
+    private HashSet<string> _currentTypeParams = new();
+
     // ── async state ───────────────────────────────────────────────────────────
 
     /// <summary>Global default: Task (default) or ValueTask (--async-return=valuetask).</summary>
@@ -152,19 +156,22 @@ public class CodeGenerator
 
     private void EmitRecordMethod(FunctionDecl fd)
     {
-        var prevAsync = _inAsyncFunction;
-        var prevKind  = _currentAsyncReturn;
-        _inAsyncFunction   = fd.IsAsync;
+        var prevAsync      = _inAsyncFunction;
+        var prevKind       = _currentAsyncReturn;
+        var prevTypeParams = _currentTypeParams;
+        _inAsyncFunction    = fd.IsAsync;
         _currentAsyncReturn = EffectiveAsyncReturn(fd.AsyncReturn);
+        _currentTypeParams  = fd.TypeParams.Count > 0 ? new HashSet<string>(fd.TypeParams) : new();
 
         var ret = fd.IsAsync
             ? BuildAsyncReturnType(fd.ReturnType, _currentAsyncReturn)
             : (fd.ReturnType is null ? "void" : MapType(fd.ReturnType));
-        var asyncMod = fd.IsAsync ? "async " : "";
+        var asyncMod    = fd.IsAsync ? "async " : "";
+        var typeParamStr = fd.TypeParams.Count > 0 ? $"<{string.Join(", ", fd.TypeParams)}>" : "";
         var parms = string.Join(", ",
             fd.Parameters.Select(p => $"{MapType(p.Type)} {p.Name}"));
 
-        Line($"public {asyncMod}{ret} {Pascal(fd.Name)}({parms})");
+        Line($"public {asyncMod}{ret} {Pascal(fd.Name)}{typeParamStr}({parms})");
         Line("{");
         _indent++;
         EmitBlock(fd.Body);
@@ -173,26 +180,30 @@ public class CodeGenerator
         Line("}");
         Blank();
 
-        _inAsyncFunction   = prevAsync;
+        _inAsyncFunction    = prevAsync;
         _currentAsyncReturn = prevKind;
+        _currentTypeParams  = prevTypeParams;
     }
 
     private void EmitFunction(FunctionDecl fd)
     {
-        var prevAsync = _inAsyncFunction;
-        var prevKind  = _currentAsyncReturn;
-        _inAsyncFunction   = fd.IsAsync;
+        var prevAsync      = _inAsyncFunction;
+        var prevKind       = _currentAsyncReturn;
+        var prevTypeParams = _currentTypeParams;
+        _inAsyncFunction    = fd.IsAsync;
         _currentAsyncReturn = EffectiveAsyncReturn(fd.AsyncReturn);
+        _currentTypeParams  = fd.TypeParams.Count > 0 ? new HashSet<string>(fd.TypeParams) : new();
 
         var ret = fd.IsAsync
             ? BuildAsyncReturnType(fd.ReturnType, _currentAsyncReturn)
             : (fd.ReturnType is null ? "void" : MapType(fd.ReturnType));
-        var asyncMod = fd.IsAsync ? "async " : "";
-        var method = fd.Name == "main" ? "Main" : fd.Name;
+        var asyncMod     = fd.IsAsync ? "async " : "";
+        var method       = fd.Name == "main" ? "Main" : fd.Name;
+        var typeParamStr = fd.TypeParams.Count > 0 ? $"<{string.Join(", ", fd.TypeParams)}>" : "";
         var parms = string.Join(", ",
             fd.Parameters.Select(p => $"{MapType(p.Type)} {p.Name}"));
 
-        Line($"static {asyncMod}{ret} {method}({parms})");
+        Line($"static {asyncMod}{ret} {method}{typeParamStr}({parms})");
         Line("{");
         _indent++;
         EmitBlock(fd.Body);
@@ -201,8 +212,9 @@ public class CodeGenerator
         Line("}");
         Blank();
 
-        _inAsyncFunction   = prevAsync;
+        _inAsyncFunction    = prevAsync;
         _currentAsyncReturn = prevKind;
+        _currentTypeParams  = prevTypeParams;
     }
 
     /// <summary>
@@ -211,23 +223,26 @@ public class CodeGenerator
     /// </summary>
     private void EmitExtFunction(ExtFunctionDecl efd)
     {
-        var prevAsync = _inAsyncFunction;
-        var prevKind  = _currentAsyncReturn;
-        _inAsyncFunction   = efd.IsAsync;
+        var prevAsync      = _inAsyncFunction;
+        var prevKind       = _currentAsyncReturn;
+        var prevTypeParams = _currentTypeParams;
+        _inAsyncFunction    = efd.IsAsync;
         _currentAsyncReturn = EffectiveAsyncReturn(efd.AsyncReturn);
+        _currentTypeParams  = efd.TypeParams.Count > 0 ? new HashSet<string>(efd.TypeParams) : new();
 
         var ret = efd.IsAsync
             ? BuildAsyncReturnType(efd.ReturnType, _currentAsyncReturn)
             : (efd.ReturnType is null ? "void" : MapType(efd.ReturnType));
-        var asyncMod = efd.IsAsync ? "async " : "";
-        var csType = MapType(new TypeRef(efd.ReceiverType, false));
+        var asyncMod     = efd.IsAsync ? "async " : "";
+        var typeParamStr = efd.TypeParams.Count > 0 ? $"<{string.Join(", ", efd.TypeParams)}>" : "";
+        var csType       = MapType(new TypeRef(efd.ReceiverType, false));
 
         // First parameter is the receiver: "this TypeName self"
         var paramParts = new List<string> { $"this {csType} self" };
         paramParts.AddRange(efd.Parameters.Select(p => $"{MapType(p.Type)} {p.Name}"));
         var parms = string.Join(", ", paramParts);
 
-        Line($"public static {asyncMod}{ret} {Pascal(efd.MethodName)}({parms})");
+        Line($"public static {asyncMod}{ret} {Pascal(efd.MethodName)}{typeParamStr}({parms})");
         Line("{");
         _indent++;
         EmitBlock(efd.Body);
@@ -236,8 +251,9 @@ public class CodeGenerator
         Line("}");
         Blank();
 
-        _inAsyncFunction   = prevAsync;
+        _inAsyncFunction    = prevAsync;
         _currentAsyncReturn = prevKind;
+        _currentTypeParams  = prevTypeParams;
     }
 
     // ── block & statements ────────────────────────────────────────────────────
@@ -631,14 +647,17 @@ public class CodeGenerator
 
         var base_ = t.Name switch
         {
-            "Int" => "int",
+            "Int"    => "int",
             "String" => "string",
-            "Bool" => "bool",
+            "Bool"   => "bool",
             "Double" => "double",
-            "Float" => "float",
-            "Long" => "long",
-            "Unit" => "void",
-            _ => _interfaces.Contains(t.Name) ? "I" + t.Name : t.Name
+            "Float"  => "float",
+            "Long"   => "long",
+            "Unit"   => "void",
+            // Type parameters pass through as-is; only prefix 'I' for declared interfaces.
+            _ => _currentTypeParams.Contains(t.Name) ? t.Name
+               : _interfaces.Contains(t.Name) ? "I" + t.Name
+               : t.Name
         };
         return t.Nullable ? $"{base_}?" : base_;
     }

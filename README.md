@@ -267,6 +267,35 @@ The global flag `--async-return=valuetask` makes all async functions use `ValueT
 ksr myapp.ksr --async-return=valuetask
 ```
 
+### Generic functions
+
+Functions and extension functions can declare type parameters with `<T, U, ...>`:
+
+```kotlin
+fun <T> identity(x: T): T {
+    return x
+}
+
+fun <T, U> first(a: T, b: U): T {
+    return a
+}
+
+// Generic extension function on List<T>
+fun <T> List<T>.second(): T {
+    return this[1]
+}
+
+fun main() {
+    println(identity(42))          // 42
+    println(identity("hello"))     // hello
+
+    val nums: List<Int> = [10, 20, 30]
+    println(nums.second())         // 20
+}
+```
+
+Type arguments are inferred by the C# compiler from call-site context — you never need to write `identity<Int>(42)`.
+
 ### Collections
 
 KSR has immutable and mutable variants of list and map.
@@ -367,7 +396,7 @@ fun main() {
 
 #### `ksr.collections` — higher-order list and map operations
 
-`Lst` and `Mp` provide a Kotlin-style functional API over `List<T>` and `Map<K,V>`.
+`ksr.collections` provides all operations as **extension methods** (fluent style) and as **static `Lst`/`Mp` helpers** (both work).
 
 ```kotlin
 use ksr.collections
@@ -375,17 +404,17 @@ use ksr.collections
 fun main() {
     val nums: List<Int> = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 
-    // Transform / filter
-    val evens  = Lst.filter(nums, { n -> n % 2 == 0 })    // [2, 4, 6, 8, 10]
-    val sq     = Lst.map(evens, { n -> n * n })            // [4, 16, 36, 64, 100]
+    // ── Fluent style (recommended) ────────────────────────────────────────────
+    val evens   = nums.filter { n -> n % 2 == 0 }         // [2, 4, 6, 8, 10]
+    val squares = evens.map { n -> n * n }                 // [4, 16, 36, 64, 100]
+    val total   = nums.fold(0) { acc, n -> acc + n }       // 55
+    val top3    = nums.sortedBy { n -> -n }.take(3)        // [10, 9, 8]
 
-    // Aggregation
-    val total  = Lst.fold(nums, 0, { acc, n -> acc + n })  // 55
-    val hasOdd = Lst.any(nums, { n -> n % 2 != 0 })       // true
-    val allPos = Lst.all(nums, { n -> n > 0 })             // true
+    println(evens.joinToString(", "))    // 2, 4, 6, 8, 10
+    println("any > 9? ${nums.any { n -> n > 9 }}")
+    println("all > 0? ${nums.all { n -> n > 0 }}")
 
-    // Ordering
-    val sorted = Lst.sorted(nums)
+    // ── Static style (also available) ────────────────────────────────────────
     val top3   = Lst.take(Lst.sortedBy(nums, { n -> -n }), 3)  // [10, 9, 8]
 
     // Access
@@ -609,7 +638,9 @@ The `examples/` directory contains runnable `.ksr` files:
 | `examples/hello.ksr` | Data classes, extension functions, control flow |
 | `examples/stdlib_demo.ksr` | `ksr.io` and `ksr.text` standard library demo |
 | `examples/async_demo.ksr` | async/await with Task and ValueTask |
-| `examples/collections_demo.ksr` | `ksr.collections`, immutable/mutable List and Map |
+| `examples/collections_demo.ksr` | `ksr.collections`, fluent and static API, immutable/mutable List and Map |
+| `examples/generic_funs.ksr` | Generic type parameters on functions and extension functions |
+| `examples/text_processing.ksr` | Text parsing + collection pipelines using `ksr.text` and `ksr.collections` together |
 | `examples/raylib_demo.ksr` | Raylib primitives demo (circles, rectangles, lines) |
 | `examples/game_of_life.ksr` | Conway's Game of Life at 1920×1080 using Raylib |
 
@@ -725,6 +756,7 @@ This works in both single-file mode (`ksr file.ksr`) and full project mode (`dot
 - [x] Async/await — `async fun`, `await`, `@ValueTask`, `--async-return=valuetask`
 - [x] Standard library — `ksr.collections` (`Lst` and `Mp` higher-order operations)
 - [x] Immutable collections by default — `List<T>` / `Map<K,V>` are read-only; `MutableList<T>` / `MutableMap<K,V>` are writable
+- [x] Generic type parameters on functions — `fun <T> identity(x: T): T` and `fun <T> List<T>.second(): T`
 
 ---
 

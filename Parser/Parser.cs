@@ -209,7 +209,7 @@ public class Parser
 
             Expect(TokenType.Fun);
             var mname = Expect(TokenType.Identifier).Value;
-            methods.Add(ParseFunctionTail(mname, mIsAsync, mAsyncReturn));
+            methods.Add(ParseFunctionTail(mname, [], mIsAsync, mAsyncReturn));
         }
 
         Expect(TokenType.RBrace);
@@ -227,21 +227,36 @@ public class Parser
         AsyncReturnKind asyncReturn = AsyncReturnKind.Task)
     {
         Expect(TokenType.Fun);
-        var firstName = Expect(TokenType.Identifier).Value;
 
-        // Extension function: fun ReceiverType.methodName(...)
+        // Optional type parameter list: fun <T, U> ...
+        var typeParams = new List<string>();
+        if (Check(TokenType.Lt))
+        {
+            Consume(); // <
+            typeParams.Add(Expect(TokenType.Identifier).Value);
+            while (Match(TokenType.Comma))
+                typeParams.Add(Expect(TokenType.Identifier).Value);
+            Expect(TokenType.Gt);
+        }
+
+        // Parse the first name / receiver type — use ParseTypeRef so generic
+        // receivers like List<T> are handled correctly.
+        var firstName = ParseTypeRef().Name;
+
+        // Extension function: fun <T> List<T>.methodName(...)
         if (Check(TokenType.Dot))
         {
             Consume(); // .
             var methodName = Expect(TokenType.Identifier).Value;
-            return ParseExtFunctionTail(firstName, methodName, isAsync, asyncReturn);
+            return ParseExtFunctionTail(firstName, methodName, typeParams, isAsync, asyncReturn);
         }
 
-        return ParseFunctionTail(firstName, isAsync, asyncReturn);
+        return ParseFunctionTail(firstName, typeParams, isAsync, asyncReturn);
     }
 
     private FunctionDecl ParseFunctionTail(
         string name,
+        List<string> typeParams,
         bool isAsync = false,
         AsyncReturnKind asyncReturn = AsyncReturnKind.Task)
     {
@@ -255,12 +270,13 @@ public class Parser
 
         if (isAsync) ValidateAsyncReturnType(retType, name);
 
-        return new FunctionDecl(name, parms, retType, ParseBlock(), isAsync, asyncReturn);
+        return new FunctionDecl(name, typeParams, parms, retType, ParseBlock(), isAsync, asyncReturn);
     }
 
     private ExtFunctionDecl ParseExtFunctionTail(
         string receiverType,
         string methodName,
+        List<string> typeParams,
         bool isAsync = false,
         AsyncReturnKind asyncReturn = AsyncReturnKind.Task)
     {
@@ -274,7 +290,7 @@ public class Parser
 
         if (isAsync) ValidateAsyncReturnType(retType, $"{receiverType}.{methodName}");
 
-        return new ExtFunctionDecl(receiverType, methodName, parms, retType,
+        return new ExtFunctionDecl(receiverType, methodName, typeParams, parms, retType,
                                    ParseBlock(), isAsync, asyncReturn);
     }
 

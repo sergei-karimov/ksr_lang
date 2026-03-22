@@ -300,4 +300,54 @@ public class CodeGenTests {
         var flat = Flat("data class Vec(x: Int)\nfun f() { val v = Vec(0) }");
         Assert.Contains("new Vec(0)", flat);
     }
+
+    // ── generic type parameters ───────────────────────────────────────────────
+
+    [Fact]
+    public void GenericFunction_EmitsTypeParams()
+    {
+        var cs = Gen("fun <T> identity(x: T): T { return x }");
+        Assert.Contains("identity<T>(", cs);
+        Assert.Contains("T x", cs);
+    }
+
+    [Fact]
+    public void GenericFunction_MultipleTypeParams()
+    {
+        var cs = Gen("fun <T, U> pair(a: T, b: U): T { return a }");
+        Assert.Contains("pair<T, U>(", cs);
+    }
+
+    [Fact]
+    public void GenericExtensionFunction_EmitsTypeParams()
+    {
+        var cs = Gen("fun <T, U> List<T>.myMap(f: T): U { return f }");
+        Assert.Contains("MyMap<T, U>(", cs);
+        Assert.Contains("this IReadOnlyList<T> self", cs);
+    }
+
+    [Fact]
+    public void GenericExtensionFunction_ReceiverTypeIsGeneric()
+    {
+        var cs = Gen("fun <T> List<T>.first(): T { return this[0] }");
+        Assert.Contains("IReadOnlyList<T>", cs);
+        Assert.Contains("First<T>(", cs);
+    }
+
+    [Fact]
+    public void GenericFunction_TypeParamInReturnType()
+    {
+        var cs = Gen("fun <T> wrap(x: T): List<T> { return x }");
+        Assert.Contains("IReadOnlyList<T>", cs);
+        Assert.Contains("wrap<T>(", cs);
+    }
+
+    [Fact]
+    public void GenericFunction_TypeParamNotPrefixedWithI()
+    {
+        // Type params must NOT get the 'I' interface prefix.
+        var cs = Gen("fun <T> id(x: T): T { return x }");
+        Assert.Contains("T id<T>(T x)", cs.Replace("  ", " ").Split('\n')
+            .Select(l => l.Trim()).First(l => l.Contains("id<T>")));
+    }
 }

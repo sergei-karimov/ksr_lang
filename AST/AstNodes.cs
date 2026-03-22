@@ -64,6 +64,7 @@ public record DataClassDecl(string Name, List<Parameter> Properties) : AstNode;
 /// <summary>fun foo(a: Int): String { … }   or   async fun foo(): String { … }</summary>
 public record FunctionDecl(
     string          Name,
+    List<string>    TypeParams,
     List<Parameter> Parameters,
     TypeRef?        ReturnType,
     Block           Body,
@@ -78,6 +79,7 @@ public record FunctionDecl(
 public record ExtFunctionDecl(
     string          ReceiverType,
     string          MethodName,
+    List<string>    TypeParams,
     List<Parameter> Parameters,
     TypeRef?        ReturnType,
     Block           Body,

@@ -12,7 +12,11 @@
       "Bash(DOTNET=\"/mnt/c/Program Files/dotnet/dotnet.exe\" \"$DOTNET\" pack sdk/KSR.Build/KSR.Build.csproj -c Release -o artifacts/ -v q)",
       "Bash(unzip -l artifacts/KSR.Build.0.1.0.nupkg)",
       "Bash(dotnet test:*)",
-      "Bash(dotnet build:*)"
+      "Bash(dotnet build:*)",
+      "Bash(dotnet run:*)",
+      "Bash(dotnet exec:*)",
+      "Bash(dotnet:*)",
+      "Bash(KSR_STDLIB_PATH=/mnt/c/Users/serge/source/repos/ksr_lang/sdk/KSR.StdLib/bin/Debug/net8.0/KSR.StdLib.dll dotnet /mnt/c/Users/serge/source/repos/ksr_lang/bin/Debug/net8.0/ksr.dll examples/text_processing.ksr 2>&1)"
     ]
   }
 }

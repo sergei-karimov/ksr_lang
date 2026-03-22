@@ -1,0 +1,135 @@
+// text_processing.ksr — demonstrates ksr.text and ksr.collections working together.
+//
+// Parses a CSV-like log file in memory, filters and aggregates entries,
+// and produces a summary report.
+
+use ksr.text
+use ksr.collections
+
+// ── Data model ────────────────────────────────────────────────────────────────
+
+data class LogEntry(level: String, module: String, message: String)
+
+fun LogEntry.isError(): Bool {
+    return this.level == "ERROR"
+}
+
+fun LogEntry.isWarning(): Bool {
+    return this.level == "WARN"
+}
+
+fun LogEntry.format(): String {
+    return "[${this.level}] ${this.module}: ${this.message}"
+}
+
+// ── Parsing ───────────────────────────────────────────────────────────────────
+
+// Parse a single "LEVEL|module|message" line into a LogEntry (nullable on bad input)
+fun parseLine(line: String): LogEntry? {
+    val parts = Text.split(line, "|")
+    if (parts.size() < 3) {
+        return null
+    }
+    val level   = Text.trim(parts.get(0))
+    val module  = Text.trim(parts.get(1))
+    val message = Text.trim(parts.get(2))
+    return LogEntry(level, module, message)
+}
+
+// ── Main ──────────────────────────────────────────────────────────────────────
+
+fun main() {
+    // Simulated log lines (could be File.lines("app.log") in real usage)
+    val raw: List<String> = [
+        "INFO  | auth    | User alice logged in",
+        "ERROR | db      | Connection timeout after 30s",
+        "WARN  | cache   | Cache miss rate above 20%",
+        "INFO  | auth    | User bob logged in",
+        "ERROR | db      | Query failed: table not found",
+        "INFO  | api     | GET /users 200 OK",
+        "WARN  | api     | Response time 850ms",
+        "ERROR | auth    | Invalid token for user carol",
+        "INFO  | cache   | Cache warmed up successfully",
+        "WARN  | db      | Slow query detected: 1200ms"
+    ]
+
+    // Parse all lines, skip nulls
+    val entries: MutableList<LogEntry> = []
+    for (line in raw) {
+        val entry = parseLine(line)
+        if (entry != null) {
+            entries.add(entry)
+        }
+    }
+
+    println("── Log Report ───────────────────────────────────")
+    println("Total entries: ${entries.size()}")
+    println("")
+
+    // ── Filter by level ───────────────────────────────────────────────────────
+
+    val errors   = entries.filter { e -> e.isError() }
+    val warnings = entries.filter { e -> e.isWarning() }
+    val infos    = entries.filter { e -> e.level == "INFO" }
+
+    println("  INFO:  ${infos.size()}")
+    println("  WARN:  ${warnings.size()}")
+    println("  ERROR: ${errors.size()}")
+    println("")
+
+    // ── Error messages ────────────────────────────────────────────────────────
+
+    println("── Errors ───────────────────────────────────────")
+    for (e in errors) {
+        println("  ${e.format()}")
+    }
+    println("")
+
+    // ── Group by module ───────────────────────────────────────────────────────
+
+    val byModule = Lst.groupBy(entries, { e -> e.module })
+
+    println("── Entries per module ───────────────────────────")
+    for (mod in Mp.keys(byModule)) {
+        val count = byModule.getOrDefault(mod, []).size()
+        println("  ${mod}: ${count}")
+    }
+    println("")
+
+    // ── Modules with errors ───────────────────────────────────────────────────
+
+    val errorModules = errors.map { e -> e.module }.distinct()
+    println("── Modules with errors ──────────────────────────")
+    println("  ${errorModules.joinToString(", ")}")
+    println("")
+
+    // ── Word frequency in messages ────────────────────────────────────────────
+
+    val allWords: MutableList<String> = []
+    for (e in entries) {
+        val words = Text.split(Text.toLower(e.message), " ")
+        for (w in words) {
+            val word = Text.trim(w)
+            if (Text.length(word) > 3) {
+                allWords.add(word)
+            }
+        }
+    }
+
+    val uniqueWords = allWords.distinct()
+    println("── Unique words (>3 chars) in messages ──────────")
+    println("  ${uniqueWords.joinToString(", ")}")
+    println("")
+
+    // ── Summary ───────────────────────────────────────────────────────────────
+
+    val hasErrors = errors.any { e -> e.isError() }
+    val status = when {
+        errors.size() > 2 -> "CRITICAL"
+        errors.size() > 0 -> "DEGRADED"
+        warnings.size() > 0 -> "WARNING"
+        else -> "HEALTHY"
+    }
+
+    println("── System status: ${status} ─────────────────────")
+}

@@ -72,6 +72,18 @@ public class CollectionsCodeGenTests
         Assert.Contains("Mp.Keys(",
             Flat("use ksr.collections\nfun f(m: Map<String, Int>) { val r = Mp.keys(m) }"));
 
+    // ── fluent extension method style ─────────────────────────────────────────
+
+    [Fact]
+    public void Fluent_Filter_EmitsExtensionCall() =>
+        Assert.Contains("nums.Filter(",
+            Flat("use ksr.collections\nfun f(nums: List<Int>) { val r = nums.filter { n -> n > 0 } }"));
+
+    [Fact]
+    public void Fluent_Map_EmitsExtensionCall() =>
+        Assert.Contains("nums.Map(",
+            Flat("use ksr.collections\nfun f(nums: List<Int>) { val r = nums.map { n -> n * 2 } }"));
+
     // ── System.Collections.Generic is in preamble ─────────────────────────────
 
     [Fact]
