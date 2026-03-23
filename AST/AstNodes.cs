@@ -144,17 +144,18 @@ public record ExprStmt(Expr Expression) : Stmt;
 //  Expressions
 // ═══════════════════════════════════════════════════════════════════════════════
 
-public record IntLiteral(int Value)       : Expr;
-public record DoubleLiteral(double Value) : Expr;
-public record StringLiteral(string Value) : Expr;
-public record BoolLiteral(bool Value)     : Expr;
-public record NullLiteral()               : Expr;
+public record IntLiteral(int Value)                         : Expr;
+public record DoubleLiteral(double Value)                   : Expr;
+public record StringLiteral(string Value, bool IsRaw = false) : Expr;
+public record BoolLiteral(bool Value)                       : Expr;
+public record NullLiteral()                                 : Expr;
 
 /// <summary>
 /// A string template: "Hello, ${name}! You are ${age} years old."
 /// Holds an ordered list of literal text chunks and embedded expressions.
+/// IsRaw = true when the source used triple-quote syntax.
 /// </summary>
-public record StringTemplateExpr(List<StringPart> Parts) : Expr;
+public record StringTemplateExpr(List<StringPart> Parts, bool IsRaw = false) : Expr;
 
 public abstract record StringPart;
 public record LiteralPart(string Text)  : StringPart;

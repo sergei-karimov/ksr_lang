@@ -411,4 +411,46 @@ public class CodeGenTests {
         var cs = Flat("fun greet(name: String, greeting: String = \"Hi\") { } fun main() { greet(name = \"Alice\") }");
         Assert.Contains("greet(name: \"Alice\")", cs);
     }
+
+    // ── raw / multiline strings ───────────────────────────────────────────────
+
+    [Fact]
+    public void RawString_EmitsVerbatim()
+    {
+        var cs = Flat("fun f() { val s = \"\"\"hello world\"\"\" }");
+        Assert.Contains("@\"hello world\"", cs);
+    }
+
+    [Fact]
+    public void RawString_QuoteInsideBecomesDoubleQuote()
+    {
+        // KSR raw: """He said "hi" here"""  →  C# @"He said ""hi"" here"
+        var cs = Flat("fun f() { val s = \"\"\"He said \"hi\" here\"\"\" }");
+        Assert.Contains("@\"He said \"\"hi\"\" here\"", cs);
+    }
+
+    [Fact]
+    public void RawString_WithTemplate_EmitsVerbatimInterpolated()
+    {
+        var cs = Flat("fun f(name: String) { val s = \"\"\"Hello, ${name}!\"\"\" }");
+        Assert.Contains("$@\"Hello, {name}!\"", cs);
+    }
+
+    [Fact]
+    public void RawString_BackslashNotEscaped()
+    {
+        // \n in raw string stays as literal \n, not a newline
+        var cs = Flat("fun f() { val s = \"\"\"C:\\Users\\Alice\"\"\" }");
+        Assert.Contains(@"@""C:\Users\Alice""", cs);
+    }
+
+    [Fact]
+    public void RawString_TemplateWithBracesEscaped()
+    {
+        // Literal { } in raw template must be doubled
+        var cs = Flat("fun f(x: Int) { val s = \"\"\"val { ${x} }\"\"\" }");
+        Assert.Contains("{{", cs);
+        Assert.Contains("}}", cs);
+        Assert.Contains("{x}", cs);
+    }
 }

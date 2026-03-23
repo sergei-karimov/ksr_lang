@@ -97,7 +97,13 @@ public class Lexer
 
         if (char.IsLetter(c) || c == '_') return ReadWord(line, col);
         if (char.IsDigit(c))              return ReadInt(line, col);
-        if (c == '"')                     return ReadString(line, col);
+        if (c == '"')
+        {
+            // Triple-quote: raw / multiline string  """..."""
+            if (LookAhead == '"' && _pos + 2 < _src.Length && _src[_pos + 2] == '"')
+                return ReadRawString(line, col);
+            return ReadString(line, col);
+        }
 
         Step(); // consume c
 
@@ -283,6 +289,59 @@ public class Lexer
         Step(); // closing "
 
         var type = isTemplate ? TokenType.StringTemplate : TokenType.StringLiteral;
+        return new Token(type, sb.ToString(), line, col);
+    }
+
+    // ── raw / multiline string  """...""" ─────────────────────────────────────
+
+    /// <summary>
+    /// Reads a triple-quoted raw string.
+    /// No escape processing; <c>${...}</c> interpolations are still recognised.
+    /// Terminated by the first <c>"""</c> that is not inside a <c>${...}</c> block.
+    /// </summary>
+    private Token ReadRawString(int line, int col)
+    {
+        Step(); Step(); Step(); // consume opening """
+        var sb          = new StringBuilder();
+        bool isTemplate = false;
+
+        while (_pos < _src.Length)
+        {
+            // Closing """
+            if (Current == '"' && LookAhead == '"' && _pos + 2 < _src.Length && _src[_pos + 2] == '"')
+            {
+                Step(); Step(); Step();
+                break;
+            }
+
+            // ${...} interpolation — same logic as ReadString
+            if (Current == '$' && LookAhead == '{')
+            {
+                isTemplate = true;
+                sb.Append("${");
+                Step(); // $
+                Step(); // {
+                int depth = 1;
+                while (_pos < _src.Length && depth > 0)
+                {
+                    if      (Current == '{') depth++;
+                    else if (Current == '}') { depth--; if (depth == 0) break; }
+                    sb.Append(Current);
+                    Step();
+                }
+                sb.Append('}');
+                if (Current == '}') Step(); // consume closing }
+            }
+            else
+            {
+                // Raw content — no escape processing
+                sb.Append(Current);
+                if (Current == '\n') { _line++; _col = 1; _pos++; }
+                else Step();
+            }
+        }
+
+        var type = isTemplate ? TokenType.RawStringTemplate : TokenType.RawStringLiteral;
         return new Token(type, sb.ToString(), line, col);
     }
 }

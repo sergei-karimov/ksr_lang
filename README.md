@@ -413,6 +413,35 @@ static void Greet(string name, string greeting = "Hello", bool excited = false) 
 Greet(excited: true, name: "Carol");
 ```
 
+### Raw / multiline strings
+
+Triple-quoted strings use `"""..."""` syntax. No escape sequences are processed — backslashes are literal. String templates (`${...}`) still work inside raw strings.
+
+```kotlin
+val path = """C:\Users\Alice\Documents\file.txt"""
+
+val sql = """
+    SELECT *
+    FROM users
+    WHERE id = ${userId}
+"""
+
+val regex = """^\d{3}-\d{4}$"""
+```
+
+Compiles to C# verbatim string literals (`@"..."` / `$@"..."`):
+```csharp
+var path = @"C:\Users\Alice\Documents\file.txt";
+var sql  = $@"
+    SELECT *
+    FROM users
+    WHERE id = {userId}
+";
+var regex = @"^\d{3}-\d{4}$";
+```
+
+Double-quote characters inside a raw string are preserved as `""` in the emitted C# verbatim literal.
+
 ### Generic functions
 
 Functions and extension functions can declare type parameters with `<T, U, ...>`:
@@ -908,6 +937,7 @@ This works in both single-file mode (`ksr file.ksr`) and full project mode (`dot
 - [x] Generic interfaces with `where` constraints — `interface Enum<E> where E : Enum<E>` and `implement Enum<Color> for Color`
 - [x] Sealed types with exhaustive `when` — `sealed Shape { struct Circle(r: Double) … }` + `when (s) { is Circle(c) -> … }`
 - [x] Default and named arguments — `fun f(x: Int = 0)` and `f(x = 42)`
+- [x] Raw / multiline strings — `"""..."""` with no escape processing; `${...}` templates still work
 
 ---
 

@@ -6,7 +6,9 @@ public enum TokenType
     IntLiteral,
     FloatLiteral,   // numeric literal with a decimal point: 3.14, 1.0
     StringLiteral,
-    StringTemplate,     // string containing ${...} interpolations
+    StringTemplate,        // string containing ${...} interpolations
+    RawStringLiteral,      // """...""" no escape processing
+    RawStringTemplate,     // """...${...}...""" raw with interpolation
 
     // ── Keywords ──────────────────────────────────────────────────────────────
     Use,        // use  (namespace import)

@@ -446,7 +446,9 @@ public class CodeGenerator
     {
         IntLiteral il => il.Value.ToString(),
         DoubleLiteral dl => dl.Value.ToString(System.Globalization.CultureInfo.InvariantCulture),
-        StringLiteral sl => $"\"{Escape(sl.Value)}\"",
+        StringLiteral sl => sl.IsRaw
+            ? $"@\"{sl.Value.Replace("\"", "\"\"")}\""
+            : $"\"{Escape(sl.Value)}\"",
         BoolLiteral bl => bl.Value ? "true" : "false",
         NullLiteral => "null",
         ThisExpr => _inRecordMethod ? "this" : "self",
@@ -477,7 +479,7 @@ public class CodeGenerator
         RangeExpr re =>
             $"Enumerable.Range({EmitExpr(re.Start)}, {EmitExpr(re.End)} - {EmitExpr(re.Start)})",
 
-        StringTemplateExpr ste => EmitStringTemplate(ste),
+        StringTemplateExpr ste => ste.IsRaw ? EmitRawStringTemplate(ste) : EmitStringTemplate(ste),
         CallExpr ce => EmitCall(ce),
         ListLiteralExpr ll => EmitListLiteral(ll),
         MapLiteralExpr ml => EmitMapLiteral(ml),
@@ -516,6 +518,29 @@ public class CodeGenerator
                     .Replace("{", "{{")
                     .Replace("}", "}}")
                     .Replace("\"", "\\\""));
+            }
+            else if (part is ExprPart ep)
+            {
+                sb.Append($"{{{EmitExpr(ep.Expression)}}}");
+            }
+        }
+        sb.Append('"');
+        return sb.ToString();
+    }
+
+    private string EmitRawStringTemplate(StringTemplateExpr ste)
+    {
+        // Raw interpolated string: $@"...{expr}..."
+        // In verbatim interpolated strings: " → "", { → {{, } → }}
+        var sb = new StringBuilder("$@\"");
+        foreach (var part in ste.Parts)
+        {
+            if (part is LiteralPart lp)
+            {
+                sb.Append(lp.Text
+                    .Replace("\"", "\"\"")
+                    .Replace("{", "{{")
+                    .Replace("}", "}}"));
             }
             else if (part is ExprPart ep)
             {

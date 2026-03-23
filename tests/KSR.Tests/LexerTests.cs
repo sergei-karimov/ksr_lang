@@ -215,4 +215,28 @@ public class LexerTests
         Assert.True(ex.Line > 0);
         Assert.True(ex.Col  > 0);
     }
+
+    // ── raw strings ───────────────────────────────────────────────────────────
+
+    [Fact]
+    public void RawString_EmitsRawStringLiteralToken()
+    {
+        var tok = Lex("\"\"\"hello\"\"\"").First(t => t.Type == TokenType.RawStringLiteral);
+        Assert.Equal("hello", tok.Value);
+    }
+
+    [Fact]
+    public void RawString_PreservesBackslash()
+    {
+        // Raw strings do NOT process escape sequences
+        var tok = Lex("\"\"\"C:\\\\Users\\\\Alice\"\"\"").First(t => t.Type == TokenType.RawStringLiteral);
+        Assert.Equal(@"C:\\Users\\Alice", tok.Value);
+    }
+
+    [Fact]
+    public void RawString_WithInterpolation_EmitsRawStringTemplate()
+    {
+        var tok = Lex("\"\"\"Hello, ${name}!\"\"\"").First(t => t.Type == TokenType.RawStringTemplate);
+        Assert.Contains("${name}", tok.Value);
+    }
 }

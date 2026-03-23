@@ -798,6 +798,14 @@ public class Parser
                 Consume();
                 return ParseStringTemplate(tok.Value);
 
+            case TokenType.RawStringLiteral:
+                Consume();
+                return new StringLiteral(tok.Value, IsRaw: true);
+
+            case TokenType.RawStringTemplate:
+                Consume();
+                return ParseStringTemplate(tok.Value, isRaw: true);
+
             case TokenType.True:  Consume(); return new BoolLiteral(true);
             case TokenType.False: Consume(); return new BoolLiteral(false);
             case TokenType.Null:  Consume(); return new NullLiteral();
@@ -976,7 +984,7 @@ public class Parser
     /// normalised by the lexer) into literal and expression parts.
     /// Each expression part is parsed by a fresh sub-parser.
     /// </summary>
-    private StringTemplateExpr ParseStringTemplate(string rawValue)
+    private StringTemplateExpr ParseStringTemplate(string rawValue, bool isRaw = false)
     {
         var parts = new List<StringPart>();
         int i = 0;
@@ -1023,6 +1031,6 @@ public class Parser
             i = j;
         }
 
-        return new StringTemplateExpr(parts);
+        return new StringTemplateExpr(parts, isRaw);
     }
 }
