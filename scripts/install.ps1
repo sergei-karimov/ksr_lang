@@ -140,9 +140,11 @@ Write-Ok "Feed '$feedName' → $ArtifactsDir"
 # ── 4. Install ksr global tool ────────────────────────────────────────────────
 
 Write-Step "Installing ksr global tool"
-# Remove from NuGet HTTP cache so the fresh local build is always used
-$cacheDir = Join-Path $env:USERPROFILE ".nuget\packages\ksr\0.1.0"
-if (Test-Path $cacheDir) { Remove-Item -Recurse -Force $cacheDir }
+# Remove all KSR packages from NuGet cache so fresh local builds are always used
+foreach ($pkg in @('ksr', 'ksr.core', 'ksr.build', 'ksr.sdk', 'ksr.stdlib', 'ksr.templates')) {
+    $cacheDir = Join-Path $env:USERPROFILE ".nuget\packages\$pkg\0.1.0"
+    if (Test-Path $cacheDir) { Remove-Item -Recurse -Force $cacheDir }
+}
 # Uninstall first in case a previous version is installed (ignore errors)
 try { & dotnet tool uninstall -g KSR *>&1 | Out-Null } catch {}
 Invoke-Cmd dotnet @('tool', 'install', '-g', 'KSR', '--add-source', $ArtifactsDir, '--version', '0.1.0')

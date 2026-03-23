@@ -861,6 +861,29 @@ If the Language Server fails to start, verify `ksr` is on your PATH:
 ksr lsp   # should hang waiting for input, not print an error
 ```
 
+### Debugging
+
+KSR projects support full breakpoint debugging in VS Code via the C# extension (`ms-dotnettools.csharp` or C# Dev Kit).
+
+**Requirements:**
+- C# extension installed in VS Code
+- Project mode only (`dotnet new ksr-console`) — single-file `ksr file.ksr` mode does not produce a PDB
+
+**Setup:** every project created with `dotnet new ksr-console` includes a `.vscode/launch.json` pre-configured for debugging:
+
+```json
+{
+    "name": "Debug KSR",
+    "type": "coreclr",
+    "request": "launch",
+    "preLaunchTask": "build",
+    "program": "${workspaceFolder}/bin/Debug/net8.0/${workspaceFolderBasename}.dll",
+    "requireExactSource": false
+}
+```
+
+Press **F5** to build and launch the debugger. Breakpoints set in `.ksr` files work because the KSR compiler embeds `#line` directives in the generated C# — the PDB maps every generated line back to the original `.ksr` file and line number.
+
 ---
 
 ## How It Works
@@ -938,6 +961,7 @@ This works in both single-file mode (`ksr file.ksr`) and full project mode (`dot
 - [x] Sealed types with exhaustive `when` — `sealed Shape { struct Circle(r: Double) … }` + `when (s) { is Circle(c) -> … }`
 - [x] Default and named arguments — `fun f(x: Int = 0)` and `f(x = 42)`
 - [x] Raw / multiline strings — `"""..."""` with no escape processing; `${...}` templates still work
+- [x] Breakpoint debugging — F5 in VS Code hits breakpoints in `.ksr` files via `#line` PDB source mapping (requires C# extension)
 
 ---
 

@@ -144,7 +144,7 @@ static void PrintHelp()
           dotnet publish
 
         LANGUAGE FEATURES
-          data class Point(x: Int, y: Int)       value type
+          struct Point(x: Int, y: Int)           value type
           val x = 42                             immutable binding
           var n = 0                              mutable binding
           fun add(a: Int, b: Int): Int { ... }   function

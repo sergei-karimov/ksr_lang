@@ -21,41 +21,111 @@ import {
 let client: LanguageClient | undefined;
 
 export function activate(context: vscode.ExtensionContext): void {
+    // ── Language Server ────────────────────────────────────────────────────────
+
     const cfg = vscode.workspace.getConfiguration('ksr');
     const exe = resolveExecutable(cfg.get<string>('executablePath', 'ksr'));
 
-    if (!exe) {
-        // ksr not installed — skip silently (no spam)
-        return;
+    if (exe) {
+        const serverOptions: ServerOptions = {
+            command:   exe,
+            args:      ['lsp'],
+            transport: TransportKind.stdio,
+        };
+
+        const clientOptions: LanguageClientOptions = {
+            documentSelector: [{ scheme: 'file', language: 'ksr' }],
+            synchronize: {
+                // Re-validate when any .ksr file changes on disk
+                fileEvents: vscode.workspace.createFileSystemWatcher('**/*.ksr'),
+            },
+        };
+
+        client = new LanguageClient(
+            'ksr',
+            'KSR Language Server',
+            serverOptions,
+            clientOptions,
+        );
+
+        client.start();
+        context.subscriptions.push(client);
     }
 
-    const serverOptions: ServerOptions = {
-        command:   exe,
-        args:      ['lsp'],
-        transport: TransportKind.stdio,
-    };
+    // ── Debug support ──────────────────────────────────────────────────────────
 
-    const clientOptions: LanguageClientOptions = {
-        documentSelector: [{ scheme: 'file', language: 'ksr' }],
-        synchronize: {
-            // Re-validate when any .ksr file changes on disk
-            fileEvents: vscode.workspace.createFileSystemWatcher('**/*.ksr'),
-        },
-    };
+    context.subscriptions.push(
+        vscode.debug.registerDebugConfigurationProvider('ksr', {
 
-    client = new LanguageClient(
-        'ksr',
-        'KSR Language Server',
-        serverOptions,
-        clientOptions,
+            // Called when no launch.json exists — provides the initial config list.
+            provideDebugConfigurations(): vscode.DebugConfiguration[] {
+                return [defaultLaunchConfig()];
+            },
+
+            // Called before every debug session.  Transforms type "ksr" → "coreclr"
+            // so the C# extension's debug adapter handles the actual execution.
+            resolveDebugConfiguration(
+                _folder: vscode.WorkspaceFolder | undefined,
+                config: vscode.DebugConfiguration,
+            ): vscode.DebugConfiguration | null {
+                // Fill in defaults when launched without a launch.json (F5)
+                if (!config.type && !config.request && !config.name) {
+                    return defaultLaunchConfig();
+                }
+
+                // Warn if neither C# extension variant is installed
+                const hasCsharp =
+                    vscode.extensions.getExtension('ms-dotnettools.csharp') ||
+                    vscode.extensions.getExtension('ms-dotnettools.csdevkit');
+                if (!hasCsharp) {
+                    vscode.window.showWarningMessage(
+                        'KSR debugging requires the C# extension. Please install "ms-dotnettools.csharp" from the Marketplace.',
+                        'Install',
+                    ).then(choice => {
+                        if (choice === 'Install') {
+                            vscode.commands.executeCommand(
+                                'workbench.extensions.search',
+                                'ms-dotnettools.csharp',
+                            );
+                        }
+                    });
+                    return null;
+                }
+
+                // Remap type "ksr" → "coreclr" (delegate to C# debug adapter)
+                config.type = 'coreclr';
+
+                // Ensure requireExactSource is off so the debugger accepts .ksr files
+                if (config.requireExactSource === undefined) {
+                    config.requireExactSource = false;
+                }
+
+                return config;
+            },
+        }),
     );
-
-    client.start();
-    context.subscriptions.push(client);
 }
 
 export function deactivate(): Thenable<void> | undefined {
     return client?.stop();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Returns a default coreclr launch configuration for a KSR console project. */
+function defaultLaunchConfig(): vscode.DebugConfiguration {
+    return {
+        name: 'Debug KSR',
+        type: 'coreclr',
+        request: 'launch',
+        preLaunchTask: 'build',
+        program: '${workspaceFolder}/bin/Debug/net8.0/${workspaceFolderBasename}.dll',
+        args: [],
+        cwd: '${workspaceFolder}',
+        console: 'internalConsole',
+        stopAtEntry: false,
+        requireExactSource: false,
+    };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

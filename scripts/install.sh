@@ -111,8 +111,10 @@ ok "Feed '$FEED_NAME' → $ARTIFACTS"
 
 # ── 4. Install ksr global tool ────────────────────────────────────────────────
 step "Installing ksr global tool"
-# Remove from NuGet cache so the fresh local build is always used
-rm -rf "$HOME/.nuget/packages/ksr/0.1.0" 2>/dev/null || true
+# Remove all KSR packages from NuGet cache so fresh local builds are always used
+for pkg in ksr ksr.core ksr.build ksr.sdk ksr.stdlib ksr.templates; do
+    rm -rf "$HOME/.nuget/packages/$pkg/0.1.0" 2>/dev/null || true
+done
 dotnet tool uninstall -g KSR 2>/dev/null || true
 dotnet tool install -g KSR --add-source "$ARTIFACTS" --version 0.1.0
 ok "ksr tool installed"

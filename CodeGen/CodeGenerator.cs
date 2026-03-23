@@ -7,7 +7,7 @@ namespace KSR.CodeGen;
 /// Walks a KSR AST and emits valid C# source code.
 ///
 /// Design notes (Rust-like, no inheritance):
-///   • data class  → C# positional record  (sealed value type, no base classes)
+///   • struct  → C# positional record  (sealed value type, no base classes)
 ///   • Extension functions go into KsrProgram as public static extension methods
 ///   • 'this' inside extension bodies compiles to 'self' (the receiver parameter)
 ///   • val / var both compile to 'var' (C# has no readonly locals)
@@ -499,7 +499,7 @@ public class CodeGenerator
         if (ce.Callee is IdentifierExpr { Name: "println" })
             return $"Console.WriteLine({args})";
 
-        // Constructor call for known data classes
+        // Constructor call for known structs
         if (ce.Callee is IdentifierExpr id && _structs.Contains(id.Name))
             return $"new {id.Name}({args})";
 
