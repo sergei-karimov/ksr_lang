@@ -68,11 +68,11 @@ public class CodeGenTests {
         Assert.Contains("IReadOnlyDictionary<string, IReadOnlyList<int>>",
             Gen("fun f(m: Map<String, List<Int>>) { }"));
 
-    // ── data classes ──────────────────────────────────────────────────────────
+    // ── structs ──────────────────────────────────────────────────────────
 
     [Fact]
     public void DataClass_EmitsRecord() {
-        var cs = Gen("data class Point(x: Int, y: Int)");
+        var cs = Gen("struct Point(x: Int, y: Int)");
         Assert.Contains("record Point(", cs);
         Assert.Contains("int X", cs);
         Assert.Contains("int Y", cs);
@@ -80,7 +80,7 @@ public class CodeGenTests {
 
     [Fact]
     public void DataClass_PropertiesArePascalCase() {
-        var cs = Gen("data class User(firstName: String)");
+        var cs = Gen("struct User(firstName: String)");
         Assert.Contains("string FirstName", cs);
     }
 
@@ -108,7 +108,7 @@ public class CodeGenTests {
 
     [Fact]
     public void ExtFunction_ThisCompilesAsSelf() {
-        var cs = Gen("data class Point(x: Int)\nfun Point.getX(): Int { return this.x }");
+        var cs = Gen("struct Point(x: Int)\nfun Point.getX(): Int { return this.x }");
         Assert.Contains("self.X", cs);
     }
 
@@ -291,13 +291,13 @@ public class CodeGenTests {
 
     [Fact]
     public void DataClassConstructor_EmitsNewKeyword() {
-        var cs = Gen("data class Point(x: Int, y: Int)\nfun f() { val p = Point(1, 2) }");
+        var cs = Gen("struct Point(x: Int, y: Int)\nfun f() { val p = Point(1, 2) }");
         Assert.Contains("new Point(", cs);
     }
 
     [Fact]
     public void KnownDataClass_CallEmitsNew() {
-        var flat = Flat("data class Vec(x: Int)\nfun f() { val v = Vec(0) }");
+        var flat = Flat("struct Vec(x: Int)\nfun f() { val v = Vec(0) }");
         Assert.Contains("new Vec(0)", flat);
     }
 

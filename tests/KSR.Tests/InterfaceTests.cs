@@ -95,7 +95,7 @@ public class InterfaceTests
     public void Parser_ImplBlock_ParsedCorrectly()
     {
         var prog = KsrHelper.Parse("""
-            data class Point(x: Int)
+            struct Point(x: Int)
             interface Named { fun name(): String }
             implement Named for Point {
                 fun name(): String { return "point" }
@@ -147,7 +147,7 @@ public class InterfaceTests
     {
         var cs = Gen("""
             interface Shape { fun area(): Double }
-            data class Circle(r: Double)
+            struct Circle(r: Double)
             implement Shape for Circle {
                 fun area(): Double { return 1.0 }
             }
@@ -160,7 +160,7 @@ public class InterfaceTests
     {
         var cs = Gen("""
             interface Shape { fun area(): Double }
-            data class Circle(r: Double)
+            struct Circle(r: Double)
             implement Shape for Circle {
                 fun area(): Double { return 1.0 }
             }
@@ -173,7 +173,7 @@ public class InterfaceTests
     {
         var cs = Gen("""
             interface Shape { fun area(): Double }
-            data class Circle(r: Double)
+            struct Circle(r: Double)
             implement Shape for Circle {
                 fun area(): Double { return this.r }
             }
@@ -198,7 +198,7 @@ public class InterfaceTests
         var cs = Gen("""
             interface Shape { fun area(): Double }
             interface Named { fun name(): String }
-            data class Circle(r: Double)
+            struct Circle(r: Double)
             implement Shape for Circle {
                 fun area(): Double { return 1.0 }
             }
@@ -230,7 +230,7 @@ public class InterfaceTests
     [Fact]
     public void CodeGen_DataClass_WithoutImpl_StillEmitsSemicolon()
     {
-        var cs = Gen("data class Point(x: Int, y: Int)");
+        var cs = Gen("struct Point(x: Int, y: Int)");
         Assert.Contains("record Point(int X, int Y);", cs);
     }
 
@@ -239,10 +239,103 @@ public class InterfaceTests
     {
         // Extension functions must still use 'self', not 'this'
         var cs = Gen("""
-            data class Point(x: Int)
+            struct Point(x: Int)
             fun Point.getX(): Int { return this.x }
             """);
         Assert.Contains("self.X", cs);
         Assert.DoesNotContain("this.X", cs);
+    }
+
+    // ── generic interfaces ────────────────────────────────────────────────────
+
+    [Fact]
+    public void GenericInterface_EmitsTypeParam()
+    {
+        var cs = Flat("""
+            interface Container<T> {
+                fun get(): T
+            }
+            """);
+        Assert.Contains("interface IContainer<T>", cs);
+        Assert.Contains("T Get();", cs);
+    }
+
+    [Fact]
+    public void GenericInterface_TypeParamNotIPrefixed()
+    {
+        // T is a type param — must not become IT
+        var cs = Flat("""
+            interface Box<T> {
+                fun value(): T
+            }
+            """);
+        Assert.DoesNotContain("IT", cs);
+        Assert.Contains("T Value();", cs);
+    }
+
+    [Fact]
+    public void GenericInterface_WhereClause_SingleConstraint()
+    {
+        var cs = Flat("""
+            interface Comparable<T> {
+                fun compareTo(other: T): Int
+            }
+            interface Sortable<E> where E : Comparable<E> {
+                fun sort(): E
+            }
+            """);
+        Assert.Contains("interface ISortable<E> where E : IComparable<E>", cs);
+    }
+
+    [Fact]
+    public void GenericInterface_WhereClause_MultipleConstraints()
+    {
+        var cs = Flat("""
+            interface Enum<E> where E : Enum<E> {
+                fun name(): String
+            }
+            interface IndexDbEnum<E> where E : Enum<E>, E : IndexDbEnum<E> {
+                fun key(): String
+            }
+            """);
+        Assert.Contains("interface IEnum<E> where E : IEnum<E>", cs);
+        Assert.Contains("interface IIndexDbEnum<E> where E : IEnum<E>, E : IIndexDbEnum<E>", cs);
+    }
+
+    [Fact]
+    public void GenericInterface_Implement_WithTypeArg()
+    {
+        var cs = Flat("""
+            interface Container<T> {
+                fun get(): T
+            }
+            struct Box(value: Int)
+            implement Container<Int> for Box {
+                fun get(): Int { return this.value }
+            }
+            """);
+        Assert.Contains("record Box", cs);
+        Assert.Contains("IContainer<int>", cs);
+    }
+
+    [Fact]
+    public void GenericInterface_SelfReferential_Roundtrip()
+    {
+        // Full pattern: interface Enum<E> where E : Enum<E>
+        // implement Enum<Color> for Color
+        var cs = Flat("""
+            interface Enum<E> where E : Enum<E> {
+                fun name(): String
+                fun ordinal(): Int
+            }
+            struct Color(label: String, idx: Int)
+            implement Enum<Color> for Color {
+                fun name(): String { return this.label }
+                fun ordinal(): Int { return this.idx }
+            }
+            """);
+        Assert.Contains("interface IEnum<E> where E : IEnum<E>", cs);
+        Assert.Contains("record Color", cs);
+        Assert.Contains("IEnum<Color>", cs);
     }
 }

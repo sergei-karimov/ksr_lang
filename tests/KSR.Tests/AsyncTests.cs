@@ -152,7 +152,7 @@ public class AsyncParserTests
     public void Parse_AsyncImplMethod()
     {
         var prog = KsrHelper.Parse(
-            "data class Foo()\n" +
+            "struct Foo()\n" +
             "interface Bar { async fun run(): Int }\n" +
             "implement Bar for Foo { async fun run(): Int { return 1 } }");
         var impl = (ImplBlock)prog.Declarations[2];

@@ -36,7 +36,7 @@ public static class LspServer {
 
     private static readonly string[] _keywords =
     [
-        "val", "var", "fun", "async", "await", "data", "class", "interface", "implement",
+        "val", "var", "fun", "async", "await", "struct", "interface", "implement",
         "use", "new", "if", "else", "while", "for", "in", "return", "when",
         "this", "true", "false", "null",
     ];
@@ -252,8 +252,8 @@ public static class LspServer {
                         var uri = td.GetProperty("uri").GetString()!;
                         if (_docs.TryGetValue(uri, out var docText)) {
                             foreach (var decl in SafeParse(docText)) {
-                                if (decl is KSR.AST.DataClassDecl dc)
-                                    items.Add(new { label = dc.Name, kind = 7  /* Class */, detail = "data class" });
+                                if (decl is KSR.AST.StructDecl dc)
+                                    items.Add(new { label = dc.Name, kind = 22 /* Struct */, detail = "struct" });
                                 if (decl is KSR.AST.InterfaceDecl ifd)
                                     items.Add(new { label = ifd.Name, kind = 8 /* Interface */, detail = "interface" });
                                 if (decl is KSR.AST.FunctionDecl fd)
@@ -338,8 +338,7 @@ public static class LspServer {
                 KSR.Lexer.TokenType.Fun       => "**fun** — function declaration",
                 KSR.Lexer.TokenType.Async     => "**async** — declares an async function; return type is the inner (unwrapped) type",
                 KSR.Lexer.TokenType.Await     => "**await** — suspends until the async expression completes",
-                KSR.Lexer.TokenType.Data      => "**data** — data class keyword",
-                KSR.Lexer.TokenType.Class     => "**class** — data class keyword",
+                KSR.Lexer.TokenType.Struct    => "**struct** — sealed value type with named fields",
                 KSR.Lexer.TokenType.Interface => "**interface** — interface declaration",
                 KSR.Lexer.TokenType.Implement => "**implement** — interface implementation block",
                 KSR.Lexer.TokenType.When      => "**when** — pattern-matching expression",

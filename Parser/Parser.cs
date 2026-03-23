@@ -103,13 +103,13 @@ public class Parser
                 "'async' cannot be applied to 'use'", Current.Line, Current.Col);
             return ParseUseDecl();
         }
-        if (Check(TokenType.Data))      return ParseDataClass();
+        if (Check(TokenType.Struct))    return ParseStruct();
         if (Check(TokenType.Fun))       return ParseFunctionOrExtension(isAsync, asyncReturn);
         if (Check(TokenType.Interface)) return ParseInterfaceDecl();
         if (Check(TokenType.Implement)) return ParseImplBlock();
 
         throw new KsrParseException(
-            $"Unexpected token '{Current.Value}' — expected 'use', 'data', 'fun', 'interface' or 'implement'",
+            $"Unexpected token '{Current.Value}' — expected 'use', 'struct', 'fun', 'interface' or 'implement'",
             Current.Line, Current.Col);
     }
 
@@ -128,15 +128,14 @@ public class Parser
         return new UseDecl(sb.ToString());
     }
 
-    private DataClassDecl ParseDataClass()
+    private StructDecl ParseStruct()
     {
-        Expect(TokenType.Data);
-        Expect(TokenType.Class);
+        Expect(TokenType.Struct);
         var name = Expect(TokenType.Identifier).Value;
         Expect(TokenType.LParen);
         var props = Check(TokenType.RParen) ? [] : ParseParamList();
         Expect(TokenType.RParen);
-        return new DataClassDecl(name, props);
+        return new StructDecl(name, props);
     }
 
     /// <summary>
@@ -146,6 +145,36 @@ public class Parser
     {
         Expect(TokenType.Interface);
         var name = Expect(TokenType.Identifier).Value;
+
+        // Optional type parameters: interface Foo<T, U>
+        var typeParams = new List<string>();
+        if (Check(TokenType.Lt))
+        {
+            Consume(); // <
+            typeParams.Add(Expect(TokenType.Identifier).Value);
+            while (Match(TokenType.Comma))
+                typeParams.Add(Expect(TokenType.Identifier).Value);
+            Expect(TokenType.Gt);
+        }
+
+        // Optional where clause: where E : Bound1, E : Bound2, F : Bound3
+        var constraints = new List<WhereConstraint>();
+        if (Current.Type == TokenType.Identifier && Current.Value == "where")
+        {
+            Consume(); // "where"
+            // Each entry: TypeParam : TypeRef  (comma-separated; stop at '{')
+            do
+            {
+                var tp = Expect(TokenType.Identifier).Value;
+                Expect(TokenType.Colon);
+                var bounds = new List<string> { ParseTypeRef().Name };
+                // Additional bounds for the same type param: "T : A & B" style not used;
+                // multiple constraints use repeated "T : X, T : Y" entries (Kotlin style)
+                constraints.Add(new WhereConstraint(tp, bounds));
+            }
+            while (Match(TokenType.Comma) && !(Current.Type == TokenType.LBrace));
+        }
+
         Expect(TokenType.LBrace);
 
         var methods = new List<InterfaceMethod>();
@@ -177,7 +206,7 @@ public class Parser
         }
 
         Expect(TokenType.RBrace);
-        return new InterfaceDecl(name, methods);
+        return new InterfaceDecl(name, typeParams, constraints, methods);
     }
 
     /// <summary>
@@ -187,6 +216,18 @@ public class Parser
     {
         Expect(TokenType.Implement);
         var interfaceName = Expect(TokenType.Identifier).Value;
+
+        // Optional type args: implement Foo<Color> for Color
+        var interfaceTypeArgs = new List<string>();
+        if (Check(TokenType.Lt))
+        {
+            Consume(); // <
+            interfaceTypeArgs.Add(ParseTypeRef().Name);
+            while (Match(TokenType.Comma))
+                interfaceTypeArgs.Add(ParseTypeRef().Name);
+            Expect(TokenType.Gt);
+        }
+
         Expect(TokenType.For);
         var typeName = Expect(TokenType.Identifier).Value;
         Expect(TokenType.LBrace);
@@ -213,7 +254,7 @@ public class Parser
         }
 
         Expect(TokenType.RBrace);
-        return new ImplBlock(interfaceName, typeName, methods);
+        return new ImplBlock(interfaceName, interfaceTypeArgs, typeName, methods);
     }
 
     /// <summary>

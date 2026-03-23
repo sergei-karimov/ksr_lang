@@ -33,12 +33,12 @@ public class ParserTests
         Assert.Equal("System.Collections.Generic", ud.Namespace);
     }
 
-    // ── data classes ──────────────────────────────────────────────────────────
+    // ── structs ──────────────────────────────────────────────────────────
 
     [Fact]
     public void DataClass_NoProperties()
     {
-        var dc = SingleDecl<DataClassDecl>("data class Empty()");
+        var dc = SingleDecl<StructDecl>("struct Empty()");
         Assert.Equal("Empty", dc.Name);
         Assert.Empty(dc.Properties);
     }
@@ -46,7 +46,7 @@ public class ParserTests
     [Fact]
     public void DataClass_TwoProperties()
     {
-        var dc = SingleDecl<DataClassDecl>("data class Point(x: Int, y: Int)");
+        var dc = SingleDecl<StructDecl>("struct Point(x: Int, y: Int)");
         Assert.Equal("Point", dc.Name);
         Assert.Equal(2, dc.Properties.Count);
         Assert.Equal("x",   dc.Properties[0].Name);
@@ -57,7 +57,7 @@ public class ParserTests
     [Fact]
     public void DataClass_NullableProperty()
     {
-        var dc = SingleDecl<DataClassDecl>("data class User(name: String?)");
+        var dc = SingleDecl<StructDecl>("struct User(name: String?)");
         Assert.True(dc.Properties[0].Type.Nullable);
     }
 

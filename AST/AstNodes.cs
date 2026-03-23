@@ -46,20 +46,31 @@ public record InterfaceMethod(
     bool            IsAsync     = false,
     AsyncReturnKind AsyncReturn = AsyncReturnKind.Task);
 
+/// <summary>A single type-parameter constraint: "E : Bound1, Bound2"</summary>
+public record WhereConstraint(string TypeParam, List<string> Bounds);
+
 /// <summary>interface Shape { fun area(): Double }</summary>
-public record InterfaceDecl(string Name, List<InterfaceMethod> Methods) : AstNode;
+public record InterfaceDecl(
+    string                  Name,
+    List<string>            TypeParams,
+    List<WhereConstraint>   Constraints,
+    List<InterfaceMethod>   Methods) : AstNode;
 
 /// <summary>
 /// implement Shape for Circle { fun area(): Double { … } }
-/// Rust-style: attaches an interface's method bodies to a data class.
+/// implement Foo&lt;T&gt; for Bar  →  InterfaceTypeArgs = ["T"]
 /// </summary>
-public record ImplBlock(string InterfaceName, string TypeName, List<FunctionDecl> Methods) : AstNode;
+public record ImplBlock(
+    string              InterfaceName,
+    List<string>        InterfaceTypeArgs,
+    string              TypeName,
+    List<FunctionDecl>  Methods) : AstNode;
 
 /// <summary>use Raylib_cs  →  using Raylib_cs;</summary>
 public record UseDecl(string Namespace) : AstNode;
 
-/// <summary>data class Foo(x: Int, y: String)</summary>
-public record DataClassDecl(string Name, List<Parameter> Properties) : AstNode;
+/// <summary>struct Foo(x: Int, y: String)</summary>
+public record StructDecl(string Name, List<Parameter> Properties) : AstNode;
 
 /// <summary>fun foo(a: Int): String { … }   or   async fun foo(): String { … }</summary>
 public record FunctionDecl(

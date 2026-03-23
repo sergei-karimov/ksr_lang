@@ -1,0 +1,105 @@
+// generic_interfaces.ksr — generic interfaces with where constraints.
+//
+// Demonstrates the IndexDbEnum<E> self-referential pattern:
+//   interface Enum<E>       where E : Enum<E>
+//   interface IndexDbEnum<E> where E : Enum<E>, E : IndexDbEnum<E>
+
+// ── Base interfaces ───────────────────────────────────────────────────────────
+
+interface Enum<E> where E : Enum<E> {
+    fun name(): String
+    fun ordinal(): Int
+}
+
+interface IndexDbEnum<E> where E : Enum<E>, E : IndexDbEnum<E> {
+    fun key(): String
+}
+
+// ── A simple generic container interface ─────────────────────────────────────
+
+interface Container<T> {
+    fun get(): T
+    fun isEmpty(): Bool
+}
+
+// ── Concrete structs ─────────────────────────────────────────────────────
+
+struct Color(label: String, idx: Int)
+struct Status(label: String, idx: Int, dbKey: String)
+struct Box(value: Int)
+
+// ── Implementations ───────────────────────────────────────────────────────────
+
+implement Enum<Color> for Color {
+    fun name(): String { return this.label }
+    fun ordinal(): Int { return this.idx }
+}
+
+implement Enum<Status> for Status {
+    fun name(): String { return this.label }
+    fun ordinal(): Int { return this.idx }
+}
+
+implement IndexDbEnum<Status> for Status {
+    fun key(): String { return this.dbKey }
+}
+
+implement Container<Int> for Box {
+    fun get(): Int { return this.value }
+    fun isEmpty(): Bool { return false }
+}
+
+// ── Helper functions using the interfaces ─────────────────────────────────────
+
+fun printEnum(e: Enum) {
+    println("name=${e.name()}, ordinal=${e.ordinal()}")
+}
+
+fun printIndexed(e: IndexDbEnum) {
+    println("key=${e.key()}")
+}
+
+fun printContainer(c: Container) {
+    if (c.isEmpty()) {
+        println("(empty)")
+    } else {
+        println("value=${c.get()}")
+    }
+}
+
+// ── Main ──────────────────────────────────────────────────────────────────────
+
+fun main() {
+    val red    = Color("RED", 0)
+    val green  = Color("GREEN", 1)
+    val blue   = Color("BLUE", 2)
+
+    println("── Colors (Enum<Color>) ─────────────────────")
+    printEnum(red)
+    printEnum(green)
+    printEnum(blue)
+
+    val active   = Status("ACTIVE",   0, "active")
+    val inactive = Status("INACTIVE", 1, "inactive")
+    val pending  = Status("PENDING",  2, "pending")
+
+    println("")
+    println("── Statuses (Enum<Status> + IndexDbEnum<Status>) ─")
+    printEnum(active)
+    printIndexed(active)
+    printEnum(inactive)
+    printIndexed(inactive)
+
+    println("")
+    println("── Box (Container<Int>) ─────────────────────")
+    val b = Box(42)
+    printContainer(b)
+
+    // Direct method calls — no interface needed
+    println("")
+    println("── Direct calls ─────────────────────────────")
+    println("red.name()    = ${red.name()}")
+    println("red.ordinal() = ${red.ordinal()}")
+    println("active.key()  = ${active.key()}")
+    println("box.get()     = ${b.get()}")
+}

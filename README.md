@@ -81,13 +81,13 @@ async fun fetchData(url: String): String {
 }
 ```
 
-### Data Classes
+### Structs
 
-Sealed value types — like Kotlin data classes or Rust structs. No inheritance.
+Sealed value types with named fields — like Rust structs. No inheritance.
 
 ```kotlin
-data class Point(x: Int, y: Int)
-data class User(name: String, age: Int)
+struct Point(x: Int, y: Int)
+struct User(name: String, age: Int)
 
 val p = Point(3, 4)
 val u = User("Alice", 30)
@@ -202,7 +202,7 @@ interface Shape {
     fun perimeter(): Double
 }
 
-data class Circle(r: Double)
+struct Circle(r: Double)
 
 implement Shape for Circle {
     fun area(): Double { return 3.14159 * this.r * this.r }
@@ -225,6 +225,60 @@ implement Named for Circle {
 ```
 
 The generated C# uses the standard `I`-prefix convention (`Shape` → `IShape`).
+
+### Generic interfaces
+
+Interfaces can declare type parameters and `where` constraints using the same Kotlin-style syntax:
+
+```kotlin
+// Simple generic interface
+interface Container<T> {
+    fun get(): T
+    fun isEmpty(): Bool
+}
+
+// Self-referential constraint — E must itself implement Enum<E>
+interface Enum<E> where E : Enum<E> {
+    fun name(): String
+    fun ordinal(): Int
+}
+
+// Multiple constraints on the same type parameter
+interface IndexDbEnum<E> where E : Enum<E>, E : IndexDbEnum<E> {
+    fun key(): String
+}
+
+struct Color(label: String, idx: Int)
+struct Status(label: String, idx: Int, dbKey: String)
+
+implement Enum<Color> for Color {
+    fun name(): String { return this.label }
+    fun ordinal(): Int { return this.idx }
+}
+
+implement Enum<Status> for Status {
+    fun name(): String { return this.label }
+    fun ordinal(): Int { return this.idx }
+}
+
+implement IndexDbEnum<Status> for Status {
+    fun key(): String { return this.dbKey }
+}
+
+fun main() {
+    val red    = Color("RED", 0)
+    val active = Status("ACTIVE", 0, "active")
+
+    println(red.name())        // RED
+    println(active.key())      // active
+}
+```
+
+Compiles to standard C# generic interface declarations with `where` clauses:
+```csharp
+interface IEnum<E> where E : IEnum<E> { ... }
+interface IIndexDbEnum<E> where E : IEnum<E>, E : IIndexDbEnum<E> { ... }
+```
 
 ### Async / Await
 
@@ -516,9 +570,9 @@ interface Shape {
     fun describe(): String
 }
 
-// Data classes
-data class Circle(r: Double)
-data class Rect(w: Double, h: Double)
+// Structs
+struct Circle(r: Double)
+struct Rect(w: Double, h: Double)
 
 // Implement the interface for each type
 implement Shape for Circle {
@@ -635,11 +689,12 @@ The `examples/` directory contains runnable `.ksr` files:
 
 | File | Description |
 |---|---|
-| `examples/hello.ksr` | Data classes, extension functions, control flow |
+| `examples/hello.ksr` | Structs, extension functions, control flow |
 | `examples/stdlib_demo.ksr` | `ksr.io` and `ksr.text` standard library demo |
 | `examples/async_demo.ksr` | async/await with Task and ValueTask |
 | `examples/collections_demo.ksr` | `ksr.collections`, fluent and static API, immutable/mutable List and Map |
 | `examples/generic_funs.ksr` | Generic type parameters on functions and extension functions |
+| `examples/generic_interfaces.ksr` | Generic interfaces with `where` constraints — `Enum<E>` and `IndexDbEnum<E>` pattern |
 | `examples/text_processing.ksr` | Text parsing + collection pipelines using `ksr.text` and `ksr.collections` together |
 | `examples/raylib_demo.ksr` | Raylib primitives demo (circles, rectangles, lines) |
 | `examples/game_of_life.ksr` | Conway's Game of Life at 1920×1080 using Raylib |
@@ -665,7 +720,7 @@ The `ksr-lang` extension provides:
 
 - **Syntax highlighting** — keywords, types, strings, operators, lambdas
 - **Real-time diagnostics** — parse errors shown inline as you type (powered by the LSP server)
-- **Completions** — keywords (`val`, `var`, `fun`, `async`, `await`, …), built-in types (`Int`, `String`, `List`, `MutableList`, …), stdlib symbols (`IO`, `File`, `Text`, `Lst`, `Mp`, …), stdlib module names (`ksr.io`, `ksr.text`, `ksr.collections`), data class names, interface names, and top-level function names from the current file
+- **Completions** — keywords (`val`, `var`, `fun`, `async`, `await`, …), built-in types (`Int`, `String`, `List`, `MutableList`, …), stdlib symbols (`IO`, `File`, `Text`, `Lst`, `Mp`, …), stdlib module names (`ksr.io`, `ksr.text`, `ksr.collections`), struct names, interface names, and top-level function names from the current file
 - **Hover documentation** — describes keywords, built-in types, stdlib symbols (`Lst`, `Mp`, `IO`, …), and identifiers on hover
 
 The extension connects to the KSR Language Server (`ksr lsp`) via JSON-RPC over stdio using the standard Language Server Protocol. It works with VS Code and any other LSP-compatible editor.
@@ -757,6 +812,7 @@ This works in both single-file mode (`ksr file.ksr`) and full project mode (`dot
 - [x] Standard library — `ksr.collections` (`Lst` and `Mp` higher-order operations)
 - [x] Immutable collections by default — `List<T>` / `Map<K,V>` are read-only; `MutableList<T>` / `MutableMap<K,V>` are writable
 - [x] Generic type parameters on functions — `fun <T> identity(x: T): T` and `fun <T> List<T>.second(): T`
+- [x] Generic interfaces with `where` constraints — `interface Enum<E> where E : Enum<E>` and `implement Enum<Color> for Color`
 
 ---
 

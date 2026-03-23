@@ -18,7 +18,7 @@ public class CodeGenerator
     private int _indent = 0;
 
     // Names declared as data classes — used to emit 'new Foo(…)'
-    private readonly HashSet<string> _dataClasses = new();
+    private readonly HashSet<string> _structs = new();
 
     // Names declared as interfaces — used to prefix with 'I' in type references
     private readonly HashSet<string> _interfaces = new();
@@ -59,7 +59,7 @@ public class CodeGenerator
         // First pass: collect data class names, interface names, and group impl blocks by type
         foreach (var d in program.Declarations)
         {
-            if (d is DataClassDecl dc) _dataClasses.Add(dc.Name);
+            if (d is StructDecl dc) _structs.Add(dc.Name);
             if (d is InterfaceDecl ifd) _interfaces.Add(ifd.Name);
             if (d is ImplBlock ib)
             {
@@ -87,7 +87,7 @@ public class CodeGenerator
 
         // Records for data classes (with optional interface implementations)
         foreach (var d in program.Declarations)
-            if (d is DataClassDecl dc) EmitDataClass(dc);
+            if (d is StructDecl dc) EmitStruct(dc);
 
         // Single static class that holds all functions + extension methods
         Line("static class KsrProgram");
@@ -110,7 +110,23 @@ public class CodeGenerator
 
     private void EmitInterface(InterfaceDecl id)
     {
-        Line($"interface I{id.Name}");
+        // Set type params so MapType won't I-prefix them
+        var prevTypeParams = _currentTypeParams;
+        _currentTypeParams = id.TypeParams.Count > 0 ? new HashSet<string>(id.TypeParams) : new();
+
+        var typeParamStr = id.TypeParams.Count > 0
+            ? $"<{string.Join(", ", id.TypeParams)}>"
+            : "";
+
+        var whereClause = "";
+        if (id.Constraints.Count > 0)
+        {
+            var parts = id.Constraints.Select(c =>
+                $"{c.TypeParam} : {string.Join(", ", c.Bounds.Select(b => MapType(new TypeRef(b, false))))}");
+            whereClause = $" where {string.Join(", ", parts)}";
+        }
+
+        Line($"interface I{id.Name}{typeParamStr}{whereClause}");
         Line("{");
         _indent++;
         foreach (var m in id.Methods)
@@ -126,9 +142,11 @@ public class CodeGenerator
         _indent--;
         Line("}");
         Blank();
+
+        _currentTypeParams = prevTypeParams;
     }
 
-    private void EmitDataClass(DataClassDecl dc)
+    private void EmitStruct(StructDecl dc)
     {
         var props = string.Join(", ",
             dc.Properties.Select(p => $"{MapType(p.Type)} {Pascal(p.Name)}"));
@@ -136,7 +154,13 @@ public class CodeGenerator
         if (_implsByType.TryGetValue(dc.Name, out var impls))
         {
             // Record implements one or more interfaces
-            var ifaces = string.Join(", ", impls.Select(b => "I" + b.InterfaceName));
+            var ifaces = string.Join(", ", impls.Select(b =>
+            {
+                var args = b.InterfaceTypeArgs.Count > 0
+                    ? $"<{string.Join(", ", b.InterfaceTypeArgs.Select(a => MapType(new TypeRef(a, false))))}>"
+                    : "";
+                return $"I{b.InterfaceName}{args}";
+            }));
             Line($"record {dc.Name}({props}) : {ifaces}");
             Line("{");
             _indent++;
@@ -420,7 +444,7 @@ public class CodeGenerator
             return $"Console.WriteLine({args})";
 
         // Constructor call for known data classes
-        if (ce.Callee is IdentifierExpr id && _dataClasses.Contains(id.Name))
+        if (ce.Callee is IdentifierExpr id && _structs.Contains(id.Name))
             return $"new {id.Name}({args})";
 
         return $"{EmitExpr(ce.Callee)}({args})";
@@ -639,7 +663,9 @@ public class CodeGenerator
                 "MutableList" => "List",
                 "Map"         => "IReadOnlyDictionary",
                 "MutableMap"  => "Dictionary",
-                _             => outer
+                _ => _currentTypeParams.Contains(outer) ? outer
+                   : _interfaces.Contains(outer) ? "I" + outer
+                   : outer
             };
             var result = $"{csOuter}<{string.Join(", ", args)}>";
             return t.Nullable ? $"{result}?" : result;

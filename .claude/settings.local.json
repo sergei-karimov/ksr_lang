@@ -16,7 +16,11 @@
       "Bash(dotnet run:*)",
       "Bash(dotnet exec:*)",
       "Bash(dotnet:*)",
-      "Bash(KSR_STDLIB_PATH=/mnt/c/Users/serge/source/repos/ksr_lang/sdk/KSR.StdLib/bin/Debug/net8.0/KSR.StdLib.dll dotnet /mnt/c/Users/serge/source/repos/ksr_lang/bin/Debug/net8.0/ksr.dll examples/text_processing.ksr 2>&1)"
+      "Bash(KSR_STDLIB_PATH=/mnt/c/Users/serge/source/repos/ksr_lang/sdk/KSR.StdLib/bin/Debug/net8.0/KSR.StdLib.dll dotnet /mnt/c/Users/serge/source/repos/ksr_lang/bin/Debug/net8.0/ksr.dll examples/text_processing.ksr 2>&1)",
+      "Bash(for f:*)",
+      "Bash(do)",
+      "Bash(sed -i 's/data class /struct /g; s/data classes/structs/g; s/DataClassDecl/StructDecl/g' \"$f\")",
+      "Bash(done)"
     ]
   }
 }

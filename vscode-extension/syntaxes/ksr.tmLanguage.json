@@ -71,12 +71,11 @@
     },
 
     "data-class-decl": {
-      "comment": "data class Point(…)",
-      "match": "\\b(data)\\s+(class)\\s+([A-Za-z_][A-Za-z0-9_]*)\\b",
+      "comment": "struct Point(…)",
+      "match": "\\b(struct)\\s+([A-Za-z_][A-Za-z0-9_]*)\\b",
       "captures": {
-        "1": { "name": "keyword.declaration.ksr"   },
-        "2": { "name": "keyword.declaration.ksr"   },
-        "3": { "name": "entity.name.type.class.ksr" }
+        "1": { "name": "keyword.declaration.ksr"    },
+        "2": { "name": "entity.name.type.struct.ksr" }
       }
     },
 
@@ -108,7 +107,7 @@
         },
         {
           "name": "keyword.declaration.ksr",
-          "match": "\\b(val|var|fun|data|class|use|new|interface|implement)\\b"
+          "match": "\\b(val|var|fun|struct|use|new|interface|implement)\\b"
         },
         {
           "name": "keyword.operator.ksr",

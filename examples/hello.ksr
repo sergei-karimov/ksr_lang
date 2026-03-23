@@ -1,7 +1,7 @@
 // ── data types (Rust-like: sealed value types, no inheritance) ────────────────
 
-data class Point(x: Int, y: Int)
-data class User(name: String, age: Int)
+struct Point(x: Int, y: Int)
+struct User(name: String, age: Int)
 
 // ── extension functions (behaviour added outside the type) ────────────────────
 

@@ -13,8 +13,7 @@ public enum TokenType
     Val,        // val  (immutable binding)
     Var,        // var  (mutable binding)
     Fun,        // fun
-    Data,       // data
-    Class,      // class
+    Struct,     // struct
     New,        // new
     If,         // if
     Else,       // else

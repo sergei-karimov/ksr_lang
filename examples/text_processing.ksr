@@ -8,7 +8,7 @@ use ksr.collections
 
 // ── Data model ────────────────────────────────────────────────────────────────
 
-data class LogEntry(level: String, module: String, message: String)
+struct LogEntry(level: String, module: String, message: String)
 
 fun LogEntry.isError(): Bool {
     return this.level == "ERROR"
