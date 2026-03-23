@@ -14,6 +14,8 @@ public enum TokenType
     Var,        // var  (mutable binding)
     Fun,        // fun
     Struct,     // struct
+    Sealed,     // sealed
+    Is,         // is
     New,        // new
     If,         // if
     Else,       // else

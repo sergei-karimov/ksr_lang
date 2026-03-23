@@ -27,6 +27,8 @@ public class Lexer
         ["var"]    = TokenType.Var,
         ["fun"]    = TokenType.Fun,
         ["struct"] = TokenType.Struct,
+        ["sealed"] = TokenType.Sealed,
+        ["is"]     = TokenType.Is,
         ["if"]     = TokenType.If,
         ["else"]   = TokenType.Else,
         ["return"] = TokenType.Return,

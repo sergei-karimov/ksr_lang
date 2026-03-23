@@ -17,11 +17,14 @@ public class CodeGenerator
     private readonly StringBuilder _out = new();
     private int _indent = 0;
 
-    // Names declared as data classes — used to emit 'new Foo(…)'
+    // Names declared as structs — used to emit 'new Foo(…)'
     private readonly HashSet<string> _structs = new();
 
     // Names declared as interfaces — used to prefix with 'I' in type references
     private readonly HashSet<string> _interfaces = new();
+
+    // Sealed type names — abstract base records; never I-prefixed
+    private readonly HashSet<string> _sealedTypes = new();
 
     // impl blocks grouped by target type — collected before emitting
     private readonly Dictionary<string, List<ImplBlock>> _implsByType = new();
@@ -56,10 +59,15 @@ public class CodeGenerator
 
     public string Generate(ProgramNode program)
     {
-        // First pass: collect data class names, interface names, and group impl blocks by type
+        // First pass: collect struct/sealed/interface names, group impl blocks by type
         foreach (var d in program.Declarations)
         {
             if (d is StructDecl dc) _structs.Add(dc.Name);
+            if (d is SealedDecl sd)
+            {
+                _sealedTypes.Add(sd.Name);
+                foreach (var v in sd.Variants) _structs.Add(v.Name);
+            }
             if (d is InterfaceDecl ifd) _interfaces.Add(ifd.Name);
             if (d is ImplBlock ib)
             {
@@ -85,7 +93,11 @@ public class CodeGenerator
         foreach (var d in program.Declarations)
             if (d is InterfaceDecl id) EmitInterface(id);
 
-        // Records for data classes (with optional interface implementations)
+        // Sealed types (abstract record + variants)
+        foreach (var d in program.Declarations)
+            if (d is SealedDecl sd) EmitSealed(sd);
+
+        // Standalone structs (with optional interface implementations)
         foreach (var d in program.Declarations)
             if (d is StructDecl dc) EmitStruct(dc);
 
@@ -136,7 +148,7 @@ public class CodeGenerator
             var ret = m.IsAsync
                 ? BuildAsyncReturnType(m.ReturnType, EffectiveAsyncReturn(m.AsyncReturn))
                 : (m.ReturnType is null ? "void" : MapType(m.ReturnType));
-            var parms = string.Join(", ", m.Parameters.Select(p => $"{MapType(p.Type)} {p.Name}"));
+            var parms = string.Join(", ", m.Parameters.Select(p => EmitParam(p)));
             Line($"{ret} {Pascal(m.Name)}({parms});");
         }
         _indent--;
@@ -146,10 +158,50 @@ public class CodeGenerator
         _currentTypeParams = prevTypeParams;
     }
 
+    private void EmitSealed(SealedDecl sd)
+    {
+        // Abstract base record — cannot be instantiated directly
+        Line($"abstract record {sd.Name};");
+        Blank();
+
+        // Each variant is a concrete record extending the base
+        foreach (var v in sd.Variants)
+        {
+            var props = v.Properties.Count > 0
+                ? $"({string.Join(", ", v.Properties.Select(p => EmitParam(p, pascalName: true)))})"
+                : "";
+
+            if (_implsByType.TryGetValue(v.Name, out var impls))
+            {
+                var ifaces = string.Join(", ", impls.Select(b =>
+                {
+                    var args = b.InterfaceTypeArgs.Count > 0
+                        ? $"<{string.Join(", ", b.InterfaceTypeArgs.Select(a => MapType(new TypeRef(a, false))))}>"
+                        : "";
+                    return $"I{b.InterfaceName}{args}";
+                }));
+                Line($"record {v.Name}{props} : {sd.Name}, {ifaces}");
+                Line("{");
+                _indent++;
+                _inRecordMethod = true;
+                foreach (var method in impls.SelectMany(b => b.Methods))
+                    EmitRecordMethod(method);
+                _inRecordMethod = false;
+                _indent--;
+                Line("}");
+            }
+            else
+            {
+                Line($"record {v.Name}{props} : {sd.Name};");
+            }
+        }
+        Blank();
+    }
+
     private void EmitStruct(StructDecl dc)
     {
         var props = string.Join(", ",
-            dc.Properties.Select(p => $"{MapType(p.Type)} {Pascal(p.Name)}"));
+            dc.Properties.Select(p => EmitParam(p, pascalName: true)));
 
         if (_implsByType.TryGetValue(dc.Name, out var impls))
         {
@@ -193,7 +245,7 @@ public class CodeGenerator
         var asyncMod    = fd.IsAsync ? "async " : "";
         var typeParamStr = fd.TypeParams.Count > 0 ? $"<{string.Join(", ", fd.TypeParams)}>" : "";
         var parms = string.Join(", ",
-            fd.Parameters.Select(p => $"{MapType(p.Type)} {p.Name}"));
+            fd.Parameters.Select(p => EmitParam(p)));
 
         Line($"public {asyncMod}{ret} {Pascal(fd.Name)}{typeParamStr}({parms})");
         Line("{");
@@ -225,7 +277,7 @@ public class CodeGenerator
         var method       = fd.Name == "main" ? "Main" : fd.Name;
         var typeParamStr = fd.TypeParams.Count > 0 ? $"<{string.Join(", ", fd.TypeParams)}>" : "";
         var parms = string.Join(", ",
-            fd.Parameters.Select(p => $"{MapType(p.Type)} {p.Name}"));
+            fd.Parameters.Select(p => EmitParam(p)));
 
         Line($"static {asyncMod}{ret} {method}{typeParamStr}({parms})");
         Line("{");
@@ -263,7 +315,7 @@ public class CodeGenerator
 
         // First parameter is the receiver: "this TypeName self"
         var paramParts = new List<string> { $"this {csType} self" };
-        paramParts.AddRange(efd.Parameters.Select(p => $"{MapType(p.Type)} {p.Name}"));
+        paramParts.AddRange(efd.Parameters.Select(p => EmitParam(p)));
         var parms = string.Join(", ", paramParts);
 
         Line($"public static {asyncMod}{ret} {Pascal(efd.MethodName)}{typeParamStr}({parms})");
@@ -431,6 +483,8 @@ public class CodeGenerator
         MapLiteralExpr ml => EmitMapLiteral(ml),
         WhenExpr we => EmitWhenExpr(we),
         AwaitExpr ae => EmitAwait(ae),
+        IsPatternExpr ip => ip.Binding is not null ? $"{ip.TypeName} {ip.Binding}" : ip.TypeName,
+        NamedArgExpr na  => $"{na.Name}: {EmitExpr(na.Value)}",
 
         _ => throw new InvalidOperationException($"Unknown expression: {expr.GetType().Name}")
     };
@@ -590,9 +644,16 @@ public class CodeGenerator
         {
             var subject = EmitExpr(we.Subject);
             var arms = we.Arms.Select(arm =>
-                arm.Pattern is null
-                    ? $"_ => {EmitExpr(arm.Body)}"
-                    : $"{EmitExpr(arm.Pattern)} => {EmitExpr(arm.Body)}");
+            {
+                var body = EmitExpr(arm.Body);
+                return arm.Pattern switch
+                {
+                    null                                       => $"_ => {body}",
+                    IsPatternExpr { Binding: not null } ip    => $"{ip.TypeName} {ip.Binding} => {body}",
+                    IsPatternExpr ip                          => $"{ip.TypeName} => {body}",
+                    _                                         => $"{EmitExpr(arm.Pattern)} => {body}"
+                };
+            });
             return $"({subject} switch {{ {string.Join(", ", arms)} }})";
         }
         return EmitWhenTernary(we.Arms, 0);
@@ -624,9 +685,19 @@ public class CodeGenerator
             }
             else
             {
-                var cond = subject is not null
-                    ? $"{subject} == {EmitExpr(arm.Pattern)}"
-                    : EmitExpr(arm.Pattern);
+                string cond;
+                if (arm.Pattern is IsPatternExpr ip)
+                {
+                    cond = ip.Binding is not null
+                        ? $"{subject} is {ip.TypeName} {ip.Binding}"
+                        : $"{subject} is {ip.TypeName}";
+                }
+                else
+                {
+                    cond = subject is not null
+                        ? $"{subject} == {EmitExpr(arm.Pattern)}"
+                        : EmitExpr(arm.Pattern);
+                }
                 Line(first ? $"if ({cond})" : $"else if ({cond})");
                 first = false;
             }
@@ -762,6 +833,18 @@ public class CodeGenerator
     /// KSR camelCase → C# PascalCase for property/member names
     private static string Pascal(string s) =>
         s.Length == 0 ? s : char.ToUpperInvariant(s[0]) + s[1..];
+
+    /// <summary>
+    /// Emits a single function parameter, including an optional default value.
+    /// fun params use the raw name; record/struct props use Pascal-cased name.
+    /// </summary>
+    private string EmitParam(Parameter p, bool pascalName = false)
+    {
+        var name = pascalName ? Pascal(p.Name) : p.Name;
+        var type = MapType(p.Type);
+        if (p.Default is null) return $"{type} {name}";
+        return $"{type} {name} = {EmitExpr(p.Default)}";
+    }
 
     private static string Escape(string s) =>
         s.Replace("\\", "\\\\")

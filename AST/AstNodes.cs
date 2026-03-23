@@ -28,8 +28,8 @@ public enum AsyncReturnKind { Task, ValueTask }
 /// <summary>A KSR type reference, e.g. "Int", "String?", "User?"</summary>
 public record TypeRef(string Name, bool Nullable);
 
-/// <summary>A named + typed parameter used in fun / data-class headers.</summary>
-public record Parameter(string Name, TypeRef Type);
+/// <summary>A named + typed parameter used in fun / struct / interface headers.</summary>
+public record Parameter(string Name, TypeRef Type, Expr? Default = null);
 
 // ═══════════════════════════════════════════════════════════════════════════════
 //  Top-level declarations
@@ -71,6 +71,12 @@ public record UseDecl(string Namespace) : AstNode;
 
 /// <summary>struct Foo(x: Int, y: String)</summary>
 public record StructDecl(string Name, List<Parameter> Properties) : AstNode;
+
+/// <summary>
+/// sealed Shape { struct Circle(r: Double)  struct Rect(w: Double, h: Double) }
+/// Compiles to: abstract record Shape; record Circle(double R) : Shape; …
+/// </summary>
+public record SealedDecl(string Name, List<StructDecl> Variants) : AstNode;
 
 /// <summary>fun foo(a: Int): String { … }   or   async fun foo(): String { … }</summary>
 public record FunctionDecl(
@@ -224,3 +230,12 @@ public record MapLiteralExpr(List<(Expr Key, Expr Value)> Entries) : Expr;
 
 /// <summary>await expr — valid only inside an async function body.</summary>
 public record AwaitExpr(Expr Operand) : Expr;
+
+/// <summary>name = value at a call site — maps to C# named argument syntax name: value.</summary>
+public record NamedArgExpr(string Name, Expr Value) : Expr;
+
+/// <summary>
+/// is Circle(c) pattern inside a when arm.
+/// Binding is the optional variable name that receives the cast value.
+/// </summary>
+public record IsPatternExpr(string TypeName, string? Binding) : Expr;

@@ -250,4 +250,150 @@ public class WhenTests
         Assert.Contains("else if",  cs);
         Assert.Contains("else",     cs);
     }
+
+    // ── sealed + exhaustive when ──────────────────────────────────────────────
+
+    [Fact]
+    public void Sealed_EmitsAbstractRecord()
+    {
+        var cs = Flat("""
+            sealed Shape {
+                struct Circle(r: Double)
+                struct Rect(w: Double, h: Double)
+            }
+            """);
+        Assert.Contains("abstract record Shape;", cs);
+    }
+
+    [Fact]
+    public void Sealed_EmitsVariantsWithBase()
+    {
+        var cs = Flat("""
+            sealed Shape {
+                struct Circle(r: Double)
+                struct Rect(w: Double, h: Double)
+            }
+            """);
+        Assert.Contains("record Circle(double R) : Shape;", cs);
+        Assert.Contains("record Rect(double W, double H) : Shape;", cs);
+    }
+
+    [Fact]
+    public void Sealed_EmptyVariant_NoParens()
+    {
+        var cs = Flat("""
+            sealed Option {
+                struct Some(value: Int)
+                struct None
+            }
+            """);
+        Assert.Contains("abstract record Option;", cs);
+        Assert.Contains("record None : Option;", cs);
+    }
+
+    [Fact]
+    public void IsPattern_WithBinding_ExprForm()
+    {
+        var cs = Flat("""
+            sealed Shape {
+                struct Circle(r: Double)
+                struct Rect(w: Double, h: Double)
+            }
+            fun area(s: Shape): Double {
+                return when (s) {
+                    is Circle(c) -> c.r
+                    is Rect(r)   -> r.w
+                }
+            }
+            """);
+        Assert.Contains("Circle c => c.R", cs);
+        Assert.Contains("Rect r => r.W", cs);
+    }
+
+    [Fact]
+    public void IsPattern_NoBinding_ExprForm()
+    {
+        var cs = Flat("""
+            sealed Color {
+                struct Red
+                struct Green
+                struct Blue
+            }
+            fun label(c: Color): String {
+                return when (c) {
+                    is Red   -> "red"
+                    is Green -> "green"
+                    is Blue  -> "blue"
+                }
+            }
+            """);
+        Assert.Contains("Red => \"red\"", cs);
+        Assert.Contains("Green => \"green\"", cs);
+        Assert.Contains("Blue => \"blue\"", cs);
+    }
+
+    [Fact]
+    public void IsPattern_WithBinding_StmtForm()
+    {
+        var cs = Flat("""
+            sealed Shape {
+                struct Circle(r: Double)
+                struct Rect(w: Double, h: Double)
+            }
+            fun describe(s: Shape) {
+                when (s) {
+                    is Circle(c) -> println(c.r)
+                    is Rect(r)   -> println(r.w)
+                }
+            }
+            """);
+        Assert.Contains("if (s is Circle c)", cs);
+        Assert.Contains("else if (s is Rect r)", cs);
+    }
+
+    [Fact]
+    public void IsPattern_WithElse_ExprForm()
+    {
+        var cs = Flat("""
+            sealed Shape {
+                struct Circle(r: Double)
+            }
+            fun area(s: Shape): Double {
+                return when (s) {
+                    is Circle(c) -> c.r
+                    else         -> 0.0
+                }
+            }
+            """);
+        Assert.Contains("Circle c => c.R", cs);
+        Assert.Contains("_ =>", cs);
+    }
+
+    [Fact]
+    public void Sealed_VariantUsedAsConstructor()
+    {
+        var cs = Flat("""
+            sealed Shape {
+                struct Circle(r: Double)
+            }
+            fun main() {
+                val s = Circle(3.0)
+            }
+            """);
+        Assert.Contains("new Circle(", cs);
+    }
+
+    [Fact]
+    public void Lexer_RecognisesSealedKeyword()
+    {
+        var tok = KsrHelper.Lex("sealed").First(t => t.Type == TokenType.Sealed);
+        Assert.Equal("sealed", tok.Value);
+    }
+
+    [Fact]
+    public void Lexer_RecognisesIsKeyword()
+    {
+        var tok = KsrHelper.Lex("is").First(t => t.Type == TokenType.Is);
+        Assert.Equal("is", tok.Value);
+    }
 }

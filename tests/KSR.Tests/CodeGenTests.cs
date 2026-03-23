@@ -350,4 +350,65 @@ public class CodeGenTests {
         Assert.Contains("T id<T>(T x)", cs.Replace("  ", " ").Split('\n')
             .Select(l => l.Trim()).First(l => l.Contains("id<T>")));
     }
+
+    // ── default arguments ─────────────────────────────────────────────────────
+
+    [Fact]
+    public void DefaultArg_EmittedInSignature()
+    {
+        var cs = Flat("fun greet(name: String, greeting: String = \"Hello\") { }");
+        Assert.Contains("string greeting = \"Hello\"", cs);
+    }
+
+    [Fact]
+    public void DefaultArg_IntLiteral()
+    {
+        var cs = Flat("fun repeat(s: String, n: Int = 1) { }");
+        Assert.Contains("int n = 1", cs);
+    }
+
+    [Fact]
+    public void DefaultArg_BoolLiteral()
+    {
+        var cs = Flat("fun log(msg: String, verbose: Bool = false) { }");
+        Assert.Contains("bool verbose = false", cs);
+    }
+
+    [Fact]
+    public void DefaultArg_NullLiteral()
+    {
+        var cs = Flat("fun find(name: String? = null) { }");
+        Assert.Contains("string? name = null", cs);
+    }
+
+    [Fact]
+    public void DefaultArg_Struct_WithDefault()
+    {
+        var cs = Flat("struct Point(x: Int = 0, y: Int = 0)");
+        Assert.Contains("int X = 0", cs);
+        Assert.Contains("int Y = 0", cs);
+    }
+
+    // ── named arguments ───────────────────────────────────────────────────────
+
+    [Fact]
+    public void NamedArg_EmittedWithColon()
+    {
+        var cs = Flat("fun f(x: Int, y: Int) { } fun main() { f(y = 2, x = 1) }");
+        Assert.Contains("f(y: 2, x: 1)", cs);
+    }
+
+    [Fact]
+    public void NamedArg_Mixed_PositionalAndNamed()
+    {
+        var cs = Flat("fun f(x: Int, y: Int) { } fun main() { f(1, y = 2) }");
+        Assert.Contains("f(1, y: 2)", cs);
+    }
+
+    [Fact]
+    public void NamedArg_OnlyNamed()
+    {
+        var cs = Flat("fun greet(name: String, greeting: String = \"Hi\") { } fun main() { greet(name = \"Alice\") }");
+        Assert.Contains("greet(name: \"Alice\")", cs);
+    }
 }

@@ -104,12 +104,13 @@ public class Parser
             return ParseUseDecl();
         }
         if (Check(TokenType.Struct))    return ParseStruct();
+        if (Check(TokenType.Sealed))    return ParseSealedDecl();
         if (Check(TokenType.Fun))       return ParseFunctionOrExtension(isAsync, asyncReturn);
         if (Check(TokenType.Interface)) return ParseInterfaceDecl();
         if (Check(TokenType.Implement)) return ParseImplBlock();
 
         throw new KsrParseException(
-            $"Unexpected token '{Current.Value}' — expected 'use', 'struct', 'fun', 'interface' or 'implement'",
+            $"Unexpected token '{Current.Value}' — expected 'use', 'struct', 'sealed', 'fun', 'interface' or 'implement'",
             Current.Line, Current.Col);
     }
 
@@ -136,6 +137,35 @@ public class Parser
         var props = Check(TokenType.RParen) ? [] : ParseParamList();
         Expect(TokenType.RParen);
         return new StructDecl(name, props);
+    }
+
+    /// <summary>
+    /// sealed Shape { struct Circle(r: Double)  struct Empty }
+    /// Variants may omit () when they have no fields.
+    /// </summary>
+    private SealedDecl ParseSealedDecl()
+    {
+        Expect(TokenType.Sealed);
+        var name = Expect(TokenType.Identifier).Value;
+        Expect(TokenType.LBrace);
+
+        var variants = new List<StructDecl>();
+        while (!Check(TokenType.RBrace) && !Check(TokenType.Eof))
+        {
+            Expect(TokenType.Struct);
+            var vName = Expect(TokenType.Identifier).Value;
+            List<Parameter> props = [];
+            if (Check(TokenType.LParen))
+            {
+                Consume(); // (
+                props = Check(TokenType.RParen) ? [] : ParseParamList();
+                Expect(TokenType.RParen);
+            }
+            variants.Add(new StructDecl(vName, props));
+        }
+
+        Expect(TokenType.RBrace);
+        return new SealedDecl(name, variants);
     }
 
     /// <summary>
@@ -366,7 +396,23 @@ public class Parser
     {
         var name = Expect(TokenType.Identifier).Value;
         Expect(TokenType.Colon);
-        return new Parameter(name, ParseTypeRef());
+        var type = ParseTypeRef();
+        Expr? defaultValue = null;
+        if (Match(TokenType.Equals))
+            defaultValue = ParseExpr();
+        return new Parameter(name, type, defaultValue);
+    }
+
+    /// <summary>
+    /// Parses a single call argument.
+    /// name = expr  →  NamedArgExpr   (lookahead: Identifier followed by '=' but not '==')
+    /// expr         →  positional arg
+    /// </summary>
+    private Expr ParseCallArg()
+    {
+        if (Current.Type == TokenType.Identifier && Peek().Type == TokenType.Equals)
+            return new NamedArgExpr(Consume().Value, (Consume(), ParseExpr()).Item2);
+        return ParseExpr();
     }
 
     private TypeRef ParseTypeRef()
@@ -647,9 +693,9 @@ public class Parser
                 var args = new List<Expr>();
                 if (!Check(TokenType.RParen))
                 {
-                    args.Add(ParseExpr());
+                    args.Add(ParseCallArg());
                     while (Match(TokenType.Comma))
-                        args.Add(ParseExpr());
+                        args.Add(ParseCallArg());
                 }
                 Expect(TokenType.RParen);
                 expr = new CallExpr(expr, args);
@@ -844,6 +890,19 @@ public class Parser
             {
                 Consume(); // else
                 pattern = null;
+            }
+            else if (Check(TokenType.Is))
+            {
+                Consume(); // is
+                var typeName = Expect(TokenType.Identifier).Value;
+                string? binding = null;
+                if (Check(TokenType.LParen))
+                {
+                    Consume(); // (
+                    binding = Expect(TokenType.Identifier).Value;
+                    Expect(TokenType.RParen);
+                }
+                pattern = new IsPatternExpr(typeName, binding);
             }
             else
             {

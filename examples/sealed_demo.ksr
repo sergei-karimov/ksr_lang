@@ -1,0 +1,133 @@
+// sealed_demo.ksr — sealed types with exhaustive when matching.
+//
+// sealed declares an abstract base with a fixed set of variants.
+// when (x) { is Variant(v) -> ... } is exhaustive — the compiler
+// (via the C# switch expression) enforces all cases are handled.
+
+// ── A classic discriminated union ────────────────────────────────────────────
+
+sealed Shape {
+    struct Circle(radius: Double)
+    struct Rect(width: Double, height: Double)
+    struct Triangle(base: Double, height: Double)
+}
+
+fun area(s: Shape): Double {
+    return when (s) {
+        is Circle(c)   -> 3.14159 * c.radius * c.radius
+        is Rect(r)     -> r.width * r.height
+        is Triangle(t) -> 0.5 * t.base * t.height
+    }
+}
+
+fun describe(s: Shape): String {
+    return when (s) {
+        is Circle(c)   -> "circle with radius ${c.radius}"
+        is Rect(r)     -> "rect ${r.width} x ${r.height}"
+        is Triangle(t) -> "triangle base=${t.base} h=${t.height}"
+    }
+}
+
+// ── Option type — nullable alternative ───────────────────────────────────────
+
+sealed Option {
+    struct Some(value: Int)
+    struct None
+}
+
+fun getOrDefault(opt: Option, default: Int): Int {
+    return when (opt) {
+        is Some(s) -> s.value
+        is None    -> default
+    }
+}
+
+fun mapOption(opt: Option, factor: Int): Option {
+    return when (opt) {
+        is Some(s) -> Some(s.value * factor)
+        is None    -> None()
+    }
+}
+
+// ── Result type — error handling without exceptions ───────────────────────────
+
+sealed Result {
+    struct Ok(value: Int)
+    struct Err(message: String)
+}
+
+fun divide(a: Int, b: Int): Result {
+    if (b == 0) {
+        return Err("division by zero")
+    }
+    return Ok(a / b)
+}
+
+fun resultToString(r: Result): String {
+    return when (r) {
+        is Ok(ok)   -> "Ok(${ok.value})"
+        is Err(err) -> "Err: ${err.message}"
+    }
+}
+
+// ── Colour enum — unit variants (no fields) ───────────────────────────────────
+
+sealed Color {
+    struct Red
+    struct Green
+    struct Blue
+}
+
+fun colorName(c: Color): String {
+    return when (c) {
+        is Red   -> "red"
+        is Green -> "green"
+        is Blue  -> "blue"
+    }
+}
+
+fun colorHex(c: Color): String {
+    return when (c) {
+        is Red   -> "#FF0000"
+        is Green -> "#00FF00"
+        is Blue  -> "#0000FF"
+    }
+}
+
+// ── Main ──────────────────────────────────────────────────────────────────────
+
+fun main() {
+    // Shapes
+    val shapes: MutableList<Shape> = []
+    shapes.add(Circle(5.0))
+    shapes.add(Rect(4.0, 6.0))
+    shapes.add(Triangle(3.0, 8.0))
+
+    println("── Shapes ───────────────────────────────────")
+    for (s in shapes) {
+        println("  ${describe(s)}  →  area = ${area(s)}")
+    }
+
+    // Option
+    println("")
+    println("── Option ───────────────────────────────────")
+    val present = Some(42)
+    val absent  = None()
+    println("  Some(42) default 0 = ${getOrDefault(present, 0)}")
+    println("  None     default 0 = ${getOrDefault(absent, 0)}")
+    println("  Some(42) * 2 = ${mapOption(present, 2)}")
+
+    // Result
+    println("")
+    println("── Result ───────────────────────────────────")
+    println("  10 / 2 = ${resultToString(divide(10, 2))}")
+    println("  10 / 0 = ${resultToString(divide(10, 0))}")
+
+    // Color
+    println("")
+    println("── Color ────────────────────────────────────")
+    val colors: List<Color> = [Red(), Green(), Blue()]
+    for (c in colors) {
+        println("  ${colorName(c)} = ${colorHex(c)}")
+    }
+}

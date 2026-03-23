@@ -226,6 +226,63 @@ implement Named for Circle {
 
 The generated C# uses the standard `I`-prefix convention (`Shape` → `IShape`).
 
+### Sealed types
+
+`sealed` declares a closed set of variants. `when` on a sealed type is exhaustive — the C# compiler enforces that every variant is handled (or an `else` is provided).
+
+```kotlin
+sealed Shape {
+    struct Circle(radius: Double)
+    struct Rect(width: Double, height: Double)
+    struct Empty                              // no fields — no parentheses needed
+}
+
+fun area(s: Shape): Double {
+    return when (s) {
+        is Circle(c) -> 3.14159 * c.radius * c.radius
+        is Rect(r)   -> r.width * r.height
+        is Empty     -> 0.0
+    }
+}
+
+fun main() {
+    val shapes: List<Shape> = [Circle(5.0), Rect(4.0, 6.0), Empty()]
+    for (s in shapes) {
+        println("area = ${area(s)}")
+    }
+}
+```
+
+Each `is Variant(binding)` arm binds the matched variant to a local name so its fields are accessible. For unit variants (no fields) the binding is omitted: `is Empty ->`.
+
+Compiles to a C# abstract record hierarchy with pattern-matching switch expressions:
+```csharp
+abstract record Shape;
+record Circle(double Radius) : Shape;
+record Rect(double Width, double Height) : Shape;
+record Empty : Shape;
+
+// area: exhaustive switch expression
+s switch {
+    Circle c => 3.14159 * c.Radius * c.Radius,
+    Rect r   => r.Width * r.Height,
+    Empty    => 0.0,
+}
+```
+
+Sealed variants can implement interfaces just like regular structs:
+```kotlin
+interface Printable { fun print() }
+
+sealed Color {
+    struct Red
+    struct Blue
+}
+
+implement Printable for Red  { fun print() { println("red")  } }
+implement Printable for Blue { fun print() { println("blue") } }
+```
+
 ### Generic interfaces
 
 Interfaces can declare type parameters and `where` constraints using the same Kotlin-style syntax:
@@ -319,6 +376,41 @@ The global flag `--async-return=valuetask` makes all async functions use `ValueT
 
 ```bash
 ksr myapp.ksr --async-return=valuetask
+```
+
+### Default and named arguments
+
+Function parameters can have default values, and call sites can pass arguments by name:
+
+```kotlin
+fun greet(name: String, greeting: String = "Hello", excited: Bool = false) {
+    val suffix = if (excited) "!" else "."
+    println("${greeting}, ${name}${suffix}")
+}
+
+fun main() {
+    greet("Alice")                              // Hello, Alice.
+    greet("Bob", greeting = "Hi")              // Hi, Bob.
+    greet(excited = true, name = "Carol")      // Hello, Carol!
+    greet("Dave", "Hey", true)                 // Hey, Dave!
+}
+```
+
+Structs also support default field values:
+
+```kotlin
+struct Point(x: Int = 0, y: Int = 0)
+
+fun main() {
+    val origin = Point()          // x=0, y=0
+    val p      = Point(x = 3)    // x=3, y=0
+}
+```
+
+Compiles directly to C# default parameter values and named argument syntax:
+```csharp
+static void Greet(string name, string greeting = "Hello", bool excited = false) { … }
+Greet(excited: true, name: "Carol");
 ```
 
 ### Generic functions
@@ -694,6 +786,7 @@ The `examples/` directory contains runnable `.ksr` files:
 | `examples/async_demo.ksr` | async/await with Task and ValueTask |
 | `examples/collections_demo.ksr` | `ksr.collections`, fluent and static API, immutable/mutable List and Map |
 | `examples/generic_funs.ksr` | Generic type parameters on functions and extension functions |
+| `examples/sealed_demo.ksr` | Sealed types — `Shape`, `Option`, `Result`, `Color` with exhaustive `when` |
 | `examples/generic_interfaces.ksr` | Generic interfaces with `where` constraints — `Enum<E>` and `IndexDbEnum<E>` pattern |
 | `examples/text_processing.ksr` | Text parsing + collection pipelines using `ksr.text` and `ksr.collections` together |
 | `examples/raylib_demo.ksr` | Raylib primitives demo (circles, rectangles, lines) |
@@ -813,6 +906,8 @@ This works in both single-file mode (`ksr file.ksr`) and full project mode (`dot
 - [x] Immutable collections by default — `List<T>` / `Map<K,V>` are read-only; `MutableList<T>` / `MutableMap<K,V>` are writable
 - [x] Generic type parameters on functions — `fun <T> identity(x: T): T` and `fun <T> List<T>.second(): T`
 - [x] Generic interfaces with `where` constraints — `interface Enum<E> where E : Enum<E>` and `implement Enum<Color> for Color`
+- [x] Sealed types with exhaustive `when` — `sealed Shape { struct Circle(r: Double) … }` + `when (s) { is Circle(c) -> … }`
+- [x] Default and named arguments — `fun f(x: Int = 0)` and `f(x = 42)`
 
 ---
 
