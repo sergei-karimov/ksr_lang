@@ -23,7 +23,7 @@ namespace KSR.VisualStudio;
 [Export(typeof(ILanguageClient))]
 public sealed class KsrLanguageClient : ILanguageClient
 {
-    private Process? _serverProcess;
+    private volatile Process? _serverProcess;
 
     // ── ILanguageClient ───────────────────────────────────────────────────────
 
@@ -33,7 +33,8 @@ public sealed class KsrLanguageClient : ILanguageClient
     /// VS uses these section names to forward workspace configuration to the
     /// LSP server via workspace/configuration requests.
     /// </summary>
-    public IEnumerable<string>? ConfigurationSections => new[] { "ksr" };
+    private static readonly IEnumerable<string> s_configSections = new[] { "ksr" };
+    public IEnumerable<string>? ConfigurationSections => s_configSections;
 
     public object? InitializationOptions => null;
 
@@ -84,12 +85,16 @@ public sealed class KsrLanguageClient : ILanguageClient
             StartInfo = psi,
             EnableRaisingEvents = true,
         };
+
+        // Assign before subscribing so OnServerExited can always null the field
+        _serverProcess = process;
         process.Exited += OnServerExited;
 
         try
         {
             if (!process.Start())
             {
+                _serverProcess = null;
                 process.Exited -= OnServerExited;
                 process.Dispose();
                 ShowExecutableNotFoundMessage();
@@ -98,13 +103,12 @@ public sealed class KsrLanguageClient : ILanguageClient
         }
         catch (Win32Exception)
         {
+            _serverProcess = null;
             process.Exited -= OnServerExited;
             process.Dispose();
             ShowExecutableNotFoundMessage();
             return null;
         }
-
-        _serverProcess = process;
 
         return new Connection(
             process.StandardOutput.BaseStream,
@@ -148,9 +152,11 @@ public sealed class KsrLanguageClient : ILanguageClient
                 }
             }
         }
-        catch
+        catch (Exception ex) when (ex is InvalidCastException
+                                 || ex is System.Runtime.InteropServices.COMException
+                                 || ex is InvalidOperationException)
         {
-            // Options page is unavailable; use the default executable resolution.
+            // Options page unavailable; use default resolution.
         }
 
         return await Task.Run(() => ResolveExecutablePath(configured), token);
@@ -165,7 +171,8 @@ public sealed class KsrLanguageClient : ILanguageClient
         var candidates = new[]
         {
             Path.Combine(userProfile, ".ksr", "ksr.exe"),
-            @"C:\Program Files\ksr\ksr.exe",
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "ksr", "ksr.exe"),
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "ksr", "ksr.exe"),
         };
 
         foreach (var c in candidates)
