@@ -10,7 +10,7 @@
     <IncludeAssemblyInVSIXContainer>true</IncludeAssemblyInVSIXContainer>
     <CopyBuildOutputToOutputDirectory>true</CopyBuildOutputToOutputDirectory>
     <UseCodebase>true</UseCodebase>
-    <NoWarn>$(NoWarn);NU1702;NU1603</NoWarn>
+    <NoWarn>$(NoWarn);NU1702</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
@@ -20,7 +20,6 @@
     </PackageReference>
     <PackageReference Include="Microsoft.VisualStudio.SDK" Version="17.11.36" ExcludeAssets="runtime" />
     <PackageReference Include="Microsoft.VisualStudio.LanguageServer.Client" Version="17.11.36" ExcludeAssets="runtime" />
-    <PackageReference Include="System.Text.Json" Version="8.0.5" />
   </ItemGroup>
 
   <ItemGroup>
