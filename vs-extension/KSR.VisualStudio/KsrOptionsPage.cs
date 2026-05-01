@@ -21,6 +21,6 @@ public sealed class KsrOptionsPage : DialogPage
     public string ExecutablePath
     {
         get => _executablePath;
-        set => _executablePath = string.IsNullOrWhiteSpace(value) ? "ksr" : value;
+        set => _executablePath = KsrPathSettings.NormalizePath(value);
     }
 }

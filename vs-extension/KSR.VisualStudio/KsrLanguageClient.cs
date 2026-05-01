@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.ComponentModel.Composition;
 using System.Diagnostics;
-using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.LanguageServer.Client;
@@ -159,26 +158,7 @@ public sealed class KsrLanguageClient : ILanguageClient
             // Options page unavailable; use default resolution.
         }
 
-        return await Task.Run(() => ResolveExecutablePath(configured), token);
-    }
-
-    private static string? ResolveExecutablePath(string configured)
-    {
-        if (Path.IsPathRooted(configured))
-            return File.Exists(configured) ? configured : null;
-
-        var userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        var candidates = new[]
-        {
-            Path.Combine(userProfile, ".ksr", "ksr.exe"),
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "ksr", "ksr.exe"),
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "ksr", "ksr.exe"),
-        };
-
-        foreach (var c in candidates)
-            if (File.Exists(c)) return c;
-
-        return configured;
+        return await Task.Run(() => KsrExecutableResolver.Resolve(configured), token);
     }
 
     private static void ShowExecutableNotFoundMessage()

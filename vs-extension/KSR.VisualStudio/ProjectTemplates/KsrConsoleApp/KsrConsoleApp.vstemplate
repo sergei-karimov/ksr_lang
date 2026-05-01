@@ -16,7 +16,6 @@
     <!-- Show under the "KSR" category in New Project dialog -->
     <TemplateGroupID>KSR</TemplateGroupID>
     <NumberOfParentCategoriesToRollUp>1</NumberOfParentCategoriesToRollUp>
-    <Icon>__TemplateIcon.ico</Icon>
   </TemplateData>
   <TemplateContent>
     <Project File="$projectname$.csproj" ReplaceParameters="true">
