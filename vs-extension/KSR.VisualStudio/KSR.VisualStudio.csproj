@@ -22,6 +22,7 @@
     <PackageReference Include="Microsoft.VisualStudio.LanguageServer.Client" Version="17.11.36" ExcludeAssets="runtime" />
     <!-- Pin to resolve NU1605: VS.Utilities requires >= 8.0.5, LSP.Client pulls 8.0.4 -->
     <PackageReference Include="System.Text.Json" Version="8.0.5" ExcludeAssets="runtime" />
+    <!-- MEF [Export] attribute; net472 SDK-style projects don't auto-reference this assembly -->
     <PackageReference Include="System.ComponentModel.Composition" Version="8.0.0" />
   </ItemGroup>
 
@@ -38,3 +39,4 @@
   </ItemGroup>
 
 </Project>
+
