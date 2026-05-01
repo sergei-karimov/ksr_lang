@@ -10,6 +10,8 @@
     <IncludeAssemblyInVSIXContainer>true</IncludeAssemblyInVSIXContainer>
     <CopyBuildOutputToOutputDirectory>true</CopyBuildOutputToOutputDirectory>
     <UseCodebase>true</UseCodebase>
+    <GenerateVsixContainer>true</GenerateVsixContainer>
+    <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
     <NoWarn>$(NoWarn);NU1702</NoWarn>
   </PropertyGroup>
 
@@ -34,9 +36,37 @@
 
   <!-- Template files must be packaged as Content inside the VSIX -->
   <ItemGroup>
-    <Content Include="ProjectTemplates\KsrConsoleApp\**\*" />
-    <Content Include="ItemTemplates\KsrFile\**\*" />
+    <Content Include="ProjectTemplates\KsrConsoleApp\**\*">
+      <IncludeInVSIX>true</IncludeInVSIX>
+    </Content>
+    <Content Include="ItemTemplates\KsrFile\**\*">
+      <IncludeInVSIX>true</IncludeInVSIX>
+    </Content>
   </ItemGroup>
 
-</Project>
+  <!-- Pre-define VSIX intermediate paths using absolute references.
+       Microsoft.VsSDK.targets uses $(IntermediateOutputPath) and $(TargetPath) which aren't set yet
+       at import time (SDK.targets sets them after this explicit import). -->
+  <PropertyGroup Condition="'$(MSBuildRuntimeType)' != 'Core'">
+    <_VsixObjPath>$(MSBuildProjectDirectory)\obj\$(MSBuildProjectName)\$(Configuration)\$(TargetFramework)</_VsixObjPath>
+    <_VsixBinPath>$(MSBuildProjectDirectory)\bin\$(Configuration)\$(TargetFramework)</_VsixBinPath>
+    <FileManifest>$(_VsixObjPath)\files.json</FileManifest>
+    <TemplateFileManifest>$(_VsixObjPath)\templateFiles.json</TemplateFileManifest>
+    <ResourceManifest>$(_VsixObjPath)\resources.json</ResourceManifest>
+    <CtoFileManifest>$(_VsixObjPath)\ctoFiles.json</CtoFileManifest>
+    <CtoCacheFile>$(_VsixObjPath)\mergeCto.cache</CtoCacheFile>
+    <CreateTemplateManifestsCacheFile>$(_VsixObjPath)\createTemplateManifests.cache</CreateTemplateManifestsCacheFile>
+    <TemplateOutputDirectory>$(_VsixObjPath)\</TemplateOutputDirectory>
+    <CreatePkgDefAssemblyToProcess>$(_VsixBinPath)\$(AssemblyName).dll</CreatePkgDefAssemblyToProcess>
+    <TargetPath>$(_VsixBinPath)\$(AssemblyName).dll</TargetPath>
+    <TargetDir>$(_VsixBinPath)\</TargetDir>
+    <TargetName>$(AssemblyName)</TargetName>
+  </PropertyGroup>
 
+  <!-- Import VS SDK targets (defines CreateVsixContainer, GeneratePkgDef, etc.)
+       Only available when building with msbuild.exe from a VS installation that has
+       the "Visual Studio extension development" workload installed. -->
+  <Import Project="$(MSBuildExtensionsPath)\Microsoft\VisualStudio\v$(VisualStudioVersion)\VSSDK\Microsoft.VsSDK.targets"
+          Condition="'$(MSBuildRuntimeType)' != 'Core' AND Exists('$(MSBuildExtensionsPath)\Microsoft\VisualStudio\v$(VisualStudioVersion)\VSSDK\Microsoft.VsSDK.targets')" />
+
+</Project>
