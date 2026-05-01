@@ -10,17 +10,17 @@ namespace KSR.VisualStudio;
 [System.Runtime.InteropServices.ComVisible(true)]
 public sealed class KsrOptionsPage : DialogPage
 {
-    private string _executablePath = string.Empty;
+    private string _executablePath = "ksr";
 
     [Category("Language Server")]
     [DisplayName("KSR Executable Path")]
     [Description(
-        "Full path to the ksr executable. " +
-        "Leave blank to use the default: %USERPROFILE%\\.ksr\\ksr.exe, " +
-        "falling back to PATH lookup.")]
+        "Path to the ksr executable used to start the Language Server. " +
+        "Defaults to 'ksr' (resolved via PATH). " +
+        "Example: C:\\Users\\you\\.ksr\\ksr.exe")]
     public string ExecutablePath
     {
         get => _executablePath;
-        set => _executablePath = value ?? string.Empty;
+        set => _executablePath = string.IsNullOrWhiteSpace(value) ? "ksr" : value;
     }
 }
