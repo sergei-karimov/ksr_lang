@@ -108,11 +108,22 @@ static void RunSingleFile(
     // (strategy 3 in ResolveReferences) can find it when compiling ksr.io / ksr.text.
     _ = typeof(KSR.Io.IO).Assembly;
 
-    var source    = File.ReadAllText(path);
-    var tokens    = new KSR.Lexer.Lexer(source).Tokenize();
-    var program   = new Parser(tokens, Path.GetFullPath(path)).Parse();
-    var csharpSrc = new KSR.CodeGen.CodeGenerator(asyncReturn).Generate(program);
-    KsrCompiler.CompileAndRun(csharpSrc, debugMode);
+    var source  = File.ReadAllText(path);
+    var tokens  = new KSR.Lexer.Lexer(source).Tokenize();
+    var program = new Parser(tokens, Path.GetFullPath(path)).Parse();
+
+    if (debugMode)
+    {
+        // Print generated C# for inspection (uses the text-based CodeGenerator).
+        var csharpSrc = new KSR.CodeGen.CodeGenerator(asyncReturn).Generate(program);
+        Console.Error.WriteLine("══════════ Generated C# ══════════");
+        Console.Error.WriteLine(csharpSrc);
+        Console.Error.WriteLine("══════════════════════════════════");
+    }
+
+    // Build a Roslyn SyntaxTree directly — no C# text generation + ParseText step.
+    var syntaxTree = new KSR.CodeGen.SyntaxTreeGenerator(asyncReturn).Generate(program);
+    KsrCompiler.CompileAndRun(syntaxTree, debugMode);
 }
 
 static void Fail(string msg)

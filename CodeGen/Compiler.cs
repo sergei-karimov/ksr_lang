@@ -6,10 +6,34 @@ using Microsoft.CodeAnalysis.CSharp;
 namespace KSR.CodeGen;
 
 /// <summary>
-/// Uses Roslyn to compile a C# source string in memory, then invokes
+/// Uses Roslyn to compile a KSR program in memory, then invokes
 /// the <c>KsrProgram.Main()</c> method via reflection.
+///
+/// Two entry points are provided:
+/// <list type="bullet">
+///   <item><see cref="CompileAndRun(SyntaxTree,bool,IEnumerable{string}?)"/> —
+///     accepts a pre-built Roslyn <see cref="SyntaxTree"/> (from
+///     <see cref="SyntaxTreeGenerator"/>), skipping the ParseText step.</item>
+///   <item><see cref="CompileAndRun(string,bool,IEnumerable{string}?)"/> —
+///     legacy path that accepts a C# source string; used by <c>--debug</c>.</item>
+/// </list>
 /// </summary>
 public static class KsrCompiler {
+
+    // ── primary entry: pre-built SyntaxTree (no ParseText step) ──────────────
+
+    public static void CompileAndRun(
+        SyntaxTree syntaxTree,
+        bool debugMode = false,
+        IEnumerable<string>? extraReferencePaths = null) {
+
+        var references = ResolveReferences(debugMode);
+        AddExtraReferences(references, extraReferencePaths);
+        CompileAndExecute(syntaxTree, references);
+    }
+
+    // ── legacy entry: C# source string (used by --debug path) ────────────────
+
     public static void CompileAndRun(
         string csharpSource,
         bool debugMode = false,
@@ -20,20 +44,16 @@ public static class KsrCompiler {
             Console.Error.WriteLine("══════════════════════════════════");
         }
 
-        // ── 1. Parse ─────────────────────────────────────────────────────────
         var syntaxTree = CSharpSyntaxTree.ParseText(csharpSource);
-
-        // ── 2. References ────────────────────────────────────────────────────
         var references = ResolveReferences(debugMode);
+        AddExtraReferences(references, extraReferencePaths);
+        CompileAndExecute(syntaxTree, references);
+    }
 
-        // Add package DLLs (from NuGet resolution)
-        if (extraReferencePaths is not null) {
-            foreach (var path in extraReferencePaths)
-                if (File.Exists(path))
-                    references.Add(MetadataReference.CreateFromFile(path));
-        }
+    // ── shared compile + execute ──────────────────────────────────────────────
 
-        // ── 3. Compile ───────────────────────────────────────────────────────
+    private static void CompileAndExecute(SyntaxTree syntaxTree, List<MetadataReference> references) {
+        // ── 1. Compile ───────────────────────────────────────────────────────
         var compilation = CSharpCompilation.Create(
             assemblyName: "KsrOutput",
             syntaxTrees: new[] { syntaxTree },
@@ -52,7 +72,7 @@ public static class KsrCompiler {
                 "C# compilation failed:\n" + string.Join("\n", errors));
         }
 
-        // ── 4. Load & execute via reflection ─────────────────────────────────
+        // ── 2. Load & execute via reflection ─────────────────────────────────
         ms.Seek(0, SeekOrigin.Begin);
         var assembly = Assembly.Load(ms.ToArray());
 
@@ -81,6 +101,15 @@ public static class KsrCompiler {
             task.GetAwaiter().GetResult();
         else if (result is System.Threading.Tasks.ValueTask vt)
             vt.GetAwaiter().GetResult();
+    }
+
+    private static void AddExtraReferences(
+        List<MetadataReference> references,
+        IEnumerable<string>? extraReferencePaths) {
+        if (extraReferencePaths is null) return;
+        foreach (var path in extraReferencePaths)
+            if (File.Exists(path))
+                references.Add(MetadataReference.CreateFromFile(path));
     }
 
     // ── reference resolution ──────────────────────────────────────────────────
