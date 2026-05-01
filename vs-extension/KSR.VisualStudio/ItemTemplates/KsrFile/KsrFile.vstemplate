@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<VSTemplate Version="3.0.0"
+    Type="Item"
+    xmlns="http://schemas.microsoft.com/developer/vstemplate/2005">
+  <TemplateData>
+    <Name>KSR File</Name>
+    <Description>A new KSR source file.</Description>
+    <ProjectType>CSharp</ProjectType>
+    <SortOrder>10</SortOrder>
+    <DefaultName>NewFile.ksr</DefaultName>
+    <TemplateGroupID>KSR</TemplateGroupID>
+  </TemplateData>
+  <TemplateContent>
+    <ProjectItem ReplaceParameters="true" TargetFileName="$fileinputname$.ksr">
+      NewFile.ksr
+    </ProjectItem>
+  </TemplateContent>
+</VSTemplate>
