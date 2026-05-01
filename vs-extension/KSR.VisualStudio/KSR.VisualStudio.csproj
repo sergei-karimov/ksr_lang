@@ -20,6 +20,8 @@
     </PackageReference>
     <PackageReference Include="Microsoft.VisualStudio.SDK" Version="17.11.36" ExcludeAssets="runtime" />
     <PackageReference Include="Microsoft.VisualStudio.LanguageServer.Client" Version="17.11.36" ExcludeAssets="runtime" />
+    <!-- Pin to resolve NU1605: VS.Utilities requires >= 8.0.5, LSP.Client pulls 8.0.4 -->
+    <PackageReference Include="System.Text.Json" Version="8.0.5" ExcludeAssets="runtime" />
   </ItemGroup>
 
   <ItemGroup>

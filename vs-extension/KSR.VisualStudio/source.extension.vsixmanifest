@@ -16,6 +16,7 @@
     <Tags>ksr;language;lsp</Tags>
   </Metadata>
 
+  <!-- Targets Visual Studio 2022 and later -->
   <Installation>
     <InstallationTarget Id="Microsoft.VisualStudio.Community" Version="[17.0,)" />
     <InstallationTarget Id="Microsoft.VisualStudio.Professional" Version="[17.0,)" />
@@ -37,19 +38,23 @@
   </Prerequisites>
 
   <Assets>
+    <!-- Package with pkgdef (for Options page registration) -->
     <Asset Type="Microsoft.VisualStudio.VsPackage"
            d:Source="Project"
            d:ProjectName="%CurrentProject%"
            Path="|KSR.VisualStudio|Microsoft.VisualStudio.VsPackage" />
 
+    <!-- MEF components: ILanguageClient + ContentType -->
     <Asset Type="Microsoft.VisualStudio.MefComponent"
            d:Source="Project"
            d:ProjectName="%CurrentProject%"
            Path="|KSR.VisualStudio|" />
 
+    <!-- Project template (shown in File → New Project) -->
     <Asset Type="Microsoft.VisualStudio.ProjectTemplate"
            Path="ProjectTemplates" />
 
+    <!-- Item template (shown in Add → New Item) -->
     <Asset Type="Microsoft.VisualStudio.ItemTemplate"
            Path="ItemTemplates" />
   </Assets>
