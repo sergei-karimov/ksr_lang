@@ -352,6 +352,27 @@ public class ParserTests
         Assert.Empty(le.Params);
     }
 
+    [Fact]
+    public void Lambda_BlockBody_ZeroParams()
+    {
+        var es = SingleStmt<ExprStmt>("app.run { val x = 1\n println(x) }");
+        var ce = Assert.IsType<CallExpr>(es.Expression);
+        var le = Assert.IsType<LambdaExpr>(ce.Arguments.Last());
+        Assert.Empty(le.Params);
+        Assert.True(le.IsBlockBody);
+        Assert.Equal(2, le.BlockBody!.Statements.Count);
+    }
+
+    [Fact]
+    public void Lambda_BlockBody_NamedParam()
+    {
+        var es = SingleStmt<ExprStmt>("app.run { draw -> val x = 1\n draw.fps(x, x) }");
+        var ce = Assert.IsType<CallExpr>(es.Expression);
+        var le = Assert.IsType<LambdaExpr>(ce.Arguments.Last());
+        Assert.Equal(["draw"], le.Params);
+        Assert.True(le.IsBlockBody);
+    }
+
     // ── collection literals ───────────────────────────────────────────────────
 
     [Fact]

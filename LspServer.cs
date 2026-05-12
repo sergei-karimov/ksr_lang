@@ -300,14 +300,45 @@ public static class LspServer {
         var diags = new List<object>();
         try {
             var tokens = new KSR.Lexer.Lexer(text).Tokenize();
-            new KSR.Parser.Parser(tokens).Parse();
+            var parser = new KSR.Parser.Parser(tokens, uri);
+            var program = parser.Parse();
+
+            // Collect parser errors
+            foreach (var err in parser.Errors) {
+                AddDiagFromErrorString(diags, err);
+            }
+
+            // Run semantic analysis if no parser errors?
+            // Actually, we can run it even if there are some errors (recovery), but maybe it's safer to skip if too many.
+            var analyzer = new KSR.Semantic.SemanticAnalyzer();
+            analyzer.Analyze(program, uri);
+            foreach (var err in analyzer.Errors) {
+                AddDiagFromErrorString(diags, err);
+            }
+
         } catch (KSR.Lexer.KsrLexException ex) {
             diags.Add(MakeDiag(ex.Message, ex.Line - 1, ex.Col - 1));
         } catch (KSR.Parser.KsrParseException ex) {
             diags.Add(MakeDiag(ex.Message, ex.Line - 1, ex.Col - 1));
         } catch { /* ignore other errors */ }
 
-        SendNotification("textDocument/publishDiagnostics", new { uri, diagnostics = diags });
+        // Remove duplicates
+        var uniqueDiags = diags
+            .GroupBy(d => d.ToString())
+            .Select(g => g.First())
+            .ToList();
+
+        SendNotification("textDocument/publishDiagnostics", new { uri, diagnostics = uniqueDiags });
+    }
+
+    private static void AddDiagFromErrorString(List<object> diags, string err) {
+        var match = System.Text.RegularExpressions.Regex.Match(err, @"\((\d+),(\d+)\): error: (.*)");
+        if (match.Success) {
+            int line = int.Parse(match.Groups[1].Value);
+            int col = int.Parse(match.Groups[2].Value);
+            string msg = match.Groups[3].Value;
+            diags.Add(MakeDiag(msg, line - 1, col - 1));
+        }
     }
 
     private static object MakeDiag(string message, int line, int col) => new {

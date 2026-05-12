@@ -8,18 +8,9 @@ namespace KSR.CodeGen;
 
 /// <summary>
 /// Walks a KSR AST and builds a Roslyn <see cref="SyntaxTree"/> directly via
-/// <see cref="SyntaxFactory"/>, skipping the intermediate C# text representation.
-///
-/// This eliminates the text generation + ParseText round-trip that
-/// <see cref="CodeGenerator"/> requires, reducing compilation overhead.
-///
-/// Semantics mirror CodeGenerator exactly:
-///   • struct  → C# positional record
-///   • Extension functions → public static extension methods in KsrProgram
-///   • 'this' inside extension bodies → 'self' (the receiver parameter)
-///   • #line source-mapping is intentionally omitted (use --debug for C# inspection)
+/// <see cref="SyntaxFactory"/> using the Visitor pattern.
 /// </summary>
-public class SyntaxTreeGenerator
+public class SyntaxTreeGenerator : IAstVisitor<CSharpSyntaxNode>
 {
     private readonly HashSet<string> _structs     = new();
     private readonly HashSet<string> _interfaces  = new();
@@ -41,8 +32,15 @@ public class SyntaxTreeGenerator
 
     public SyntaxTree Generate(ProgramNode program)
     {
-        // First pass: collect struct / sealed / interface names; group impl blocks
-        foreach (var d in program.Declarations)
+        return program.Accept(this).SyntaxTree;
+    }
+
+    // ── Visit Implementations ────────────────────────────────────────────────
+
+    public CSharpSyntaxNode Visit(ProgramNode node)
+    {
+        // First pass: collect metadata
+        foreach (var d in node.Declarations)
         {
             if (d is StructDecl dc) _structs.Add(dc.Name);
             if (d is SealedDecl sd)
@@ -66,58 +64,56 @@ public class SyntaxTreeGenerator
             UsingDirective(ParseName("System.Collections.Generic")),
             UsingDirective(ParseName("System.Linq")),
         };
-        foreach (var d in program.Declarations)
+        foreach (var d in node.Declarations)
             if (d is UseDecl ud)
                 usings.Add(UsingDirective(ParseName(MapUseNamespace(ud.Namespace))));
 
-        // Attach #nullable enable as leading trivia on the first using
+        // Attach #nullable enable
         usings[0] = usings[0].WithLeadingTrivia(TriviaList(
             Trivia(NullableDirectiveTrivia(Token(SyntaxKind.EnableKeyword), true)),
             EndOfLine(Environment.NewLine)));
 
-        // Top-level type declarations
+        // Top-level declarations
         var members = new List<MemberDeclarationSyntax>();
-        foreach (var d in program.Declarations)
-            if (d is InterfaceDecl id) members.Add(BuildInterface(id));
-        foreach (var d in program.Declarations)
-            if (d is SealedDecl sd)    members.AddRange(BuildSealed(sd));
-        foreach (var d in program.Declarations)
-            if (d is StructDecl dc)    members.Add(BuildStruct(dc));
-
-        // static class KsrProgram { all functions + extension methods }
-        var programMembers = new List<MemberDeclarationSyntax>();
-        foreach (var d in program.Declarations)
+        foreach (var d in node.Declarations)
         {
-            if (d is FunctionDecl fd)   programMembers.Add(BuildFunction(fd));
-            if (d is ExtFunctionDecl efd) programMembers.Add(BuildExtFunction(efd));
+            if (d is InterfaceDecl id) members.Add((MemberDeclarationSyntax)id.Accept(this));
+            if (d is SealedDecl sd)    members.AddRange(VisitSealed(sd));
+            if (d is StructDecl dc)    members.Add((MemberDeclarationSyntax)dc.Accept(this));
         }
+
+        // static class KsrProgram
+        var programMembers = new List<MemberDeclarationSyntax>();
+        foreach (var d in node.Declarations)
+        {
+            if (d is FunctionDecl fd)     programMembers.Add((MemberDeclarationSyntax)fd.Accept(this));
+            if (d is ExtFunctionDecl efd) programMembers.Add((MemberDeclarationSyntax)efd.Accept(this));
+        }
+
         members.Add(
             ClassDeclaration("KsrProgram")
                 .WithModifiers(TokenList(Token(SyntaxKind.StaticKeyword)))
-                .WithMembers(List<MemberDeclarationSyntax>(programMembers)));
+                .WithMembers(List(programMembers)));
 
         return CompilationUnit()
             .WithUsings(List(usings))
-            .WithMembers(List(members))
-            .SyntaxTree;
+            .WithMembers(List(members));
     }
 
-    // ── declarations ─────────────────────────────────────────────────────────
-
-    private InterfaceDeclarationSyntax BuildInterface(InterfaceDecl id)
+    public CSharpSyntaxNode Visit(InterfaceDecl id)
     {
         var prevTypeParams = _currentTypeParams;
         _currentTypeParams = id.TypeParams.Count > 0 ? new HashSet<string>(id.TypeParams) : new();
 
-        var decl = InterfaceDeclaration("I" + id.Name);
+        var decl = InterfaceDeclaration("I" + NameUtils.Escape(id.Name));
 
         if (id.TypeParams.Count > 0)
             decl = decl.WithTypeParameterList(
-                TypeParameterList(SeparatedList(id.TypeParams.Select(tp => TypeParameter(tp)))));
+                TypeParameterList(SeparatedList(id.TypeParams.Select(tp => TypeParameter(NameUtils.Escape(tp))))));
 
         if (id.Constraints.Count > 0)
             decl = decl.WithConstraintClauses(List(id.Constraints.Select(c =>
-                TypeParameterConstraintClause(IdentifierName(c.TypeParam))
+                TypeParameterConstraintClause(IdentifierName(NameUtils.Escape(c.TypeParam)))
                     .WithConstraints(SeparatedList<TypeParameterConstraintSyntax>(
                         c.Bounds.Select(b => TypeConstraint(MapTypeSyntax(new TypeRef(b, false)))))))));
 
@@ -138,17 +134,22 @@ public class SyntaxTreeGenerator
         return decl;
     }
 
-    private IEnumerable<MemberDeclarationSyntax> BuildSealed(SealedDecl sd)
+    public CSharpSyntaxNode Visit(SealedDecl sd)
     {
-        // abstract record Shape;
-        yield return RecordDeclaration(Token(SyntaxKind.RecordKeyword), sd.Name)
+        // This is a special case since it returns multiple members.
+        // The standard Visit(SealedDecl) will return the base record.
+        return RecordDeclaration(Token(SyntaxKind.RecordKeyword), NameUtils.Escape(sd.Name))
             .WithModifiers(TokenList(Token(SyntaxKind.AbstractKeyword)))
             .WithSemicolonToken(Token(SyntaxKind.SemicolonToken));
+    }
+
+    private IEnumerable<MemberDeclarationSyntax> VisitSealed(SealedDecl sd)
+    {
+        yield return (MemberDeclarationSyntax)Visit(sd);
 
         foreach (var v in sd.Variants)
         {
-            // Base list always includes the sealed parent
-            var baseTypes = new List<BaseTypeSyntax> { SimpleBaseType(IdentifierName(sd.Name)) };
+            var baseTypes = new List<BaseTypeSyntax> { SimpleBaseType(IdentifierName(NameUtils.Escape(sd.Name))) };
 
             RecordDeclarationSyntax variantDecl;
             if (_implsByType.TryGetValue(v.Name, out var impls))
@@ -158,11 +159,11 @@ public class SyntaxTreeGenerator
                 var prev = _inRecordMethod;
                 _inRecordMethod = true;
                 var methodMembers = impls.SelectMany(b => b.Methods)
-                                        .Select(m => (MemberDeclarationSyntax)BuildRecordMethod(m))
+                                        .Select(m => (MemberDeclarationSyntax)m.Accept(this))
                                         .ToList();
                 _inRecordMethod = prev;
 
-                variantDecl = RecordDeclaration(Token(SyntaxKind.RecordKeyword), v.Name)
+                variantDecl = RecordDeclaration(Token(SyntaxKind.RecordKeyword), NameUtils.Escape(v.Name))
                     .WithParameterList(BuildRecordParams(v.Properties))
                     .WithBaseList(BaseList(SeparatedList(baseTypes)))
                     .WithOpenBraceToken(Token(SyntaxKind.OpenBraceToken))
@@ -171,7 +172,7 @@ public class SyntaxTreeGenerator
             }
             else
             {
-                variantDecl = RecordDeclaration(Token(SyntaxKind.RecordKeyword), v.Name)
+                variantDecl = RecordDeclaration(Token(SyntaxKind.RecordKeyword), NameUtils.Escape(v.Name))
                     .WithParameterList(BuildRecordParams(v.Properties))
                     .WithBaseList(BaseList(SeparatedList(baseTypes)))
                     .WithSemicolonToken(Token(SyntaxKind.SemicolonToken));
@@ -180,7 +181,7 @@ public class SyntaxTreeGenerator
         }
     }
 
-    private MemberDeclarationSyntax BuildStruct(StructDecl dc)
+    public CSharpSyntaxNode Visit(StructDecl dc)
     {
         if (_implsByType.TryGetValue(dc.Name, out var impls))
         {
@@ -189,11 +190,11 @@ public class SyntaxTreeGenerator
             var prev = _inRecordMethod;
             _inRecordMethod = true;
             var methodMembers = impls.SelectMany(b => b.Methods)
-                                     .Select(m => (MemberDeclarationSyntax)BuildRecordMethod(m))
+                                     .Select(m => (MemberDeclarationSyntax)m.Accept(this))
                                      .ToList();
             _inRecordMethod = prev;
 
-            return RecordDeclaration(Token(SyntaxKind.RecordKeyword), dc.Name)
+            return RecordDeclaration(Token(SyntaxKind.RecordKeyword), NameUtils.Escape(dc.Name))
                 .WithParameterList(BuildRecordParams(dc.Properties))
                 .WithBaseList(BaseList(SeparatedList(baseTypes)))
                 .WithOpenBraceToken(Token(SyntaxKind.OpenBraceToken))
@@ -201,27 +202,12 @@ public class SyntaxTreeGenerator
                 .WithCloseBraceToken(Token(SyntaxKind.CloseBraceToken));
         }
 
-        return RecordDeclaration(Token(SyntaxKind.RecordKeyword), dc.Name)
+        return RecordDeclaration(Token(SyntaxKind.RecordKeyword), NameUtils.Escape(dc.Name))
             .WithParameterList(BuildRecordParams(dc.Properties))
             .WithSemicolonToken(Token(SyntaxKind.SemicolonToken));
     }
 
-    /// <summary>Positional parameter list for record declarations; omits list when empty.</summary>
-    private ParameterListSyntax BuildRecordParams(List<Parameter> props) =>
-        ParameterList(props.Count > 0
-            ? SeparatedList(props.Select(p => BuildParam(p, pascalName: true)))
-            : default);
-
-    private TypeSyntax BuildImplTypeSyntax(ImplBlock b)
-    {
-        if (b.InterfaceTypeArgs.Count > 0)
-            return GenericName("I" + b.InterfaceName)
-                .WithTypeArgumentList(TypeArgumentList(SeparatedList(
-                    b.InterfaceTypeArgs.Select(a => MapTypeSyntax(new TypeRef(a, false))))));
-        return IdentifierName("I" + b.InterfaceName);
-    }
-
-    private MethodDeclarationSyntax BuildRecordMethod(FunctionDecl fd)
+    public CSharpSyntaxNode Visit(FunctionDecl fd)
     {
         var (prevAsync, prevKind, prevTypeParams) = SaveAsyncState();
         _inAsyncFunction    = fd.IsAsync;
@@ -229,48 +215,31 @@ public class SyntaxTreeGenerator
         _currentTypeParams  = fd.TypeParams.Count > 0 ? new HashSet<string>(fd.TypeParams) : new();
 
         var ret = GetReturnTypeSyntax(fd.IsAsync, fd.ReturnType, _currentAsyncReturn);
-        var mods = new List<SyntaxToken> { Token(SyntaxKind.PublicKeyword) };
+        var mods = new List<SyntaxToken>();
+
+        if (_inRecordMethod)
+            mods.Add(Token(SyntaxKind.PublicKeyword));
+        else
+            mods.Add(Token(SyntaxKind.StaticKeyword));
+
         if (fd.IsAsync) mods.Add(Token(SyntaxKind.AsyncKeyword));
 
-        var method = MethodDeclaration(ret, Pascal(fd.Name))
+        var methodName = (!_inRecordMethod && fd.Name == "main") ? "Main" : fd.Name;
+
+        var method = MethodDeclaration(ret, Pascal(methodName))
             .WithModifiers(TokenList(mods))
             .WithParameterList(ParameterList(SeparatedList(fd.Parameters.Select(p => BuildParam(p)))))
-            .WithBody(BuildBlock(fd.Body));
+            .WithBody((BlockSyntax)fd.Body.Accept(this));
 
         if (fd.TypeParams.Count > 0)
             method = method.WithTypeParameterList(
-                TypeParameterList(SeparatedList(fd.TypeParams.Select(tp => TypeParameter(tp)))));
+                TypeParameterList(SeparatedList(fd.TypeParams.Select(tp => TypeParameter(NameUtils.Escape(tp))))));
 
         RestoreAsyncState(prevAsync, prevKind, prevTypeParams);
         return method;
     }
 
-    private MethodDeclarationSyntax BuildFunction(FunctionDecl fd)
-    {
-        var (prevAsync, prevKind, prevTypeParams) = SaveAsyncState();
-        _inAsyncFunction    = fd.IsAsync;
-        _currentAsyncReturn = EffectiveAsyncReturn(fd.AsyncReturn);
-        _currentTypeParams  = fd.TypeParams.Count > 0 ? new HashSet<string>(fd.TypeParams) : new();
-
-        var ret        = GetReturnTypeSyntax(fd.IsAsync, fd.ReturnType, _currentAsyncReturn);
-        var methodName = fd.Name == "main" ? "Main" : fd.Name;
-        var mods       = new List<SyntaxToken> { Token(SyntaxKind.StaticKeyword) };
-        if (fd.IsAsync) mods.Add(Token(SyntaxKind.AsyncKeyword));
-
-        var method = MethodDeclaration(ret, methodName)
-            .WithModifiers(TokenList(mods))
-            .WithParameterList(ParameterList(SeparatedList(fd.Parameters.Select(p => BuildParam(p)))))
-            .WithBody(BuildBlock(fd.Body));
-
-        if (fd.TypeParams.Count > 0)
-            method = method.WithTypeParameterList(
-                TypeParameterList(SeparatedList(fd.TypeParams.Select(tp => TypeParameter(tp)))));
-
-        RestoreAsyncState(prevAsync, prevKind, prevTypeParams);
-        return method;
-    }
-
-    private MethodDeclarationSyntax BuildExtFunction(ExtFunctionDecl efd)
+    public CSharpSyntaxNode Visit(ExtFunctionDecl efd)
     {
         var (prevAsync, prevKind, prevTypeParams) = SaveAsyncState();
         _inAsyncFunction    = efd.IsAsync;
@@ -291,54 +260,341 @@ public class SyntaxTreeGenerator
         var method = MethodDeclaration(ret, Pascal(efd.MethodName))
             .WithModifiers(TokenList(mods))
             .WithParameterList(ParameterList(SeparatedList(allParams)))
-            .WithBody(BuildBlock(efd.Body));
+            .WithBody((BlockSyntax)efd.Body.Accept(this));
 
         if (efd.TypeParams.Count > 0)
             method = method.WithTypeParameterList(
-                TypeParameterList(SeparatedList(efd.TypeParams.Select(tp => TypeParameter(tp)))));
+                TypeParameterList(SeparatedList(efd.TypeParams.Select(tp => TypeParameter(NameUtils.Escape(tp))))));
 
         RestoreAsyncState(prevAsync, prevKind, prevTypeParams);
         return method;
     }
 
-    // ── block & statements ────────────────────────────────────────────────────
+    public CSharpSyntaxNode Visit(Block node) =>
+        Block(node.Statements.Select(s => (StatementSyntax)s.Accept(this)));
 
-    private BlockSyntax BuildBlock(Block block) =>
-        Block(block.Statements.Select(BuildStmt));
+    public CSharpSyntaxNode Visit(UseDecl node) => EmptyStatement(); // Handled in preamble
 
-    private StatementSyntax BuildStmt(Stmt stmt) => stmt switch
-    {
-        ValDecl vd => BuildLocalDecl(vd.Name, vd.Type, BuildExprWithHint(vd.Value, vd.Type)),
-        VarDecl vd => BuildLocalDecl(vd.Name, vd.Type, BuildExprWithHint(vd.Value, vd.Type)),
+    public CSharpSyntaxNode Visit(ImplBlock node) => EmptyStatement(); // Handled in metadata pass
 
-        AssignStmt ass => ExpressionStatement(
-            AssignmentExpression(SyntaxKind.SimpleAssignmentExpression,
-                IdentifierName(ass.Name), BuildExpr(ass.Value))),
+    // ── Statements ───────────────────────────────────────────────────────────
 
-        CompoundAssignStmt cas => ExpressionStatement(
-            AssignmentExpression(MapCompoundOp(cas.Op),
-                IdentifierName(cas.Name), BuildExpr(cas.Value))),
+    public CSharpSyntaxNode Visit(ValDecl node) =>
+        BuildLocalDecl(node.Name, node.Type, (ExpressionSyntax)BuildExprWithHint(node.Value, node.Type));
 
-        IndexAssignStmt ias => ExpressionStatement(
-            AssignmentExpression(SyntaxKind.SimpleAssignmentExpression,
-                ElementAccessExpression(IdentifierName(ias.Name))
-                    .WithArgumentList(BracketedArgumentList(
-                        SingletonSeparatedList(Argument(BuildExpr(ias.Index))))),
-                BuildExpr(ias.Value))),
+    public CSharpSyntaxNode Visit(VarDecl node) =>
+        BuildLocalDecl(node.Name, node.Type, (ExpressionSyntax)BuildExprWithHint(node.Value, node.Type));
 
-        ExprStmt { Expression: WhenExpr we } => BuildWhenStmt(we),
-        ExprStmt es => ExpressionStatement(BuildExpr(es.Expression)),
+    public CSharpSyntaxNode Visit(AssignStmt node) =>
+        ExpressionStatement(AssignmentExpression(SyntaxKind.SimpleAssignmentExpression,
+            IdentifierName(NameUtils.Escape(node.Name)), (ExpressionSyntax)node.Value.Accept(this)));
 
-        ReturnStmt rs => rs.Value is null
+    public CSharpSyntaxNode Visit(CompoundAssignStmt node) =>
+        ExpressionStatement(AssignmentExpression(MapCompoundOp(node.Op),
+            IdentifierName(NameUtils.Escape(node.Name)), (ExpressionSyntax)node.Value.Accept(this)));
+
+    public CSharpSyntaxNode Visit(IndexAssignStmt node) =>
+        ExpressionStatement(AssignmentExpression(SyntaxKind.SimpleAssignmentExpression,
+            ElementAccessExpression(IdentifierName(NameUtils.Escape(node.Name)))
+                .WithArgumentList(BracketedArgumentList(
+                    SingletonSeparatedList(Argument((ExpressionSyntax)node.Index.Accept(this))))),
+            (ExpressionSyntax)node.Value.Accept(this)));
+
+    public CSharpSyntaxNode Visit(ReturnStmt node) =>
+        node.Value is null
             ? ReturnStatement()
-            : ReturnStatement(BuildExpr(rs.Value)),
+            : ReturnStatement((ExpressionSyntax)node.Value.Accept(this));
 
-        IfStmt ifs => BuildIf(ifs),
-        WhileStmt ws => WhileStatement(BuildExpr(ws.Condition), BuildBlock(ws.Body)),
-        ForInStmt fis => BuildForIn(fis),
+    public CSharpSyntaxNode Visit(IfStmt node)
+    {
+        var s = IfStatement((ExpressionSyntax)node.Condition.Accept(this), (BlockSyntax)node.Then.Accept(this));
+        return node.Else is null ? s : s.WithElse(ElseClause((BlockSyntax)node.Else.Accept(this)));
+    }
 
-        _ => throw new InvalidOperationException($"Unknown statement: {stmt.GetType().Name}")
-    };
+    public CSharpSyntaxNode Visit(WhileStmt node) =>
+        WhileStatement((ExpressionSyntax)node.Condition.Accept(this), (BlockSyntax)node.Body.Accept(this));
+
+    public CSharpSyntaxNode Visit(ForInStmt node)
+    {
+        var escapedVar = NameUtils.Escape(node.VarName);
+        if (node.Iterable is RangeExpr re)
+        {
+            var op = re.Inclusive
+                ? SyntaxKind.LessThanOrEqualExpression
+                : SyntaxKind.LessThanExpression;
+            return ForStatement(
+                VariableDeclaration(IdentifierName("var"))
+                    .WithVariables(SingletonSeparatedList(
+                        VariableDeclarator(Identifier(escapedVar))
+                            .WithInitializer(EqualsValueClause((ExpressionSyntax)re.Start.Accept(this))))),
+                default,
+                BinaryExpression(op, IdentifierName(escapedVar), (ExpressionSyntax)re.End.Accept(this)),
+                SingletonSeparatedList<ExpressionSyntax>(
+                    PostfixUnaryExpression(SyntaxKind.PostIncrementExpression,
+                        IdentifierName(escapedVar))),
+                (BlockSyntax)node.Body.Accept(this));
+        }
+
+        return ForEachStatement(
+            IdentifierName("var"),
+            Identifier(escapedVar),
+            (ExpressionSyntax)node.Iterable.Accept(this),
+            (BlockSyntax)node.Body.Accept(this));
+    }
+
+    public CSharpSyntaxNode Visit(ExprStmt node)
+    {
+        if (node.Expression is WhenExpr we)
+            return BuildWhenStmt(we);
+        return ExpressionStatement((ExpressionSyntax)node.Expression.Accept(this));
+    }
+
+    // ── Expressions ──────────────────────────────────────────────────────────
+
+    public CSharpSyntaxNode Visit(IntLiteral node) =>
+        LiteralExpression(SyntaxKind.NumericLiteralExpression, Literal(node.Value));
+
+    public CSharpSyntaxNode Visit(DoubleLiteral node) =>
+        LiteralExpression(SyntaxKind.NumericLiteralExpression, Literal(node.Value));
+
+    public CSharpSyntaxNode Visit(StringLiteral node)
+    {
+        if (node.IsRaw)
+        {
+            var escaped = node.Value.Replace("\"", "\"\"");
+            return LiteralExpression(
+                SyntaxKind.StringLiteralExpression,
+                Token(default, SyntaxKind.StringLiteralToken,
+                    $"@\"{escaped}\"", node.Value, default));
+        }
+        return LiteralExpression(SyntaxKind.StringLiteralExpression, Literal(node.Value));
+    }
+
+    public CSharpSyntaxNode Visit(BoolLiteral node) =>
+        node.Value
+            ? LiteralExpression(SyntaxKind.TrueLiteralExpression)
+            : LiteralExpression(SyntaxKind.FalseLiteralExpression);
+
+    public CSharpSyntaxNode Visit(NullLiteral node) =>
+        LiteralExpression(SyntaxKind.NullLiteralExpression);
+
+    public CSharpSyntaxNode Visit(ThisExpr node) =>
+        _inRecordMethod
+            ? (ExpressionSyntax)ThisExpression()
+            : IdentifierName("self");
+
+    public CSharpSyntaxNode Visit(IdentifierExpr node) => IdentifierName(NameUtils.Escape(node.Name));
+
+    public CSharpSyntaxNode Visit(IndexExpr node) =>
+        ElementAccessExpression((ExpressionSyntax)node.Target.Accept(this))
+            .WithArgumentList(BracketedArgumentList(
+                SingletonSeparatedList(Argument((ExpressionSyntax)node.Index.Accept(this)))));
+
+    public CSharpSyntaxNode Visit(NewArrayExpr node) =>
+        ArrayCreationExpression(
+            ArrayType(MapTypeSyntax(node.ElementType))
+                .WithRankSpecifiers(SingletonList(
+                    ArrayRankSpecifier(SingletonSeparatedList<ExpressionSyntax>((ExpressionSyntax)node.Size.Accept(this))))));
+
+    public CSharpSyntaxNode Visit(NewObjectExpr node) =>
+        ObjectCreationExpression(IdentifierName(NameUtils.Escape(node.TypeName)))
+            .WithArgumentList(ArgumentList(
+                SeparatedList(node.Arguments.Select(a => Argument((ExpressionSyntax)a.Accept(this))))));
+
+    public CSharpSyntaxNode Visit(LambdaExpr node)
+    {
+        CSharpSyntaxNode body = node.IsBlockBody
+            ? (BlockSyntax)(node.BlockBody?.Accept(this)
+                ?? throw new InvalidOperationException("Block lambda is missing a block body."))
+            : (ExpressionSyntax)(node.Body?.Accept(this)
+                ?? throw new InvalidOperationException("Expression lambda is missing a body."));
+
+        if (node.Params.Count == 0)
+            return ParenthesizedLambdaExpression().WithBody(body);
+        if (node.Params.Count == 1)
+            return SimpleLambdaExpression(Parameter(Identifier(NameUtils.Escape(node.Params[0])))).WithBody(body);
+        return ParenthesizedLambdaExpression()
+            .WithParameterList(ParameterList(SeparatedList(node.Params.Select(p => Parameter(Identifier(NameUtils.Escape(p)))))))
+            .WithBody(body);
+    }
+
+
+    public CSharpSyntaxNode Visit(BinaryExpr node) =>
+        ParenthesizedExpression(
+            BinaryExpression(MapBinaryOp(node.Op), (ExpressionSyntax)node.Left.Accept(this), (ExpressionSyntax)node.Right.Accept(this)));
+
+    public CSharpSyntaxNode Visit(UnaryExpr node) =>
+        ParenthesizedExpression(
+            PrefixUnaryExpression(MapUnaryOp(node.Op), (ExpressionSyntax)node.Operand.Accept(this)));
+
+    public CSharpSyntaxNode Visit(MemberAccessExpr node) =>
+        MemberAccessExpression(
+            SyntaxKind.SimpleMemberAccessExpression,
+            (ExpressionSyntax)node.Target.Accept(this), IdentifierName(Pascal(node.Member)));
+
+    public CSharpSyntaxNode Visit(SafeCallExpr node) =>
+        ConditionalAccessExpression(
+            (ExpressionSyntax)node.Target.Accept(this),
+            MemberBindingExpression(IdentifierName(Pascal(node.Member))));
+
+    public CSharpSyntaxNode Visit(ElvisExpr node) =>
+        ParenthesizedExpression(
+            BinaryExpression(SyntaxKind.CoalesceExpression,
+                (ExpressionSyntax)node.Left.Accept(this), (ExpressionSyntax)node.Right.Accept(this)));
+
+    public CSharpSyntaxNode Visit(RangeExpr node)
+    {
+        var start = (ExpressionSyntax)node.Start.Accept(this);
+        var end = (ExpressionSyntax)node.End.Accept(this);
+        ExpressionSyntax count = node.Inclusive
+            ? BinaryExpression(SyntaxKind.AddExpression,
+                BinaryExpression(SyntaxKind.SubtractExpression, end, start),
+                LiteralExpression(SyntaxKind.NumericLiteralExpression, Literal(1)))
+            : BinaryExpression(SyntaxKind.SubtractExpression, end, start);
+
+        return InvocationExpression(
+                MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression,
+                    IdentifierName("Enumerable"), IdentifierName("Range")))
+            .WithArgumentList(ArgumentList(SeparatedList(new[]
+            {
+                Argument(start),
+                Argument(count),
+            })));
+    }
+
+    public CSharpSyntaxNode Visit(StringTemplateExpr node)
+    {
+        var startToken = node.IsRaw
+            ? Token(SyntaxKind.InterpolatedVerbatimStringStartToken)
+            : Token(SyntaxKind.InterpolatedStringStartToken);
+
+        var contents = node.Parts.Select<StringPart, InterpolatedStringContentSyntax>(part =>
+        {
+            if (part is LiteralPart lp)
+            {
+                var srcText = node.IsRaw
+                    ? lp.Text.Replace("\"", "\"\"").Replace("{", "{{").Replace("}", "}}")
+                    : lp.Text.Replace("{", "{{").Replace("}", "}}");
+                return InterpolatedStringText(
+                    Token(default, SyntaxKind.InterpolatedStringTextToken,
+                        srcText, lp.Text, default));
+            }
+            if (part is ExprPart ep)
+                return Interpolation((ExpressionSyntax)ep.Expression.Accept(this));
+            throw new InvalidOperationException($"Unknown StringPart: {part.GetType().Name}");
+        });
+
+        return InterpolatedStringExpression(startToken)
+            .WithContents(List(contents))
+            .WithStringEndToken(Token(SyntaxKind.InterpolatedStringEndToken));
+    }
+
+    public CSharpSyntaxNode Visit(CallExpr node)
+    {
+        if (node.Callee is SafeCallExpr sc)
+        {
+            return ConditionalAccessExpression(
+                (ExpressionSyntax)sc.Target.Accept(this),
+                InvocationExpression(MemberBindingExpression(IdentifierName(Pascal(sc.Member))))
+                    .WithArgumentList(ArgumentList(
+                        SeparatedList(node.Arguments.Select(BuildCallArg)))));
+        }
+
+        if (node.Callee is IdentifierExpr { Name: "println" })
+        {
+            return InvocationExpression(
+                    MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression,
+                        IdentifierName("Console"), IdentifierName("WriteLine")))
+                .WithArgumentList(ArgumentList(
+                    SeparatedList(node.Arguments.Select(BuildCallArg))));
+        }
+
+        if (node.Callee is IdentifierExpr id && _structs.Contains(id.Name))
+        {
+            return ObjectCreationExpression(IdentifierName(id.Name))
+                .WithArgumentList(ArgumentList(
+                    SeparatedList(node.Arguments.Select(BuildCallArg))));
+        }
+
+        return InvocationExpression((ExpressionSyntax)node.Callee.Accept(this))
+            .WithArgumentList(ArgumentList(
+                SeparatedList(node.Arguments.Select(BuildCallArg))));
+    }
+
+    public CSharpSyntaxNode Visit(ListLiteralExpr node)
+    {
+        if (node.Elements.Count == 0)
+            return InvocationExpression(
+                    MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression,
+                        IdentifierName("Array"),
+                        GenericName("Empty").WithTypeArgumentList(TypeArgumentList(
+                            SingletonSeparatedList<TypeSyntax>(IdentifierName("object"))))))
+                .WithArgumentList(ArgumentList());
+
+        return ImplicitArrayCreationExpression(
+            InitializerExpression(SyntaxKind.ArrayInitializerExpression,
+                SeparatedList(node.Elements.Select(e => (ExpressionSyntax)e.Accept(this)))));
+    }
+
+    public CSharpSyntaxNode Visit(MapLiteralExpr node)
+    {
+        var keyType = (TypeSyntax)(InferTypeSyntax(node.Entries.Count > 0 ? node.Entries[0].Key : null) ?? IdentifierName("object"));
+        var valType = (TypeSyntax)(InferTypeSyntax(node.Entries.Count > 0 ? node.Entries[0].Value : null) ?? IdentifierName("object"));
+
+        var dictType = GenericName("Dictionary")
+            .WithTypeArgumentList(TypeArgumentList(SeparatedList<TypeSyntax>(new[] { keyType, valType })));
+
+        if (node.Entries.Count == 0)
+            return ObjectCreationExpression(dictType).WithArgumentList(ArgumentList());
+
+        var entries = node.Entries.Select(e =>
+            (ExpressionSyntax)AssignmentExpression(
+                SyntaxKind.SimpleAssignmentExpression,
+                ImplicitElementAccess()
+                    .WithArgumentList(BracketedArgumentList(
+                        SingletonSeparatedList(Argument((ExpressionSyntax)e.Key.Accept(this))))),
+                (ExpressionSyntax)e.Value.Accept(this)));
+
+        return ObjectCreationExpression(dictType)
+            .WithArgumentList(ArgumentList())
+            .WithInitializer(InitializerExpression(
+                SyntaxKind.ObjectInitializerExpression,
+                SeparatedList(entries)));
+    }
+
+    public CSharpSyntaxNode Visit(WhenExpr node)
+    {
+        if (node.Subject is not null)
+        {
+            var arms = node.Arms.Select(arm =>
+            {
+                PatternSyntax pattern = arm.Pattern switch
+                {
+                    null                => DiscardPattern(),
+                    IsPatternExpr ip    => BuildSwitchPattern(ip),
+                    _                   => ConstantPattern((ExpressionSyntax)arm.Pattern.Accept(this))
+                };
+                return SwitchExpressionArm(pattern, (ExpressionSyntax)arm.Body.Accept(this));
+            });
+
+            return ParenthesizedExpression(
+                SwitchExpression((ExpressionSyntax)node.Subject.Accept(this))
+                    .WithArms(SeparatedList(arms)));
+        }
+
+        return BuildWhenTernary(node.Arms, 0);
+    }
+
+    public CSharpSyntaxNode Visit(AwaitExpr node) =>
+        ParenthesizedExpression(AwaitExpression((ExpressionSyntax)node.Operand.Accept(this)));
+
+    public CSharpSyntaxNode Visit(NamedArgExpr node) =>
+        (ExpressionSyntax)node.Value.Accept(this);
+
+    public CSharpSyntaxNode Visit(IsPatternExpr node) =>
+        throw new InvalidOperationException("IsPatternExpr must be handled in pattern context");
+
+    // ── Helpers ──────────────────────────────────────────────────────────────
 
     private LocalDeclarationStatementSyntax BuildLocalDecl(
         string name, TypeRef? typeHint, ExpressionSyntax init)
@@ -351,51 +607,14 @@ public class SyntaxTreeGenerator
                         .WithInitializer(EqualsValueClause(init)))));
     }
 
-    private IfStatementSyntax BuildIf(IfStmt ifs)
-    {
-        var s = IfStatement(BuildExpr(ifs.Condition), BuildBlock(ifs.Then));
-        return ifs.Else is null ? s : s.WithElse(ElseClause(BuildBlock(ifs.Else)));
-    }
-
-    private StatementSyntax BuildForIn(ForInStmt fis)
-    {
-        if (fis.Iterable is RangeExpr re)
-        {
-            var op = re.Inclusive
-                ? SyntaxKind.LessThanOrEqualExpression
-                : SyntaxKind.LessThanExpression;
-            return ForStatement(
-                VariableDeclaration(IdentifierName("var"))
-                    .WithVariables(SingletonSeparatedList(
-                        VariableDeclarator(Identifier(fis.VarName))
-                            .WithInitializer(EqualsValueClause(BuildExpr(re.Start))))),
-                default,
-                BinaryExpression(op, IdentifierName(fis.VarName), BuildExpr(re.End)),
-                SingletonSeparatedList<ExpressionSyntax>(
-                    PostfixUnaryExpression(SyntaxKind.PostIncrementExpression,
-                        IdentifierName(fis.VarName))),
-                BuildBlock(fis.Body));
-        }
-
-        return ForEachStatement(
-            IdentifierName("var"),
-            Identifier(fis.VarName),
-            BuildExpr(fis.Iterable),
-            BuildBlock(fis.Body));
-    }
-
-    /// <summary>
-    /// Emits <c>when</c> as a C# statement (if / else-if / else chain).
-    /// Arms are processed in reverse so we can nest ElseClauses.
-    /// </summary>
     private StatementSyntax BuildWhenStmt(WhenExpr we)
     {
-        var subjectExpr = we.Subject is not null ? BuildExpr(we.Subject) : null;
+        var subjectExpr = we.Subject is not null ? (ExpressionSyntax)we.Subject.Accept(this) : null;
         StatementSyntax? result = null;
 
         foreach (var arm in Enumerable.Reverse(we.Arms))
         {
-            var body = (StatementSyntax)Block(ExpressionStatement(BuildExpr(arm.Body)));
+            var body = (StatementSyntax)Block(ExpressionStatement((ExpressionSyntax)arm.Body.Accept(this)));
 
             if (arm.Pattern is null) // else arm
             {
@@ -412,8 +631,8 @@ public class SyntaxTreeGenerator
                 {
                     cond = subjectExpr is not null
                         ? BinaryExpression(SyntaxKind.EqualsExpression,
-                            subjectExpr, BuildExpr(arm.Pattern))
-                        : BuildExpr(arm.Pattern);
+                            subjectExpr, (ExpressionSyntax)arm.Pattern.Accept(this))
+                        : (ExpressionSyntax)arm.Pattern.Accept(this);
                 }
 
                 var ifStmt = IfStatement(cond, body);
@@ -423,254 +642,6 @@ public class SyntaxTreeGenerator
         }
 
         return result ?? Block();
-    }
-
-    // ── expressions ──────────────────────────────────────────────────────────
-
-    private ExpressionSyntax BuildExpr(Expr expr) => expr switch
-    {
-        IntLiteral il    => LiteralExpression(SyntaxKind.NumericLiteralExpression, Literal(il.Value)),
-        DoubleLiteral dl => LiteralExpression(SyntaxKind.NumericLiteralExpression, Literal(dl.Value)),
-        BoolLiteral bl   => bl.Value
-                                ? LiteralExpression(SyntaxKind.TrueLiteralExpression)
-                                : LiteralExpression(SyntaxKind.FalseLiteralExpression),
-        NullLiteral      => LiteralExpression(SyntaxKind.NullLiteralExpression),
-        StringLiteral sl => BuildStringLiteral(sl),
-
-        ThisExpr => _inRecordMethod
-            ? (ExpressionSyntax)ThisExpression()
-            : IdentifierName("self"),
-
-        IdentifierExpr id => IdentifierName(id.Name),
-
-        IndexExpr ie => ElementAccessExpression(BuildExpr(ie.Target))
-            .WithArgumentList(BracketedArgumentList(
-                SingletonSeparatedList(Argument(BuildExpr(ie.Index))))),
-
-        NewArrayExpr na => ArrayCreationExpression(
-            ArrayType(MapTypeSyntax(na.ElementType))
-                .WithRankSpecifiers(SingletonList(
-                    ArrayRankSpecifier(SingletonSeparatedList<ExpressionSyntax>(BuildExpr(na.Size)))))),
-
-        NewObjectExpr no => ObjectCreationExpression(IdentifierName(no.TypeName))
-            .WithArgumentList(ArgumentList(
-                SeparatedList(no.Arguments.Select(a => Argument(BuildExpr(a)))))),
-
-        LambdaExpr le => BuildLambda(le),
-
-        BinaryExpr be => ParenthesizedExpression(
-            BinaryExpression(MapBinaryOp(be.Op), BuildExpr(be.Left), BuildExpr(be.Right))),
-
-        UnaryExpr ue => ParenthesizedExpression(
-            PrefixUnaryExpression(MapUnaryOp(ue.Op), BuildExpr(ue.Operand))),
-
-        MemberAccessExpr ma => MemberAccessExpression(
-            SyntaxKind.SimpleMemberAccessExpression,
-            BuildExpr(ma.Target), IdentifierName(Pascal(ma.Member))),
-
-        SafeCallExpr sc => ConditionalAccessExpression(
-            BuildExpr(sc.Target),
-            MemberBindingExpression(IdentifierName(Pascal(sc.Member)))),
-
-        ElvisExpr ev => ParenthesizedExpression(
-            BinaryExpression(SyntaxKind.CoalesceExpression,
-                BuildExpr(ev.Left), BuildExpr(ev.Right))),
-
-        RangeExpr re      => BuildRangeAsValue(re),
-        StringTemplateExpr ste => BuildStringTemplate(ste),
-        CallExpr ce       => BuildCall(ce),
-        ListLiteralExpr ll => BuildListLiteral(ll),
-        MapLiteralExpr ml  => BuildMapLiteral(ml),
-        WhenExpr we        => BuildWhenExpr(we),
-
-        AwaitExpr ae => ParenthesizedExpression(AwaitExpression(BuildExpr(ae.Operand))),
-
-        NamedArgExpr na => BuildExpr(na.Value), // handled as named arg in BuildCall
-
-        IsPatternExpr => throw new InvalidOperationException(
-            "IsPatternExpr must be handled in pattern context, not as a standalone expression"),
-
-        _ => throw new InvalidOperationException($"Unknown expression: {expr.GetType().Name}")
-    };
-
-    private ExpressionSyntax BuildStringLiteral(StringLiteral sl)
-    {
-        if (sl.IsRaw)
-        {
-            var escaped = sl.Value.Replace("\"", "\"\"");
-            return LiteralExpression(
-                SyntaxKind.StringLiteralExpression,
-                Token(default, SyntaxKind.StringLiteralToken,
-                    $"@\"{escaped}\"", sl.Value, default));
-        }
-        return LiteralExpression(SyntaxKind.StringLiteralExpression, Literal(sl.Value));
-    }
-
-    private ExpressionSyntax BuildLambda(LambdaExpr le)
-    {
-        var body = BuildExpr(le.Body);
-        if (le.Params.Count == 0)
-            return ParenthesizedLambdaExpression().WithBody(body);
-        if (le.Params.Count == 1)
-            return SimpleLambdaExpression(Parameter(Identifier(le.Params[0]))).WithBody(body);
-        return ParenthesizedLambdaExpression()
-            .WithParameterList(ParameterList(SeparatedList(le.Params.Select(p => Parameter(Identifier(p))))))
-            .WithBody(body);
-    }
-
-    private ExpressionSyntax BuildCall(CallExpr ce)
-    {
-        // SafeCallExpr as callee: target?.Method(args)
-        if (ce.Callee is SafeCallExpr sc)
-        {
-            return ConditionalAccessExpression(
-                BuildExpr(sc.Target),
-                InvocationExpression(MemberBindingExpression(IdentifierName(Pascal(sc.Member))))
-                    .WithArgumentList(ArgumentList(
-                        SeparatedList(ce.Arguments.Select(BuildCallArg)))));
-        }
-
-        // Built-in: println → Console.WriteLine
-        if (ce.Callee is IdentifierExpr { Name: "println" })
-        {
-            return InvocationExpression(
-                    MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression,
-                        IdentifierName("Console"), IdentifierName("WriteLine")))
-                .WithArgumentList(ArgumentList(
-                    SeparatedList(ce.Arguments.Select(BuildCallArg))));
-        }
-
-        // Constructor call for known structs: Foo(…) → new Foo(…)
-        if (ce.Callee is IdentifierExpr id && _structs.Contains(id.Name))
-        {
-            return ObjectCreationExpression(IdentifierName(id.Name))
-                .WithArgumentList(ArgumentList(
-                    SeparatedList(ce.Arguments.Select(BuildCallArg))));
-        }
-
-        // Regular invocation
-        return InvocationExpression(BuildExpr(ce.Callee))
-            .WithArgumentList(ArgumentList(
-                SeparatedList(ce.Arguments.Select(BuildCallArg))));
-    }
-
-    private ArgumentSyntax BuildCallArg(Expr expr)
-    {
-        if (expr is NamedArgExpr na)
-            return Argument(BuildExpr(na.Value))
-                .WithNameColon(NameColon(IdentifierName(na.Name)));
-        return Argument(BuildExpr(expr));
-    }
-
-    private ExpressionSyntax BuildStringTemplate(StringTemplateExpr ste)
-    {
-        var startToken = ste.IsRaw
-            ? Token(SyntaxKind.InterpolatedVerbatimStringStartToken)
-            : Token(SyntaxKind.InterpolatedStringStartToken);
-
-        var contents = ste.Parts.Select<StringPart, InterpolatedStringContentSyntax>(part =>
-        {
-            if (part is LiteralPart lp)
-            {
-                var srcText = ste.IsRaw
-                    ? lp.Text.Replace("\"", "\"\"").Replace("{", "{{").Replace("}", "}}")
-                    : lp.Text.Replace("{", "{{").Replace("}", "}}");
-                return InterpolatedStringText(
-                    Token(default, SyntaxKind.InterpolatedStringTextToken,
-                        srcText, lp.Text, default));
-            }
-            if (part is ExprPart ep)
-                return Interpolation(BuildExpr(ep.Expression));
-            throw new InvalidOperationException($"Unknown StringPart: {part.GetType().Name}");
-        });
-
-        return InterpolatedStringExpression(startToken)
-            .WithContents(List(contents))
-            .WithStringEndToken(Token(SyntaxKind.InterpolatedStringEndToken));
-    }
-
-    private ExpressionSyntax BuildRangeAsValue(RangeExpr re)
-    {
-        // Enumerable.Range(start, end - start + 1)  or  Enumerable.Range(start, end - start)
-        ExpressionSyntax count = re.Inclusive
-            ? BinaryExpression(SyntaxKind.AddExpression,
-                BinaryExpression(SyntaxKind.SubtractExpression, BuildExpr(re.End), BuildExpr(re.Start)),
-                LiteralExpression(SyntaxKind.NumericLiteralExpression, Literal(1)))
-            : BinaryExpression(SyntaxKind.SubtractExpression, BuildExpr(re.End), BuildExpr(re.Start));
-
-        return InvocationExpression(
-                MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression,
-                    IdentifierName("Enumerable"), IdentifierName("Range")))
-            .WithArgumentList(ArgumentList(SeparatedList(new[]
-            {
-                Argument(BuildExpr(re.Start)),
-                Argument(count),
-            })));
-    }
-
-    private ExpressionSyntax BuildListLiteral(ListLiteralExpr ll)
-    {
-        if (ll.Elements.Count == 0)
-            return InvocationExpression(
-                    MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression,
-                        IdentifierName("Array"),
-                        GenericName("Empty").WithTypeArgumentList(TypeArgumentList(
-                            SingletonSeparatedList<TypeSyntax>(IdentifierName("object"))))))
-                .WithArgumentList(ArgumentList());
-
-        return ImplicitArrayCreationExpression(
-            InitializerExpression(SyntaxKind.ArrayInitializerExpression,
-                SeparatedList(ll.Elements.Select(BuildExpr))));
-    }
-
-    private ExpressionSyntax BuildMapLiteral(MapLiteralExpr ml)
-    {
-        var keyType = (TypeSyntax)(InferTypeSyntax(ml.Entries.Count > 0 ? ml.Entries[0].Key : null) ?? IdentifierName("object"));
-        var valType = (TypeSyntax)(InferTypeSyntax(ml.Entries.Count > 0 ? ml.Entries[0].Value : null) ?? IdentifierName("object"));
-
-        var dictType = GenericName("Dictionary")
-            .WithTypeArgumentList(TypeArgumentList(SeparatedList<TypeSyntax>(new[] { keyType, valType })));
-
-        if (ml.Entries.Count == 0)
-            return ObjectCreationExpression(dictType).WithArgumentList(ArgumentList());
-
-        var entries = ml.Entries.Select(e =>
-            (ExpressionSyntax)AssignmentExpression(
-                SyntaxKind.SimpleAssignmentExpression,
-                ImplicitElementAccess()
-                    .WithArgumentList(BracketedArgumentList(
-                        SingletonSeparatedList(Argument(BuildExpr(e.Key))))),
-                BuildExpr(e.Value)));
-
-        return ObjectCreationExpression(dictType)
-            .WithArgumentList(ArgumentList())
-            .WithInitializer(InitializerExpression(
-                SyntaxKind.ObjectInitializerExpression,
-                SeparatedList(entries)));
-    }
-
-    private ExpressionSyntax BuildWhenExpr(WhenExpr we)
-    {
-        if (we.Subject is not null)
-        {
-            var arms = we.Arms.Select(arm =>
-            {
-                PatternSyntax pattern = arm.Pattern switch
-                {
-                    null                => DiscardPattern(),
-                    IsPatternExpr ip    => BuildSwitchPattern(ip),
-                    _                   => ConstantPattern(BuildExpr(arm.Pattern))
-                };
-                return SwitchExpressionArm(pattern, BuildExpr(arm.Body));
-            });
-
-            return ParenthesizedExpression(
-                SwitchExpression(BuildExpr(we.Subject))
-                    .WithArms(SeparatedList(arms)));
-        }
-
-        // Subject-less → ternary chain
-        return BuildWhenTernary(we.Arms, 0);
     }
 
     private ExpressionSyntax BuildWhenTernary(List<WhenArm> arms, int i)
@@ -684,17 +655,13 @@ public class SyntaxTreeGenerator
 
         var arm = arms[i];
         return arm.Pattern is null
-            ? BuildExpr(arm.Body)
-            : ConditionalExpression(BuildExpr(arm.Pattern),
-                BuildExpr(arm.Body),
+            ? (ExpressionSyntax)arm.Body.Accept(this)
+            : ConditionalExpression((ExpressionSyntax)arm.Pattern.Accept(this),
+                (ExpressionSyntax)arm.Body.Accept(this),
                 BuildWhenTernary(arms, i + 1));
     }
 
-    /// <summary>
-    /// Like <see cref="BuildExpr"/> but uses type context so collection literals
-    /// get the correct concrete or interface type (MutableList vs IReadOnlyList, etc.).
-    /// </summary>
-    private ExpressionSyntax BuildExprWithHint(Expr expr, TypeRef? hint)
+    private CSharpSyntaxNode BuildExprWithHint(Expr expr, TypeRef? hint)
     {
         if (hint is not null)
         {
@@ -732,7 +699,7 @@ public class SyntaxTreeGenerator
                         .WithArgumentList(ArgumentList())
                         .WithInitializer(InitializerExpression(
                             SyntaxKind.CollectionInitializerExpression,
-                            SeparatedList(ll.Elements.Select(BuildExpr))));
+                            SeparatedList(ll.Elements.Select(e => (ExpressionSyntax)e.Accept(this)))));
                 }
             }
 
@@ -741,26 +708,19 @@ public class SyntaxTreeGenerator
                     .WithArgumentList(ArgumentList());
         }
 
-        return BuildExpr(expr);
+        return expr.Accept(this);
     }
 
-    // ── pattern helpers ───────────────────────────────────────────────────────
-
-    /// <summary>Pattern for a switch expression arm: <c>Circle c</c> or <c>Circle</c>.</summary>
     private PatternSyntax BuildSwitchPattern(IsPatternExpr ip) =>
         ip.Binding is not null
             ? DeclarationPattern(IdentifierName(ip.TypeName),
                 SingleVariableDesignation(Identifier(ip.Binding)))
             : TypePattern(IdentifierName(ip.TypeName));
 
-    /// <summary>Pattern for an <c>is</c> check inside a <c>when</c> condition: <c>s is Circle c</c>.</summary>
     private PatternSyntax BuildIsPattern(IsPatternExpr ip) => BuildSwitchPattern(ip);
-
-    // ── type mapping ──────────────────────────────────────────────────────────
 
     private TypeSyntax MapTypeSyntax(TypeRef t)
     {
-        // Array types: Bool[] → bool[]
         if (t.Name.EndsWith("[]"))
         {
             var elem    = MapTypeSyntax(new TypeRef(t.Name[..^2], false));
@@ -770,7 +730,6 @@ public class SyntaxTreeGenerator
             return t.Nullable ? NullableType(arrType) : (TypeSyntax)arrType;
         }
 
-        // Generic types: List<Int> → IReadOnlyList<int>
         var angleIdx = t.Name.IndexOf('<');
         if (angleIdx >= 0)
         {
@@ -808,10 +767,6 @@ public class SyntaxTreeGenerator
         return t.Nullable ? NullableType(baseTy) : baseTy;
     }
 
-    /// <summary>
-    /// Maps to the concrete (constructible) C# type used in <c>new T()</c>.
-    /// IReadOnlyList/IReadOnlyDictionary are interfaces; use List/Dictionary for construction.
-    /// </summary>
     private TypeSyntax MapTypeForNewSyntax(TypeRef t)
     {
         var angleIdx = t.Name.IndexOf('<');
@@ -831,8 +786,6 @@ public class SyntaxTreeGenerator
         }
         return MapTypeSyntax(t);
     }
-
-    // ── async helpers ─────────────────────────────────────────────────────────
 
     private AsyncReturnKind EffectiveAsyncReturn(AsyncReturnKind perFunction) =>
         perFunction == AsyncReturnKind.ValueTask || _globalAsyncReturn == AsyncReturnKind.ValueTask
@@ -855,8 +808,6 @@ public class SyntaxTreeGenerator
                 ? PredefinedType(Token(SyntaxKind.VoidKeyword))
                 : MapTypeSyntax(returnType);
 
-    // ── state save / restore helpers ─────────────────────────────────────────
-
     private (bool, AsyncReturnKind, HashSet<string>) SaveAsyncState() =>
         (_inAsyncFunction, _currentAsyncReturn, _currentTypeParams);
 
@@ -867,15 +818,35 @@ public class SyntaxTreeGenerator
         _currentTypeParams  = prevTypeParams;
     }
 
-    // ── misc helpers ──────────────────────────────────────────────────────────
-
     private ParameterSyntax BuildParam(Parameter p, bool pascalName = false)
     {
         var name  = pascalName ? Pascal(p.Name) : p.Name;
         var param = Parameter(Identifier(name)).WithType(MapTypeSyntax(p.Type));
         if (p.Default is not null)
-            param = param.WithDefault(EqualsValueClause(BuildExpr(p.Default)));
+            param = param.WithDefault(EqualsValueClause((ExpressionSyntax)p.Default.Accept(this)));
         return param;
+    }
+
+    private ParameterListSyntax BuildRecordParams(List<Parameter> props) =>
+        ParameterList(props.Count > 0
+            ? SeparatedList(props.Select(p => BuildParam(p, pascalName: true)))
+            : default);
+
+    private TypeSyntax BuildImplTypeSyntax(ImplBlock b)
+    {
+        if (b.InterfaceTypeArgs.Count > 0)
+            return GenericName("I" + b.InterfaceName)
+                .WithTypeArgumentList(TypeArgumentList(SeparatedList(
+                    b.InterfaceTypeArgs.Select(a => MapTypeSyntax(new TypeRef(a, false))))));
+        return IdentifierName("I" + b.InterfaceName);
+    }
+
+    private ArgumentSyntax BuildCallArg(Expr expr)
+    {
+        if (expr is NamedArgExpr na)
+            return Argument((ExpressionSyntax)na.Value.Accept(this))
+                .WithNameColon(NameColon(IdentifierName(na.Name)));
+        return Argument((ExpressionSyntax)expr.Accept(this));
     }
 
     private static SyntaxKind MapBinaryOp(string op) => op switch

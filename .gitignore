@@ -361,3 +361,8 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+
+# VSIX build artifacts
+*.vsix
+extension.vsixmanifest
+merged.source.extension.vsixmanifest

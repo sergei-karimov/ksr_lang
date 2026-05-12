@@ -1,6 +1,7 @@
 using System.Text.Json;
 using KSR.CodeGen;
 using KSR.Parser;
+using KSR.Semantic;
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  KSR — Kotlin-Style Runtime language
@@ -71,10 +72,19 @@ static void CheckFile(string path)
 
     try
     {
-        var source = File.ReadAllText(path);
-        var tokens = new KSR.Lexer.Lexer(source).Tokenize();
-        new KSR.Parser.Parser(tokens).Parse();
-        Console.WriteLine("[]");
+        var fullPath = Path.GetFullPath(path);
+        var source   = File.ReadAllText(path);
+        var tokens   = new KSR.Lexer.Lexer(source).Tokenize();
+        var parser   = new KSR.Parser.Parser(tokens, fullPath);
+        var program  = parser.Parse();
+
+        var diagnostics = parser.Errors.Select(ParseDiagnostic).ToList();
+
+        var analyzer = new SemanticAnalyzer();
+        analyzer.Analyze(program, fullPath);
+        diagnostics.AddRange(analyzer.Errors.Select(ParseDiagnostic));
+
+        Console.WriteLine(JsonSerializer.Serialize(diagnostics));
     }
     catch (KSR.Lexer.KsrLexException ex)
     {
@@ -107,10 +117,20 @@ static void RunSingleFile(
     // Ensure KSR.StdLib assembly is loaded into the AppDomain so that Roslyn
     // (strategy 3 in ResolveReferences) can find it when compiling ksr.io / ksr.text.
     _ = typeof(KSR.Io.IO).Assembly;
+    // Same for the creative-coding MVP libraries used by examples/camera_demo.ksr.
+    _ = typeof(KSR.Creative.CreativeApp).Assembly;
+    _ = typeof(KSR.Vision.Camera).Assembly;
 
     var source  = File.ReadAllText(path);
     var tokens  = new KSR.Lexer.Lexer(source).Tokenize();
-    var program = new Parser(tokens, Path.GetFullPath(path)).Parse();
+    var fullPath = Path.GetFullPath(path);
+    var program = new Parser(tokens, fullPath, throwOnError: true).Parse();
+
+    var analyzer = new SemanticAnalyzer();
+    analyzer.Analyze(program, fullPath);
+    if (analyzer.Errors.Count > 0)
+        throw new KsrCompileException(
+            "Semantic analysis failed:\n" + string.Join(Environment.NewLine, analyzer.Errors));
 
     if (debugMode)
     {
@@ -130,6 +150,18 @@ static void Fail(string msg)
 {
     Console.Error.WriteLine($"error: {msg}");
     Environment.Exit(1);
+}
+
+static DiagnosticDto ParseDiagnostic(string err)
+{
+    var match = System.Text.RegularExpressions.Regex.Match(err, @"\((\d+),(\d+)\): error: (.*)");
+    if (!match.Success)
+        return new DiagnosticDto(err, 1, 1);
+
+    return new DiagnosticDto(
+        match.Groups[3].Value,
+        int.Parse(match.Groups[1].Value),
+        int.Parse(match.Groups[2].Value));
 }
 
 static void PrintHelp()
@@ -173,3 +205,8 @@ static void PrintHelp()
           Append ? for nullable:  String?   User?
         """);
 }
+
+public sealed record DiagnosticDto(
+    [property: System.Text.Json.Serialization.JsonPropertyName("message")] string Message,
+    [property: System.Text.Json.Serialization.JsonPropertyName("line")] int Line,
+    [property: System.Text.Json.Serialization.JsonPropertyName("col")] int Col);

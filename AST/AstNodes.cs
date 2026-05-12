@@ -4,7 +4,11 @@ namespace KSR.AST;
 //  Base types
 // ═══════════════════════════════════════════════════════════════════════════════
 
-public abstract record AstNode;
+public abstract record AstNode
+{
+    public abstract T Accept<T>(IAstVisitor<T> visitor);
+}
+
 public abstract record Stmt : AstNode
 {
     /// <summary>1-based line number in the original .ksr source file.</summary>
@@ -12,7 +16,8 @@ public abstract record Stmt : AstNode
     /// <summary>Absolute path of the .ksr source file this statement came from.</summary>
     public string SourceFile { get; init; } = "";
 }
-public abstract record Expr  : AstNode;
+
+public abstract record Expr : AstNode;
 
 // ═══════════════════════════════════════════════════════════════════════════════
 //  Helpers (not nodes — just data bags used inside other nodes)
@@ -36,7 +41,10 @@ public record Parameter(string Name, TypeRef Type, Expr? Default = null);
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /// <summary>Root of a KSR compilation unit.</summary>
-public record ProgramNode(List<AstNode> Declarations) : AstNode;
+public record ProgramNode(List<AstNode> Declarations) : AstNode
+{
+    public override T Accept<T>(IAstVisitor<T> visitor) => visitor.Visit(this);
+}
 
 /// <summary>A method signature inside an interface body.</summary>
 public record InterfaceMethod(
@@ -54,7 +62,10 @@ public record InterfaceDecl(
     string                  Name,
     List<string>            TypeParams,
     List<WhereConstraint>   Constraints,
-    List<InterfaceMethod>   Methods) : AstNode;
+    List<InterfaceMethod>   Methods) : AstNode
+{
+    public override T Accept<T>(IAstVisitor<T> visitor) => visitor.Visit(this);
+}
 
 /// <summary>
 /// implement Shape for Circle { fun area(): Double { … } }
@@ -64,19 +75,31 @@ public record ImplBlock(
     string              InterfaceName,
     List<string>        InterfaceTypeArgs,
     string              TypeName,
-    List<FunctionDecl>  Methods) : AstNode;
+    List<FunctionDecl>  Methods) : AstNode
+{
+    public override T Accept<T>(IAstVisitor<T> visitor) => visitor.Visit(this);
+}
 
 /// <summary>use Raylib_cs  →  using Raylib_cs;</summary>
-public record UseDecl(string Namespace) : AstNode;
+public record UseDecl(string Namespace) : AstNode
+{
+    public override T Accept<T>(IAstVisitor<T> visitor) => visitor.Visit(this);
+}
 
 /// <summary>struct Foo(x: Int, y: String)</summary>
-public record StructDecl(string Name, List<Parameter> Properties) : AstNode;
+public record StructDecl(string Name, List<Parameter> Properties) : AstNode
+{
+    public override T Accept<T>(IAstVisitor<T> visitor) => visitor.Visit(this);
+}
 
 /// <summary>
 /// sealed Shape { struct Circle(r: Double)  struct Rect(w: Double, h: Double) }
 /// Compiles to: abstract record Shape; record Circle(double R) : Shape; …
 /// </summary>
-public record SealedDecl(string Name, List<StructDecl> Variants) : AstNode;
+public record SealedDecl(string Name, List<StructDecl> Variants) : AstNode
+{
+    public override T Accept<T>(IAstVisitor<T> visitor) => visitor.Visit(this);
+}
 
 /// <summary>fun foo(a: Int): String { … }   or   async fun foo(): String { … }</summary>
 public record FunctionDecl(
@@ -86,7 +109,10 @@ public record FunctionDecl(
     TypeRef?        ReturnType,
     Block           Body,
     bool            IsAsync     = false,
-    AsyncReturnKind AsyncReturn = AsyncReturnKind.Task) : AstNode;
+    AsyncReturnKind AsyncReturn = AsyncReturnKind.Task) : AstNode
+{
+    public override T Accept<T>(IAstVisitor<T> visitor) => visitor.Visit(this);
+}
 
 /// <summary>
 /// Extension function: fun Type.method(params): RetType { … }
@@ -101,118 +127,220 @@ public record ExtFunctionDecl(
     TypeRef?        ReturnType,
     Block           Body,
     bool            IsAsync     = false,
-    AsyncReturnKind AsyncReturn = AsyncReturnKind.Task) : AstNode;
+    AsyncReturnKind AsyncReturn = AsyncReturnKind.Task) : AstNode
+{
+    public override T Accept<T>(IAstVisitor<T> visitor) => visitor.Visit(this);
+}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 //  Statements
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /// <summary>{ stmt* }</summary>
-public record Block(List<Stmt> Statements) : AstNode;
+public record Block(List<Stmt> Statements) : AstNode
+{
+    public override T Accept<T>(IAstVisitor<T> visitor) => visitor.Visit(this);
+}
 
 /// <summary>val x: Type = expr  (immutable, type optional)</summary>
-public record ValDecl(string Name, TypeRef? Type, Expr Value) : Stmt;
+public record ValDecl(string Name, TypeRef? Type, Expr Value) : Stmt
+{
+    public override T Accept<T>(IAstVisitor<T> visitor) => visitor.Visit(this);
+}
 
 /// <summary>var x: Type = expr  (mutable, type optional)</summary>
-public record VarDecl(string Name, TypeRef? Type, Expr Value) : Stmt;
+public record VarDecl(string Name, TypeRef? Type, Expr Value) : Stmt
+{
+    public override T Accept<T>(IAstVisitor<T> visitor) => visitor.Visit(this);
+}
 
 /// <summary>x = expr  (reassignment — only valid for var bindings)</summary>
-public record AssignStmt(string Name, Expr Value) : Stmt;
+public record AssignStmt(string Name, Expr Value) : Stmt
+{
+    public override T Accept<T>(IAstVisitor<T> visitor) => visitor.Visit(this);
+}
 
 /// <summary>x += expr  |  x -= expr</summary>
-public record CompoundAssignStmt(string Name, string Op, Expr Value) : Stmt;
+public record CompoundAssignStmt(string Name, string Op, Expr Value) : Stmt
+{
+    public override T Accept<T>(IAstVisitor<T> visitor) => visitor.Visit(this);
+}
 
 /// <summary>name[index] = expr  (indexed assignment)</summary>
-public record IndexAssignStmt(string Name, Expr Index, Expr Value) : Stmt;
+public record IndexAssignStmt(string Name, Expr Index, Expr Value) : Stmt
+{
+    public override T Accept<T>(IAstVisitor<T> visitor) => visitor.Visit(this);
+}
 
 /// <summary>return expr?</summary>
-public record ReturnStmt(Expr? Value) : Stmt;
+public record ReturnStmt(Expr? Value) : Stmt
+{
+    public override T Accept<T>(IAstVisitor<T> visitor) => visitor.Visit(this);
+}
 
 /// <summary>if (cond) { … } else { … }</summary>
-public record IfStmt(Expr Condition, Block Then, Block? Else) : Stmt;
+public record IfStmt(Expr Condition, Block Then, Block? Else) : Stmt
+{
+    public override T Accept<T>(IAstVisitor<T> visitor) => visitor.Visit(this);
+}
 
 /// <summary>while (cond) { … }</summary>
-public record WhileStmt(Expr Condition, Block Body) : Stmt;
+public record WhileStmt(Expr Condition, Block Body) : Stmt
+{
+    public override T Accept<T>(IAstVisitor<T> visitor) => visitor.Visit(this);
+}
 
 /// <summary>for (x in iterable) { … }  — iterable may be a RangeExpr or a collection</summary>
-public record ForInStmt(string VarName, Expr Iterable, Block Body) : Stmt;
+public record ForInStmt(string VarName, Expr Iterable, Block Body) : Stmt
+{
+    public override T Accept<T>(IAstVisitor<T> visitor) => visitor.Visit(this);
+}
 
 /// <summary>Any expression used as a statement.</summary>
-public record ExprStmt(Expr Expression) : Stmt;
+public record ExprStmt(Expr Expression) : Stmt
+{
+    public override T Accept<T>(IAstVisitor<T> visitor) => visitor.Visit(this);
+}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 //  Expressions
 // ═══════════════════════════════════════════════════════════════════════════════
 
-public record IntLiteral(int Value)                         : Expr;
-public record DoubleLiteral(double Value)                   : Expr;
-public record StringLiteral(string Value, bool IsRaw = false) : Expr;
-public record BoolLiteral(bool Value)                       : Expr;
-public record NullLiteral()                                 : Expr;
+public record IntLiteral(int Value) : Expr
+{
+    public override T Accept<T>(IAstVisitor<T> visitor) => visitor.Visit(this);
+}
+
+public record DoubleLiteral(double Value) : Expr
+{
+    public override T Accept<T>(IAstVisitor<T> visitor) => visitor.Visit(this);
+}
+
+public record StringLiteral(string Value, bool IsRaw = false) : Expr
+{
+    public override T Accept<T>(IAstVisitor<T> visitor) => visitor.Visit(this);
+}
+
+public record BoolLiteral(bool Value) : Expr
+{
+    public override T Accept<T>(IAstVisitor<T> visitor) => visitor.Visit(this);
+}
+
+public record NullLiteral() : Expr
+{
+    public override T Accept<T>(IAstVisitor<T> visitor) => visitor.Visit(this);
+}
 
 /// <summary>
 /// A string template: "Hello, ${name}! You are ${age} years old."
 /// Holds an ordered list of literal text chunks and embedded expressions.
 /// IsRaw = true when the source used triple-quote syntax.
 /// </summary>
-public record StringTemplateExpr(List<StringPart> Parts, bool IsRaw = false) : Expr;
+public record StringTemplateExpr(List<StringPart> Parts, bool IsRaw = false) : Expr
+{
+    public override T Accept<T>(IAstVisitor<T> visitor) => visitor.Visit(this);
+}
 
 public abstract record StringPart;
 public record LiteralPart(string Text)  : StringPart;
 public record ExprPart(Expr Expression) : StringPart;
 
 /// <summary>The receiver inside an extension function body.</summary>
-public record ThisExpr() : Expr;
+public record ThisExpr() : Expr
+{
+    public override T Accept<T>(IAstVisitor<T> visitor) => visitor.Visit(this);
+}
 
 /// <summary>A bare name: foo, User, counter …</summary>
-public record IdentifierExpr(string Name) : Expr;
+public record IdentifierExpr(string Name) : Expr
+{
+    public override T Accept<T>(IAstVisitor<T> visitor) => visitor.Visit(this);
+}
 
 /// <summary>callee(arg1, arg2, …)</summary>
-public record CallExpr(Expr Callee, List<Expr> Arguments) : Expr;
+public record CallExpr(Expr Callee, List<Expr> Arguments) : Expr
+{
+    public override T Accept<T>(IAstVisitor<T> visitor) => visitor.Visit(this);
+}
 
 /// <summary>target.member</summary>
-public record MemberAccessExpr(Expr Target, string Member) : Expr;
+public record MemberAccessExpr(Expr Target, string Member) : Expr
+{
+    public override T Accept<T>(IAstVisitor<T> visitor) => visitor.Visit(this);
+}
 
 /// <summary>target?.member</summary>
-public record SafeCallExpr(Expr Target, string Member) : Expr;
+public record SafeCallExpr(Expr Target, string Member) : Expr
+{
+    public override T Accept<T>(IAstVisitor<T> visitor) => visitor.Visit(this);
+}
 
 /// <summary>left ?: right</summary>
-public record ElvisExpr(Expr Left, Expr Right) : Expr;
+public record ElvisExpr(Expr Left, Expr Right) : Expr
+{
+    public override T Accept<T>(IAstVisitor<T> visitor) => visitor.Visit(this);
+}
 
 /// <summary>Binary operation: +  -  *  /  %  ==  !=  &lt;  &gt;  &lt;=  &gt;=  &amp;&amp;  ||</summary>
-public record BinaryExpr(Expr Left, string Op, Expr Right) : Expr;
+public record BinaryExpr(Expr Left, string Op, Expr Right) : Expr
+{
+    public override T Accept<T>(IAstVisitor<T> visitor) => visitor.Visit(this);
+}
 
 /// <summary>target[index]</summary>
-public record IndexExpr(Expr Target, Expr Index) : Expr;
+public record IndexExpr(Expr Target, Expr Index) : Expr
+{
+    public override T Accept<T>(IAstVisitor<T> visitor) => visitor.Visit(this);
+}
 
 /// <summary>new Bool[size]  →  new bool[size]</summary>
-public record NewArrayExpr(TypeRef ElementType, Expr Size) : Expr;
+public record NewArrayExpr(TypeRef ElementType, Expr Size) : Expr
+{
+    public override T Accept<T>(IAstVisitor<T> visitor) => visitor.Visit(this);
+}
 
 /// <summary>
 /// Lambda literal.
 /// <list type="bullet">
-///   <item>{ it }        → (it =&gt; it)           — implicit "it" parameter</item>
-///   <item>{ x -&gt; expr } → (x =&gt; expr)          — single named parameter</item>
-///   <item>{ x, y -&gt; e } → ((x, y) =&gt; e)        — multiple named parameters</item>
-///   <item>{ -&gt; expr }   → (() =&gt; expr)          — zero parameters</item>
+///   <item>{ it }              → (it =&gt; it)          — implicit "it" parameter</item>
+///   <item>{ x -&gt; expr }       → (x =&gt; expr)         — expression body</item>
+///   <item>{ x -&gt; stmt* }      → (x =&gt; { stmt* })    — block body</item>
+///   <item>{ -&gt; expr }         → (() =&gt; expr)         — zero parameters</item>
 /// </list>
 /// </summary>
-public record LambdaExpr(List<string> Params, Expr Body) : Expr;
+public record LambdaExpr(List<string> Params, Expr? Body, Block? BlockBody = null) : Expr
+{
+    public bool IsBlockBody => BlockBody is not null;
+
+    public override T Accept<T>(IAstVisitor<T> visitor) => visitor.Visit(this);
+}
 
 /// <summary>new Random()  →  new Random()   (for non-data-class types)</summary>
-public record NewObjectExpr(string TypeName, List<Expr> Arguments) : Expr;
+public record NewObjectExpr(string TypeName, List<Expr> Arguments) : Expr
+{
+    public override T Accept<T>(IAstVisitor<T> visitor) => visitor.Visit(this);
+}
 
 /// <summary>Unary operation: !  -</summary>
-public record UnaryExpr(string Op, Expr Operand) : Expr;
+public record UnaryExpr(string Op, Expr Operand) : Expr
+{
+    public override T Accept<T>(IAstVisitor<T> visitor) => visitor.Visit(this);
+}
 
 /// <summary>
 /// start..end  (inclusive)  or  start..&lt;end  (exclusive).
 /// Used as the iterable of a ForInStmt; also valid as a standalone value.
 /// </summary>
-public record RangeExpr(Expr Start, Expr End, bool Inclusive) : Expr;
+public record RangeExpr(Expr Start, Expr End, bool Inclusive) : Expr
+{
+    public override T Accept<T>(IAstVisitor<T> visitor) => visitor.Visit(this);
+}
 
 /// <summary>List literal: [a, b, c]  →  new List&lt;T&gt; { a, b, c }</summary>
-public record ListLiteralExpr(List<Expr> Elements) : Expr;
+public record ListLiteralExpr(List<Expr> Elements) : Expr
+{
+    public override T Accept<T>(IAstVisitor<T> visitor) => visitor.Visit(this);
+}
 
 /// <summary>
 /// A single arm of a when expression: pattern -&gt; body
@@ -224,19 +352,34 @@ public record WhenArm(Expr? Pattern, Expr Body);
 /// when (subject) { p1 -&gt; e1  p2 -&gt; e2  else -&gt; eN }
 /// when           { cond1 -&gt; e1  else -&gt; eN }   (subject-less / guard form)
 /// </summary>
-public record WhenExpr(Expr? Subject, List<WhenArm> Arms) : Expr;
+public record WhenExpr(Expr? Subject, List<WhenArm> Arms) : Expr
+{
+    public override T Accept<T>(IAstVisitor<T> visitor) => visitor.Visit(this);
+}
 
 /// <summary>Map literal: ["k1": v1, "k2": v2]  →  new Dictionary&lt;K, V&gt; { ["k1"] = v1, … }</summary>
-public record MapLiteralExpr(List<(Expr Key, Expr Value)> Entries) : Expr;
+public record MapLiteralExpr(List<(Expr Key, Expr Value)> Entries) : Expr
+{
+    public override T Accept<T>(IAstVisitor<T> visitor) => visitor.Visit(this);
+}
 
 /// <summary>await expr — valid only inside an async function body.</summary>
-public record AwaitExpr(Expr Operand) : Expr;
+public record AwaitExpr(Expr Operand) : Expr
+{
+    public override T Accept<T>(IAstVisitor<T> visitor) => visitor.Visit(this);
+}
 
 /// <summary>name = value at a call site — maps to C# named argument syntax name: value.</summary>
-public record NamedArgExpr(string Name, Expr Value) : Expr;
+public record NamedArgExpr(string Name, Expr Value) : Expr
+{
+    public override T Accept<T>(IAstVisitor<T> visitor) => visitor.Visit(this);
+}
 
 /// <summary>
 /// is Circle(c) pattern inside a when arm.
 /// Binding is the optional variable name that receives the cast value.
 /// </summary>
-public record IsPatternExpr(string TypeName, string? Binding) : Expr;
+public record IsPatternExpr(string TypeName, string? Binding) : Expr
+{
+    public override T Accept<T>(IAstVisitor<T> visitor) => visitor.Visit(this);
+}

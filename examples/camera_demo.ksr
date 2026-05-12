@@ -1,0 +1,36 @@
+// KSR Camera Demo — KSR.Creative + KSR.Vision MVP.
+
+use KSR.Creative
+use KSR.Vision
+
+struct AppState(camera: Camera)
+
+fun main() {
+    val app = new CreativeApp(1280, 720, "KSR Camera Demo")
+
+    val state = app.init {
+        return AppState(Camera.open(0))
+    }
+
+    app.draw {
+        val frame = state.camera.read()
+        val gray = frame.grayscale()
+        val blurred = gray.blur(5)
+        val processed = blurred.edges()
+
+        draw.clear(Color.black)
+        draw.image(processed, 0, 0)
+        draw.fps(10, 10)
+
+        processed.dispose()
+        blurred.dispose()
+        gray.dispose()
+        frame.dispose()
+    }
+
+    app.cleanup {
+        state.camera.close()
+    }
+
+    app.run()
+}

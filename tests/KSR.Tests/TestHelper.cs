@@ -11,7 +11,7 @@ internal static class KsrHelper
         new Lexer.Lexer(src).Tokenize();
 
     public static ProgramNode Parse(string src, string file = "") =>
-        new Parser.Parser(new Lexer.Lexer(src).Tokenize(), file).Parse();
+        new Parser.Parser(new Lexer.Lexer(src).Tokenize(), file, throwOnError: true).Parse();
 
     public static string Generate(string src, string file = "") =>
         new CodeGenerator().Generate(Parse(src, file));

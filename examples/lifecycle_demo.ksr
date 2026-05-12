@@ -1,0 +1,30 @@
+// KSR Creative lifecycle demo — init once, draw every frame, cleanup once.
+
+use KSR.Creative
+
+struct CounterState(ticks: Int[])
+
+fun main() {
+    val app = new CreativeApp(800, 450, "KSR Lifecycle Demo")
+
+    val state = app.init {
+        val ticks = new Int[1]
+        ticks[0] = 0
+        return CounterState(ticks)
+    }
+
+    app.draw {
+        val ticks = state.ticks
+        ticks[0] = ticks[0] + 1
+
+        draw.clear(Color.black)
+        draw.fps(10, 10)
+    }
+
+    app.cleanup {
+        val ticks = state.ticks
+        println("Frames drawn: ${ticks[0]}")
+    }
+
+    app.run()
+}

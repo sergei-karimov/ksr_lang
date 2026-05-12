@@ -43,8 +43,11 @@
     <Compile Remove="Parser\**\*.cs" />
     <Compile Remove="AST\**\*.cs" />
     <Compile Remove="CodeGen\CodeGenerator.cs" />
+    <Compile Remove="CodeGen\NameUtils.cs" />
     <!-- sdk/ and all obj/ sub-dirs are built separately; exclude them entirely -->
     <Compile Remove="sdk\**\*.cs" />
+    <Compile Remove="vs-extension\**\*.cs" />
+    <Compile Remove="vscode-extension\**\*.cs" />
     <Compile Remove="obj\**\*.cs" />
     <Compile Remove="tests\**\*.cs" />
   </ItemGroup>
@@ -52,6 +55,7 @@
   <!-- ── Project and package references ────────────────────────────────── -->
   <ItemGroup>
     <ProjectReference Include="KSR.Core.csproj" />
+    <ProjectReference Include="sdk\KSR.Creative\KSR.Creative.csproj" />
     <ProjectReference Include="sdk\KSR.StdLib\KSR.StdLib.csproj" />
   </ItemGroup>
 

@@ -501,6 +501,10 @@ lookup["key"] = 42
 ```kotlin
 val alive = cells.count { it }              // implicit 'it'
 val names = users.select { u -> u.name }
+app.run {
+    val frame = camera.read()
+    draw.image(frame, 0, 0)
+}
 ```
 
 ### Namespace Imports
@@ -768,6 +772,61 @@ fun main() {
 }
 ```
 
+### Creative camera MVP
+
+KSR also includes a minimal creative-coding runtime for Windows:
+
+- `KSR.Creative` uses `Raylib-cs` for a window, draw loop, FPS display, and texture output.
+- `KSR.Vision` uses `OpenCvSharp4` and `OpenCvSharp4.runtime.win` for webcam capture and frame processing.
+- Supported frame operations in the MVP: `grayscale()`, `blur(radius)`, and `edges()`.
+- `app.init { ... }` creates reusable resources once, `app.draw { ... }` runs every frame, `app.cleanup { ... }` releases resources once, and `app.run()` starts the loop.
+- The lifecycle is generic: use it for cameras, textures, models, audio inputs, sockets, sensors, render targets, ML models, or any other expensive/disposable state. In the MVP, `draw` and `cleanup` can each be registered once; repeated registration throws an exception.
+
+```kotlin
+use KSR.Creative
+use KSR.Vision
+
+struct AppState(camera: Camera)
+
+fun main() {
+    val app = new CreativeApp(1280, 720, "KSR Camera Demo")
+
+    val state = app.init {
+        return AppState(Camera.open(0))
+    }
+
+    app.draw {
+        val frame = state.camera.read()
+        val gray = frame.grayscale()
+        val blurred = gray.blur(5)
+        val processed = blurred.edges()
+
+        draw.clear(Color.black)
+        draw.image(processed, 0, 0)
+        draw.fps(10, 10)
+
+        processed.dispose()
+        blurred.dispose()
+        gray.dispose()
+        frame.dispose()
+    }
+
+    app.cleanup {
+        state.camera.close()
+    }
+
+    app.run()
+}
+```
+
+Run the included example:
+
+```bash
+ksr examples/camera_demo.ksr
+```
+
+The MVP ships only the Windows OpenCV runtime package. Camera access can still fail if no camera is present, another app owns it, or Windows privacy permissions block the process.
+
 ### Build and publish
 
 ```bash
@@ -820,6 +879,8 @@ The `examples/` directory contains runnable `.ksr` files:
 | `examples/text_processing.ksr` | Text parsing + collection pipelines using `ksr.text` and `ksr.collections` together |
 | `examples/raylib_demo.ksr` | Raylib primitives demo (circles, rectangles, lines) |
 | `examples/game_of_life.ksr` | Conway's Game of Life at 1920×1080 using Raylib |
+| `examples/camera_demo.ksr` | Creative camera MVP using `KSR.Creative` and `KSR.Vision` |
+| `examples/lifecycle_demo.ksr` | Generic Creative lifecycle demo with reusable per-app state |
 
 Run any example:
 
@@ -886,16 +947,79 @@ Press **F5** to build and launch the debugger. Breakpoints set in `.ksr` files w
 
 ---
 
+## Visual Studio Extension
+
+The `KSR.VisualStudio` VSIX extension adds first-class KSR support to **Visual Studio 2022 and later** (including Visual Studio 2026).
+
+### Features
+
+- **Syntax highlighting** — KSR-aware `.ksr` content type
+- **Real-time diagnostics** — parse errors shown inline as you type
+- **IntelliSense** — completions and hover documentation powered by the KSR Language Server
+- **Project templates** — _KSR Console App_ appears under **File → New Project**
+- **Item templates** — _KSR Source File_ appears under **Add → New Item**
+- **Breakpoint debugging** — F5 hits breakpoints in `.ksr` files (source-mapped via `#line` PDB entries; requires project mode)
+
+### Install
+
+1. Build or download `KSR.VisualStudio.vsix` (found in `vs-extension/KSR.VisualStudio/`).
+2. Close Visual Studio.
+3. Double-click `KSR.VisualStudio.vsix` and follow the installer prompts.
+4. Reopen Visual Studio — the extension is active immediately.
+
+Alternatively, install from the command line:
+
+```powershell
+& "C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\VSIXInstaller.exe" `
+    KSR.VisualStudio.vsix
+```
+
+Adjust the path for your VS edition (Professional / Enterprise) and year (2022, 2026, …).
+
+### Requirements
+
+- Visual Studio 2022 or later (Community, Professional, or Enterprise)
+- `ksr` installed and available on your `PATH`
+
+  The extension resolves the executable in this order:
+  1. The path configured under **Tools → Options → KSR → General → KSR Executable Path**
+  2. `%USERPROFILE%\.ksr\ksr.exe`
+  3. `ksr` via `PATH`
+
+### Troubleshooting
+
+| Symptom | Fix |
+|---|---|
+| _"KSR executable not found"_ warning on startup | Install KSR or set the executable path at **Tools → Options → KSR → General** |
+| No IntelliSense in `.ksr` files | Verify `ksr lsp` runs without error in a terminal |
+| Extension not listed after install | Ensure VS was closed before running the VSIX installer |
+
+---
+
 ## How It Works
 
-KSR is a **source-to-source compiler**: `.ksr` → C# → .NET assembly.
+KSR is a **source-to-source compiler**: `.ksr` → Roslyn SyntaxTree → .NET assembly.
+
+**Single-file mode** (`ksr file.ksr`):
 
 ```
 .ksr source
-    └── Lexer         → tokens
-    └── Parser        → AST  (with source positions)
-    └── CodeGenerator → C# source  (with #line directives)
-    └── Roslyn        → .NET assembly
+    └── Lexer               → tokens
+    └── Parser              → AST  (with source positions)
+    └── SyntaxTreeGenerator → Roslyn SyntaxTree  (direct — no text intermediate step)
+    └── KsrCompiler         → in-memory CSharpCompilation → Assembly.Load → reflection invoke
+```
+
+The `SyntaxTreeGenerator` builds the Roslyn `SyntaxTree` via `SyntaxFactory` directly, skipping the `ParseText` round-trip. Pass `--debug` to also print the generated C# source (falls back to the text-based `CodeGenerator` for human-readable output).
+
+**Project mode** (`dotnet build`):
+
+```
+.ksr source
+    └── Lexer           → tokens
+    └── Parser          → AST  (with source positions)
+    └── CodeGenerator   → C# source  (with #line directives → PDB source mapping)
+    └── KsrCompileTask  → writes *.g.cs → standard Roslyn MSBuild pipeline
 ```
 
 The compiler hooks into `dotnet build` via a custom MSBuild task (`KSR.Build`), so `.ksr` files compile transparently alongside any other `.cs` files in your project.
@@ -921,6 +1045,8 @@ This works in both single-file mode (`ksr file.ksr`) and full project mode (`dot
 | `KSR.Build` | MSBuild task — hooks KSR into `dotnet build` |
 | `KSR.Sdk` | MSBuild SDK — `Sdk="KSR.Sdk/0.1.0"` |
 | `KSR.StdLib` | Standard library — `ksr.io`, `ksr.text`, and `ksr.collections` modules |
+| `KSR.Vision` | Webcam capture and OpenCV frame processing (`OpenCvSharp4`, Windows runtime MVP) |
+| `KSR.Creative` | Minimal Raylib creative-coding window and draw API |
 | `KSR.Templates` | `dotnet new` templates |
 
 ---
@@ -992,9 +1118,12 @@ The compiler and toolchain is ~3 500 lines of C# across six layers:
 Lexer/             tokeniser
 Parser/            recursive-descent parser + semantic validation
 AST/               node definitions (C# records)
-CodeGen/           C# emitter (async/await, interfaces, when) + Roslyn in-memory runner
+CodeGen/           SyntaxTreeGenerator (primary — direct Roslyn SyntaxTree, no text step)
+                   CodeGenerator       (text emitter — --debug mode and MSBuild task)
+                   KsrCompiler         (Roslyn CSharpCompilation → in-memory emit + reflection invoke)
 LspServer.cs       Language Server Protocol (JSON-RPC over stdio)
 sdk/KSR.StdLib/    standard library (ksr.io, ksr.text)
+vs-extension/      Visual Studio VSIX (LSP client, project/item templates)
 ```
 
 ---

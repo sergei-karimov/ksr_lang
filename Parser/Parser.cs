@@ -4,47 +4,51 @@ using KSR.Lexer;
 namespace KSR.Parser;
 
 /// <summary>
-/// Recursive-descent parser.
-///
-/// Expression precedence (lowest → highest):
-///   elvis       ?:
-///   logicalOr   ||
-///   logicalAnd  &&
-///   equality    == !=
-///   comparison  &lt; &gt; &lt;= &gt;=
-///   range       .. ..(less than)
-///   additive    + -
-///   multiplicative * / %
-///   unary       ! -
-///   postfix     call()  .member  ?.member
-///   primary     literals / identifiers / (expr)
+/// Recursive-descent parser with error recovery.
 /// </summary>
 public class Parser
 {
     private readonly List<Token> _tokens;
     private readonly string      _sourceFile;
     private int _pos;
+    private readonly List<string> _errors = new();
+    private readonly bool _throwOnError;
 
-    public Parser(List<Token> tokens, string sourceFile = "")
+    public Parser(List<Token> tokens, string sourceFile = "", bool throwOnError = false)
     {
         _tokens     = tokens;
         _sourceFile = sourceFile;
+        _throwOnError = throwOnError;
     }
+
+    public IReadOnlyList<string> Errors => _errors;
 
     // ── token helpers ─────────────────────────────────────────────────────────
 
-    private Token Current => _tokens[_pos];
+    private Token Current => _pos < _tokens.Count ? _tokens[_pos] : _tokens[^1];
     private Token Peek(int offset = 1) => _tokens[Math.Min(_pos + offset, _tokens.Count - 1)];
 
-    private Token Consume() => _tokens[_pos++];
+    private Token Consume() => _pos < _tokens.Count ? _tokens[_pos++] : _tokens[^1];
 
     private Token Expect(TokenType type)
     {
         if (Current.Type != type)
-            throw new KsrParseException(
-                $"Expected '{type}' but found '{Current.Value}' ({Current.Type})",
-                Current.Line, Current.Col);
+        {
+            Error($"Expected '{type}' but found '{Current.Value}' ({Current.Type})");
+            // If we're at EOF, don't try to consume
+            if (Current.Type == TokenType.Eof) throw new KsrParseException("EOF", Current.Line, Current.Col);
+            return Consume(); // Pseudo-consume to avoid infinite loops in some callers
+        }
         return Consume();
+    }
+
+    private void Error(string message)
+    {
+        var err = $"{_sourceFile}({Current.Line},{Current.Col}): error: {message}";
+        _errors.Add(err);
+        // We still throw internally to trigger Synchronize() in caller loops,
+        // or to satisfy tests that expect a fatal error.
+        throw new KsrParseException(message, Current.Line, Current.Col);
     }
 
     private bool Check(TokenType type) => Current.Type == type;
@@ -56,13 +60,55 @@ public class Parser
         return true;
     }
 
+    /// <summary>
+    /// Skips tokens until we find a reliable recovery point (start of a new declaration).
+    /// </summary>
+    private void Synchronize()
+    {
+        if (_throwOnError) return; // Don't synchronize if we want to fail fast
+
+        Consume();
+
+        while (!Check(TokenType.Eof))
+        {
+            switch (Current.Type)
+            {
+                case TokenType.Use:
+                case TokenType.Struct:
+                case TokenType.Sealed:
+                case TokenType.Fun:
+                case TokenType.Interface:
+                case TokenType.Implement:
+                case TokenType.Val:
+                case TokenType.Var:
+                case TokenType.If:
+                case TokenType.While:
+                case TokenType.For:
+                case TokenType.Return:
+                    return;
+            }
+
+            Consume();
+        }
+    }
+
     // ── entry point ───────────────────────────────────────────────────────────
 
     public ProgramNode Parse()
     {
         var decls = new List<AstNode>();
         while (!Check(TokenType.Eof))
-            decls.Add(ParseDeclaration());
+        {
+            try
+            {
+                decls.Add(ParseDeclaration());
+            }
+            catch (KsrParseException)
+            {
+                if (_throwOnError) throw;
+                Synchronize();
+            }
+        }
         return new ProgramNode(decls);
     }
 
@@ -77,9 +123,10 @@ public class Parser
             Consume(); // @
             var ann = Expect(TokenType.Identifier).Value;
             if (ann != "ValueTask")
-                throw new KsrParseException(
-                    $"Unknown annotation '@{ann}' — only '@ValueTask' is supported",
-                    Current.Line, Current.Col);
+            {
+                // Note: Error() throws, so this triggers Synchronize() in Parse()
+                Error($"Unknown annotation '@{ann}' — only '@ValueTask' is supported");
+            }
             asyncReturn = AsyncReturnKind.ValueTask;
         }
 
@@ -93,14 +140,11 @@ public class Parser
 
         // @ValueTask without async is invalid
         if (asyncReturn == AsyncReturnKind.ValueTask && !isAsync)
-            throw new KsrParseException(
-                "@ValueTask can only be used on async functions",
-                Current.Line, Current.Col);
+            Error("@ValueTask can only be used on async functions");
 
         if (Check(TokenType.Use))
         {
-            if (isAsync) throw new KsrParseException(
-                "'async' cannot be applied to 'use'", Current.Line, Current.Col);
+            if (isAsync) Error("'async' cannot be applied to 'use'");
             return ParseUseDecl();
         }
         if (Check(TokenType.Struct))    return ParseStruct();
@@ -109,15 +153,13 @@ public class Parser
         if (Check(TokenType.Interface)) return ParseInterfaceDecl();
         if (Check(TokenType.Implement)) return ParseImplBlock();
 
-        throw new KsrParseException(
-            $"Unexpected token '{Current.Value}' — expected 'use', 'struct', 'sealed', 'fun', 'interface' or 'implement'",
-            Current.Line, Current.Col);
+        Error($"Unexpected token '{Current.Value}' — expected 'use', 'struct', 'sealed', 'fun', 'interface' or 'implement'");
+        return null!; // Unreachable due to Error throwing
     }
 
     private UseDecl ParseUseDecl()
     {
         Expect(TokenType.Use);
-        // Namespace may be dotted: Raylib_cs  or  System.Collections.Generic
         var sb = new System.Text.StringBuilder();
         sb.Append(Expect(TokenType.Identifier).Value);
         while (Check(TokenType.Dot))
@@ -139,10 +181,6 @@ public class Parser
         return new StructDecl(name, props);
     }
 
-    /// <summary>
-    /// sealed Shape { struct Circle(r: Double)  struct Empty }
-    /// Variants may omit () when they have no fields.
-    /// </summary>
     private SealedDecl ParseSealedDecl()
     {
         Expect(TokenType.Sealed);
@@ -152,31 +190,36 @@ public class Parser
         var variants = new List<StructDecl>();
         while (!Check(TokenType.RBrace) && !Check(TokenType.Eof))
         {
-            Expect(TokenType.Struct);
-            var vName = Expect(TokenType.Identifier).Value;
-            List<Parameter> props = [];
-            if (Check(TokenType.LParen))
+            try
             {
-                Consume(); // (
-                props = Check(TokenType.RParen) ? [] : ParseParamList();
-                Expect(TokenType.RParen);
+                Expect(TokenType.Struct);
+                var vName = Expect(TokenType.Identifier).Value;
+                List<Parameter> props = [];
+                if (Check(TokenType.LParen))
+                {
+                    Consume(); // (
+                    props = Check(TokenType.RParen) ? [] : ParseParamList();
+                    Expect(TokenType.RParen);
+                }
+                variants.Add(new StructDecl(vName, props));
             }
-            variants.Add(new StructDecl(vName, props));
+            catch (KsrParseException)
+            {
+                // Local recovery inside sealed block: skip to next 'struct' or '}'
+                while (!Check(TokenType.Struct) && !Check(TokenType.RBrace) && !Check(TokenType.Eof))
+                    Consume();
+            }
         }
 
         Expect(TokenType.RBrace);
         return new SealedDecl(name, variants);
     }
 
-    /// <summary>
-    /// interface Shape { fun area(): Double \n async fun fetch(): String }
-    /// </summary>
     private InterfaceDecl ParseInterfaceDecl()
     {
         Expect(TokenType.Interface);
         var name = Expect(TokenType.Identifier).Value;
 
-        // Optional type parameters: interface Foo<T, U>
         var typeParams = new List<string>();
         if (Check(TokenType.Lt))
         {
@@ -187,19 +230,15 @@ public class Parser
             Expect(TokenType.Gt);
         }
 
-        // Optional where clause: where E : Bound1, E : Bound2, F : Bound3
         var constraints = new List<WhereConstraint>();
         if (Current.Type == TokenType.Identifier && Current.Value == "where")
         {
             Consume(); // "where"
-            // Each entry: TypeParam : TypeRef  (comma-separated; stop at '{')
             do
             {
                 var tp = Expect(TokenType.Identifier).Value;
                 Expect(TokenType.Colon);
                 var bounds = new List<string> { ParseTypeRef().Name };
-                // Additional bounds for the same type param: "T : A & B" style not used;
-                // multiple constraints use repeated "T : X, T : Y" entries (Kotlin style)
                 constraints.Add(new WhereConstraint(tp, bounds));
             }
             while (Match(TokenType.Comma) && !(Current.Type == TokenType.LBrace));
@@ -210,44 +249,45 @@ public class Parser
         var methods = new List<InterfaceMethod>();
         while (!Check(TokenType.RBrace) && !Check(TokenType.Eof))
         {
-            // Optional async modifier on interface methods
-            var mAsyncReturn = AsyncReturnKind.Task;
-            if (Check(TokenType.At))
+            try
             {
-                Consume();
-                var ann = Expect(TokenType.Identifier).Value;
-                if (ann != "ValueTask")
-                    throw new KsrParseException(
-                        $"Unknown annotation '@{ann}'", Current.Line, Current.Col);
-                mAsyncReturn = AsyncReturnKind.ValueTask;
-            }
-            bool mIsAsync = false;
-            if (Check(TokenType.Async)) { mIsAsync = true; Consume(); }
+                var mAsyncReturn = AsyncReturnKind.Task;
+                if (Check(TokenType.At))
+                {
+                    Consume();
+                    var ann = Expect(TokenType.Identifier).Value;
+                    if (ann != "ValueTask") Error($"Unknown annotation '@{ann}'");
+                    mAsyncReturn = AsyncReturnKind.ValueTask;
+                }
+                bool mIsAsync = false;
+                if (Check(TokenType.Async)) { mIsAsync = true; Consume(); }
 
-            Expect(TokenType.Fun);
-            var mname = Expect(TokenType.Identifier).Value;
-            Expect(TokenType.LParen);
-            var parms = Check(TokenType.RParen) ? [] : ParseParamList();
-            Expect(TokenType.RParen);
-            TypeRef? ret = null;
-            if (Match(TokenType.Colon)) ret = ParseTypeRef();
-            if (mIsAsync) ValidateAsyncReturnType(ret, mname);
-            methods.Add(new InterfaceMethod(mname, parms, ret, mIsAsync, mAsyncReturn));
+                Expect(TokenType.Fun);
+                var mname = Expect(TokenType.Identifier).Value;
+                Expect(TokenType.LParen);
+                var parms = Check(TokenType.RParen) ? [] : ParseParamList();
+                Expect(TokenType.RParen);
+                TypeRef? ret = null;
+                if (Match(TokenType.Colon)) ret = ParseTypeRef();
+                if (mIsAsync) ValidateAsyncReturnType(ret, mname);
+                methods.Add(new InterfaceMethod(mname, parms, ret, mIsAsync, mAsyncReturn));
+            }
+            catch (KsrParseException)
+            {
+                while (!Check(TokenType.Fun) && !Check(TokenType.Async) && !Check(TokenType.At) && !Check(TokenType.RBrace) && !Check(TokenType.Eof))
+                    Consume();
+            }
         }
 
         Expect(TokenType.RBrace);
         return new InterfaceDecl(name, typeParams, constraints, methods);
     }
 
-    /// <summary>
-    /// implement Shape for Circle { fun area(): Double { … } … }
-    /// </summary>
     private ImplBlock ParseImplBlock()
     {
         Expect(TokenType.Implement);
         var interfaceName = Expect(TokenType.Identifier).Value;
 
-        // Optional type args: implement Foo<Color> for Color
         var interfaceTypeArgs = new List<string>();
         if (Check(TokenType.Lt))
         {
@@ -265,41 +305,40 @@ public class Parser
         var methods = new List<FunctionDecl>();
         while (!Check(TokenType.RBrace) && !Check(TokenType.Eof))
         {
-            var mAsyncReturn = AsyncReturnKind.Task;
-            if (Check(TokenType.At))
+            try
             {
-                Consume();
-                var ann = Expect(TokenType.Identifier).Value;
-                if (ann != "ValueTask")
-                    throw new KsrParseException(
-                        $"Unknown annotation '@{ann}'", Current.Line, Current.Col);
-                mAsyncReturn = AsyncReturnKind.ValueTask;
-            }
-            bool mIsAsync = false;
-            if (Check(TokenType.Async)) { mIsAsync = true; Consume(); }
+                var mAsyncReturn = AsyncReturnKind.Task;
+                if (Check(TokenType.At))
+                {
+                    Consume();
+                    var ann = Expect(TokenType.Identifier).Value;
+                    if (ann != "ValueTask") Error($"Unknown annotation '@{ann}'");
+                    mAsyncReturn = AsyncReturnKind.ValueTask;
+                }
+                bool mIsAsync = false;
+                if (Check(TokenType.Async)) { mIsAsync = true; Consume(); }
 
-            Expect(TokenType.Fun);
-            var mname = Expect(TokenType.Identifier).Value;
-            methods.Add(ParseFunctionTail(mname, [], mIsAsync, mAsyncReturn));
+                Expect(TokenType.Fun);
+                var mname = Expect(TokenType.Identifier).Value;
+                methods.Add(ParseFunctionTail(mname, [], mIsAsync, mAsyncReturn));
+            }
+            catch (KsrParseException)
+            {
+                while (!Check(TokenType.Fun) && !Check(TokenType.Async) && !Check(TokenType.At) && !Check(TokenType.RBrace) && !Check(TokenType.Eof))
+                    Consume();
+            }
         }
 
         Expect(TokenType.RBrace);
         return new ImplBlock(interfaceName, interfaceTypeArgs, typeName, methods);
     }
 
-    /// <summary>
-    /// Handles both:
-    ///   fun name(...)             → FunctionDecl
-    ///   fun TypeName.method(...)  → ExtFunctionDecl
-    /// Both may be preceded by async / @ValueTask async.
-    /// </summary>
     private AstNode ParseFunctionOrExtension(
         bool isAsync = false,
         AsyncReturnKind asyncReturn = AsyncReturnKind.Task)
     {
         Expect(TokenType.Fun);
 
-        // Optional type parameter list: fun <T, U> ...
         var typeParams = new List<string>();
         if (Check(TokenType.Lt))
         {
@@ -310,11 +349,8 @@ public class Parser
             Expect(TokenType.Gt);
         }
 
-        // Parse the first name / receiver type — use ParseTypeRef so generic
-        // receivers like List<T> are handled correctly.
         var firstName = ParseTypeRef().Name;
 
-        // Extension function: fun <T> List<T>.methodName(...)
         if (Check(TokenType.Dot))
         {
             Consume(); // .
@@ -365,21 +401,15 @@ public class Parser
                                    ParseBlock(), isAsync, asyncReturn);
     }
 
-    /// <summary>
-    /// Rejects explicit Task/ValueTask wrapper types in async return annotations.
-    /// The annotation should be the inner type only; the compiler adds the wrapper.
-    /// </summary>
     private void ValidateAsyncReturnType(TypeRef? ret, string funcName)
     {
         if (ret is null) return;
         var n = ret.Name;
         if (n == "Task" || n.StartsWith("Task<") ||
             n == "ValueTask" || n.StartsWith("ValueTask<"))
-            throw new KsrParseException(
-                $"async function '{funcName}': write the inner return type " +
+            Error($"async function '{funcName}': write the inner return type " +
                 $"(e.g. 'String'), not the Task wrapper ('{n}'). " +
-                "The compiler adds Task/ValueTask automatically.",
-                Current.Line, Current.Col);
+                "The compiler adds Task/ValueTask automatically.");
     }
 
     // ── parameters / types ────────────────────────────────────────────────────
@@ -403,11 +433,6 @@ public class Parser
         return new Parameter(name, type, defaultValue);
     }
 
-    /// <summary>
-    /// Parses a single call argument.
-    /// name = expr  →  NamedArgExpr   (lookahead: Identifier followed by '=' but not '==')
-    /// expr         →  positional arg
-    /// </summary>
     private Expr ParseCallArg()
     {
         if (Current.Type == TokenType.Identifier && Peek().Type == TokenType.Equals)
@@ -419,7 +444,6 @@ public class Parser
     {
         var name = Expect(TokenType.Identifier).Value;
 
-        // Generic type: List<T>  Map<K, V>
         if (Check(TokenType.Lt))
         {
             Consume(); // <
@@ -430,7 +454,6 @@ public class Parser
             name = $"{name}<{string.Join(", ", args)}>";
         }
 
-        // Array type: Bool[]  Int[]  etc.
         if (Check(TokenType.LBracket))
         {
             Consume(); // [
@@ -449,7 +472,24 @@ public class Parser
         Expect(TokenType.LBrace);
         var stmts = new List<Stmt>();
         while (!Check(TokenType.RBrace) && !Check(TokenType.Eof))
-            stmts.Add(ParseStatement());
+        {
+            try
+            {
+                stmts.Add(ParseStatement());
+            }
+            catch (KsrParseException)
+            {
+                if (_throwOnError) throw;
+
+                // Local recovery inside block: skip to next statement or '}'
+                while (!Check(TokenType.Val) && !Check(TokenType.Var) && !Check(TokenType.Return) &&
+                       !Check(TokenType.If) && !Check(TokenType.While) && !Check(TokenType.For) &&
+                       !Check(TokenType.RBrace) && !Check(TokenType.Eof))
+                {
+                    Consume();
+                }
+            }
+        }
         Expect(TokenType.RBrace);
         return new Block(stmts);
     }
@@ -559,12 +599,10 @@ public class Parser
         Expect(TokenType.LParen);
         var varName = Expect(TokenType.Identifier).Value;
         Expect(TokenType.In);
-        var iterable = ParseExpr(); // naturally handles RangeExpr via ParseRange()
+        var iterable = ParseExpr();
         Expect(TokenType.RParen);
         return new ForInStmt(varName, iterable, ParseBlock());
     }
-
-    // ── expressions (public so sub-parsers for string templates can call it) ──
 
     public Expr ParseExpr() => ParseElvis();
 
@@ -667,7 +705,7 @@ public class Parser
         if (Check(TokenType.Await))
         {
             Consume();
-            return new AwaitExpr(ParseUnary()); // right-associative: await await x
+            return new AwaitExpr(ParseUnary());
         }
         if (Check(TokenType.Bang))
         {
@@ -719,12 +757,9 @@ public class Parser
                 var member = Expect(TokenType.Identifier).Value;
                 expr = new SafeCallExpr(expr, member);
             }
-            // Trailing lambda: expr { ... }  or  expr.method { ... }
-            // Appended as the last argument to the preceding call.
             else if (Check(TokenType.LBrace))
             {
                 var lambda = ParseLambdaExpr();
-                // Wrap in a call if not already one, or append to existing call
                 expr = expr is CallExpr ce
                     ? new CallExpr(ce.Callee, [..ce.Arguments, lambda])
                     : new CallExpr(expr, [lambda]);
@@ -734,46 +769,75 @@ public class Parser
         return expr;
     }
 
-    // ── lambda ────────────────────────────────────────────────────────────────
-
-    /// <summary>
-    /// Parses a lambda literal starting at <c>{</c>.
-    /// <code>
-    ///   { expr }           — implicit "it" parameter
-    ///   { x → expr }       — single named parameter
-    ///   { x, y → expr }    — multiple named parameters
-    ///   { → expr }         — zero parameters (e.g. for Func&lt;T&gt;)
-    /// </code>
-    /// </summary>
     private LambdaExpr ParseLambdaExpr()
     {
         Expect(TokenType.LBrace);
         var parms = new List<string>();
+        var explicitParams = false;
 
         if (Check(TokenType.Arrow))
         {
-            // { -> expr }  — zero parameters
             Consume();
+            explicitParams = true;
         }
         else if (Check(TokenType.Identifier) &&
                  (Peek().Type == TokenType.Arrow || Peek().Type == TokenType.Comma))
         {
-            // { x -> expr }  or  { x, y -> expr }
             parms.Add(Consume().Value);
             while (Match(TokenType.Comma))
                 parms.Add(Expect(TokenType.Identifier).Value);
             Expect(TokenType.Arrow);
+            explicitParams = true;
         }
         else
         {
-            // { expr }  — implicit "it"
-            parms.Add("it");
+            if (LooksLikeStatementStart(Current.Type))
+                explicitParams = true;
+            else
+                parms.Add("it");
         }
 
-        var body = ParseExpr();
-        Expect(TokenType.RBrace);
-        return new LambdaExpr(parms, body);
+        if (LooksLikeStatementStart(Current.Type))
+        {
+            var body = ParseLambdaBlockBody();
+            return new LambdaExpr(parms, null, body);
+        }
+
+        var expr = ParseExpr();
+        if (Check(TokenType.RBrace))
+        {
+            Consume();
+            return new LambdaExpr(parms, expr);
+        }
+
+        var stmts = new List<Stmt> { new ExprStmt(expr) };
+        stmts.AddRange(ParseLambdaStatementsUntilBrace());
+
+        if (!explicitParams && parms.Count == 1 && parms[0] == "it")
+            parms.Clear();
+
+        return new LambdaExpr(parms, null, new Block(stmts));
     }
+
+    private Block ParseLambdaBlockBody() =>
+        new(ParseLambdaStatementsUntilBrace());
+
+    private List<Stmt> ParseLambdaStatementsUntilBrace()
+    {
+        var stmts = new List<Stmt>();
+        while (!Check(TokenType.RBrace) && !Check(TokenType.Eof))
+            stmts.Add(ParseStatement());
+        Expect(TokenType.RBrace);
+        return stmts;
+    }
+
+    private static bool LooksLikeStatementStart(TokenType type) => type is
+        TokenType.Val or
+        TokenType.Var or
+        TokenType.Return or
+        TokenType.If or
+        TokenType.While or
+        TokenType.For;
 
     private Expr ParsePrimary()
     {
@@ -821,7 +885,6 @@ public class Parser
                 var typeName = Expect(TokenType.Identifier).Value;
                 if (Check(TokenType.LBracket))
                 {
-                    // new Bool[size]  →  array creation
                     Consume(); // [
                     var size = ParseExpr();
                     Expect(TokenType.RBracket);
@@ -829,7 +892,6 @@ public class Parser
                 }
                 else
                 {
-                    // new Random(args)  →  object creation
                     Expect(TokenType.LParen);
                     var args = new List<Expr>();
                     if (!Check(TokenType.RParen))
@@ -843,15 +905,12 @@ public class Parser
                 }
             }
 
-            // List / Map literal: [a, b, c]  or  ["k1": v1, "k2": v2]
             case TokenType.LBracket:
                 return ParseCollectionLiteral();
 
-            // when expression
             case TokenType.When:
                 return ParseWhenExpr();
 
-            // Lambda literal  { expr }  /  { x -> expr }  /  { x, y -> expr }  /  { -> expr }
             case TokenType.LBrace:
                 return ParseLambdaExpr();
 
@@ -862,21 +921,11 @@ public class Parser
                 return inner;
 
             default:
-                throw new KsrParseException(
-                    $"Unexpected token '{tok.Value}' ({tok.Type}) in expression",
-                    tok.Line, tok.Col);
+                Error($"Unexpected token '{tok.Value}' ({tok.Type}) in expression");
+                return null!;
         }
     }
 
-    // ── when expression ───────────────────────────────────────────────────────
-
-    /// <summary>
-    /// when (expr) { arm* }   — subject form (match by value)
-    /// when { arm* }          — subject-less form (guard conditions)
-    ///
-    /// arm ::= expr -> expr
-    ///       | else -> expr
-    /// </summary>
     private WhenExpr ParseWhenExpr()
     {
         Expect(TokenType.When);
@@ -893,53 +942,54 @@ public class Parser
 
         while (!Check(TokenType.RBrace) && !Check(TokenType.Eof))
         {
-            Expr? pattern;
-            if (Check(TokenType.Else))
+            try
             {
-                Consume(); // else
-                pattern = null;
-            }
-            else if (Check(TokenType.Is))
-            {
-                Consume(); // is
-                var typeName = Expect(TokenType.Identifier).Value;
-                string? binding = null;
-                if (Check(TokenType.LParen))
+                Expr? pattern;
+                if (Check(TokenType.Else))
                 {
-                    Consume(); // (
-                    binding = Expect(TokenType.Identifier).Value;
-                    Expect(TokenType.RParen);
+                    Consume(); // else
+                    pattern = null;
                 }
-                pattern = new IsPatternExpr(typeName, binding);
+                else if (Check(TokenType.Is))
+                {
+                    Consume(); // is
+                    var typeName = Expect(TokenType.Identifier).Value;
+                    string? binding = null;
+                    if (Check(TokenType.LParen))
+                    {
+                        Consume(); // (
+                        binding = Expect(TokenType.Identifier).Value;
+                        Expect(TokenType.RParen);
+                    }
+                    pattern = new IsPatternExpr(typeName, binding);
+                }
+                else
+                {
+                    pattern = ParseExpr();
+                }
+                Expect(TokenType.Arrow);
+                var body = ParseExpr();
+                arms.Add(new WhenArm(pattern, body));
             }
-            else
+            catch (KsrParseException)
             {
-                pattern = ParseExpr();
+                while (!Check(TokenType.Else) && !Check(TokenType.Is) && !Check(TokenType.Arrow) &&
+                       !Check(TokenType.RBrace) && !Check(TokenType.Eof))
+                {
+                    Consume();
+                }
+                if (Match(TokenType.Arrow)) ParseExpr(); // try to skip body
             }
-            Expect(TokenType.Arrow);
-            var body = ParseExpr();
-            arms.Add(new WhenArm(pattern, body));
         }
 
         Expect(TokenType.RBrace);
         return new WhenExpr(subject, arms);
     }
 
-    // ── collection literals ───────────────────────────────────────────────────
-
-    /// <summary>
-    /// Parses a list or map literal starting at <c>[</c>.
-    /// <code>
-    ///   [1, 2, 3]            — list literal
-    ///   ["k1": v1, "k2": v2] — map literal  (distinguished by ':' after first key)
-    ///   []                   — empty list
-    /// </code>
-    /// </summary>
     private Expr ParseCollectionLiteral()
     {
         Expect(TokenType.LBracket);
 
-        // Empty list
         if (Check(TokenType.RBracket))
         {
             Consume();
@@ -948,7 +998,6 @@ public class Parser
 
         var first = ParseExpr();
 
-        // Map literal: first key is followed by ':'
         if (Check(TokenType.Colon))
         {
             Consume(); // :
@@ -956,7 +1005,7 @@ public class Parser
             var entries = new List<(Expr, Expr)> { (first, firstVal) };
             while (Match(TokenType.Comma))
             {
-                if (Check(TokenType.RBracket)) break; // trailing comma
+                if (Check(TokenType.RBracket)) break;
                 var k = ParseExpr();
                 Expect(TokenType.Colon);
                 var v = ParseExpr();
@@ -966,24 +1015,16 @@ public class Parser
             return new MapLiteralExpr(entries);
         }
 
-        // List literal
         var elems = new List<Expr> { first };
         while (Match(TokenType.Comma))
         {
-            if (Check(TokenType.RBracket)) break; // trailing comma
+            if (Check(TokenType.RBracket)) break;
             elems.Add(ParseExpr());
         }
         Expect(TokenType.RBracket);
         return new ListLiteralExpr(elems);
     }
 
-    // ── string template parsing ───────────────────────────────────────────────
-
-    /// <summary>
-    /// Splits the raw template value (which uses the <c>${...}</c> convention
-    /// normalised by the lexer) into literal and expression parts.
-    /// Each expression part is parsed by a fresh sub-parser.
-    /// </summary>
     private StringTemplateExpr ParseStringTemplate(string rawValue, bool isRaw = false)
     {
         var parts = new List<StringPart>();
@@ -999,11 +1040,9 @@ public class Parser
                 break;
             }
 
-            // Literal text before ${
             if (dollarPos > i)
                 parts.Add(new LiteralPart(rawValue[i..dollarPos]));
 
-            // Find matching }
             int exprStart = dollarPos + 2;
             int j = exprStart;
             int depth = 1;
@@ -1021,10 +1060,10 @@ public class Parser
                 var subTokens = new KSR.Lexer.Lexer(exprText).Tokenize();
                 var subParser = new Parser(subTokens);
                 parts.Add(new ExprPart(subParser.ParseExpr()));
+                _errors.AddRange(subParser.Errors); // Bubble up errors from templates
             }
             catch
             {
-                // Fallback: emit as opaque literal so we still produce valid C#
                 parts.Add(new LiteralPart("${" + exprText + "}"));
             }
 

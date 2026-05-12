@@ -260,6 +260,23 @@ public class CodeGenTests {
     public void Lambda_ZeroParams() =>
         Assert.Contains("(() =>", Flat("fun f() { val fn = { -> 42 } }"));
 
+    [Fact]
+    public void Lambda_BlockBody_ZeroParams()
+    {
+        var cs = Gen("fun f() { app.run { val x = 1\n println(x) } }");
+        Assert.Contains("(() =>", cs);
+        Assert.Contains("var x = 1", cs);
+        Assert.Contains("Console.WriteLine(x)", cs);
+    }
+
+    [Fact]
+    public void Lambda_BlockBody_NamedParam()
+    {
+        var cs = Gen("fun f() { app.run { draw -> val x = 1\n draw.fps(x, x) } }");
+        Assert.Contains("(draw =>", cs);
+        Assert.Contains("draw.Fps(x, x)", cs);
+    }
+
     // ── #line directives ──────────────────────────────────────────────────────
 
     [Fact]
