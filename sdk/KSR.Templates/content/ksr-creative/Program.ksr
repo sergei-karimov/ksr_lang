@@ -1,0 +1,28 @@
+use KSR.Creative
+
+struct AppState(frames: Int[])
+
+fun main() {
+    val app = new CreativeApp(960, 540, "KSR Creative App")
+
+    val state = app.init {
+        val frames = new Int[1]
+        frames[0] = 0
+        return AppState(frames)
+    }
+
+    app.draw {
+        val frames = state.frames
+        frames[0] = frames[0] + 1
+
+        draw.clear(Color.black)
+        draw.fps(10, 10)
+    }
+
+    app.cleanup {
+        val frames = state.frames
+        println("Frames drawn: ${frames[0]}")
+    }
+
+    app.run()
+}

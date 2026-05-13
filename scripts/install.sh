@@ -91,6 +91,14 @@ step "Building KSR.StdLib"
 dotnet pack "$REPO_ROOT/sdk/KSR.StdLib/KSR.StdLib.csproj" -c Release -o "$ARTIFACTS" -v q --nologo
 ok "KSR.StdLib packed"
 
+step "Building KSR.Vision"
+dotnet pack "$REPO_ROOT/sdk/KSR.Vision/KSR.Vision.csproj" -c Release -o "$ARTIFACTS" -v q --nologo
+ok "KSR.Vision packed"
+
+step "Building KSR.Creative"
+dotnet pack "$REPO_ROOT/sdk/KSR.Creative/KSR.Creative.csproj" -c Release -o "$ARTIFACTS" -v q --nologo
+ok "KSR.Creative packed"
+
 step "Building KSR.Templates"
 dotnet pack "$REPO_ROOT/sdk/KSR.Templates/KSR.Templates.csproj" -c Release -o "$ARTIFACTS" -v q --nologo
 ok "KSR.Templates packed"
@@ -112,7 +120,7 @@ ok "Feed '$FEED_NAME' → $ARTIFACTS"
 # ── 4. Install ksr global tool ────────────────────────────────────────────────
 step "Installing ksr global tool"
 # Remove all KSR packages from NuGet cache so fresh local builds are always used
-for pkg in ksr ksr.core ksr.build ksr.sdk ksr.stdlib ksr.templates; do
+for pkg in ksr ksr.core ksr.build ksr.sdk ksr.stdlib ksr.vision ksr.creative ksr.templates; do
     rm -rf "$HOME/.nuget/packages/$pkg/0.1.0" 2>/dev/null || true
 done
 dotnet tool uninstall -g KSR 2>/dev/null || true
@@ -131,7 +139,7 @@ fi
 step "Installing dotnet new templates"
 dotnet new uninstall KSR.Templates 2>/dev/null || true
 dotnet new install "$ARTIFACTS/KSR.Templates.0.1.0.nupkg"
-ok "KSR templates installed  (dotnet new ksr-console)"
+ok "KSR templates installed  (dotnet new ksr-console | ksr-creative | ksr-creative-camera)"
 
 # ── 6. Build & install VS Code extension (optional) ─────────────────────────
 if [[ $SKIP_VSCODE -eq 0 ]]; then
@@ -171,6 +179,10 @@ echo "  Get started:"
 echo -e "    ${CYAN}dotnet new ksr-console -n MyApp${NC}"
 echo -e "    ${CYAN}cd MyApp${NC}"
 echo -e "    ${CYAN}dotnet run${NC}"
+echo ""
+echo "  Creative coding:"
+echo -e "    ${CYAN}dotnet new ksr-creative -n Sketch${NC}"
+echo -e "    ${CYAN}dotnet new ksr-creative-camera -n CameraSketch${NC}"
 echo ""
 echo "  Single-file mode:"
 echo -e "    ${CYAN}ksr hello.ksr${NC}"

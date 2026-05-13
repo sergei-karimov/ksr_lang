@@ -117,6 +117,14 @@ Write-Step "Building KSR.StdLib"
 Invoke-Cmd dotnet @('pack', (Join-Path $RepoRoot 'sdk\KSR.StdLib\KSR.StdLib.csproj'), '-c', 'Release', '-o', $ArtifactsDir, '-v', 'q', '--nologo')
 Write-Ok "KSR.StdLib packed"
 
+Write-Step "Building KSR.Vision"
+Invoke-Cmd dotnet @('pack', (Join-Path $RepoRoot 'sdk\KSR.Vision\KSR.Vision.csproj'), '-c', 'Release', '-o', $ArtifactsDir, '-v', 'q', '--nologo')
+Write-Ok "KSR.Vision packed"
+
+Write-Step "Building KSR.Creative"
+Invoke-Cmd dotnet @('pack', (Join-Path $RepoRoot 'sdk\KSR.Creative\KSR.Creative.csproj'), '-c', 'Release', '-o', $ArtifactsDir, '-v', 'q', '--nologo')
+Write-Ok "KSR.Creative packed"
+
 Write-Step "Building KSR.Templates"
 Invoke-Cmd dotnet @('pack', (Join-Path $RepoRoot 'sdk\KSR.Templates\KSR.Templates.csproj'), '-c', 'Release', '-o', $ArtifactsDir, '-v', 'q', '--nologo')
 Write-Ok "KSR.Templates packed"
@@ -141,7 +149,7 @@ Write-Ok "Feed '$feedName' → $ArtifactsDir"
 
 Write-Step "Installing ksr global tool"
 # Remove all KSR packages from NuGet cache so fresh local builds are always used
-foreach ($pkg in @('ksr', 'ksr.core', 'ksr.build', 'ksr.sdk', 'ksr.stdlib', 'ksr.templates')) {
+foreach ($pkg in @('ksr', 'ksr.core', 'ksr.build', 'ksr.sdk', 'ksr.stdlib', 'ksr.vision', 'ksr.creative', 'ksr.templates')) {
     $cacheDir = Join-Path $env:USERPROFILE ".nuget\packages\$pkg\0.1.0"
     if (Test-Path $cacheDir) { Remove-Item -Recurse -Force $cacheDir }
 }
@@ -156,7 +164,7 @@ Write-Step "Installing dotnet new templates"
 try { & dotnet new uninstall KSR.Templates *>&1 | Out-Null } catch {}
 $templatePkg = Join-Path $ArtifactsDir "KSR.Templates.0.1.0.nupkg"
 Invoke-Cmd dotnet @('new', 'install', $templatePkg)
-Write-Ok "KSR templates installed  (dotnet new ksr-console)"
+Write-Ok "KSR templates installed  (dotnet new ksr-console | ksr-creative | ksr-creative-camera)"
 
 # ── 6. Build & install VS Code extension (optional) ─────────────────────────
 
@@ -200,6 +208,10 @@ Write-Host "  Get started:" -ForegroundColor White
 Write-Host "    dotnet new ksr-console -n MyApp" -ForegroundColor Cyan
 Write-Host "    cd MyApp" -ForegroundColor Cyan
 Write-Host "    dotnet run" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "  Creative coding:" -ForegroundColor White
+Write-Host "    dotnet new ksr-creative -n Sketch" -ForegroundColor Cyan
+Write-Host "    dotnet new ksr-creative-camera -n CameraSketch" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "  Single-file mode:" -ForegroundColor White
 Write-Host "    ksr hello.ksr" -ForegroundColor Cyan

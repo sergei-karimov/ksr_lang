@@ -52,6 +52,13 @@ dotnet run
 Hello from KSR!
 ```
 
+Creative-coding starters are available too:
+
+```bash
+dotnet new ksr-creative -n Sketch
+dotnet new ksr-creative-camera -n CameraSketch
+```
+
 ---
 
 ## Language Tour
@@ -782,6 +789,22 @@ KSR also includes a minimal creative-coding runtime for Windows:
 - `app.init { ... }` creates reusable resources once, `app.draw { ... }` runs every frame, `app.cleanup { ... }` releases resources once, and `app.run()` starts the loop.
 - The lifecycle is generic: use it for cameras, textures, models, audio inputs, sockets, sensors, render targets, ML models, or any other expensive/disposable state. In the MVP, `draw` and `cleanup` can each be registered once; repeated registration throws an exception.
 
+Create a graphics-only sketch:
+
+```bash
+dotnet new ksr-creative -n Sketch
+cd Sketch
+dotnet run
+```
+
+Create the camera MVP project:
+
+```bash
+dotnet new ksr-creative-camera -n CameraSketch
+cd CameraSketch
+dotnet run
+```
+
 ```kotlin
 use KSR.Creative
 use KSR.Vision
@@ -847,7 +870,16 @@ A KSR project is a standard `.csproj` using the KSR SDK:
 </Project>
 ```
 
-That's it. No boilerplate, no extra build steps.
+Creative projects add runtime packages:
+
+```xml
+<ItemGroup>
+  <PackageReference Include="KSR.Creative" Version="0.1.0" />
+  <PackageReference Include="KSR.Vision" Version="0.1.0" />
+</ItemGroup>
+```
+
+The `ksr-creative` and `ksr-creative-camera` templates include these references for you. No boilerplate, no extra build steps.
 
 ---
 
@@ -1106,6 +1138,8 @@ dotnet pack KSR.Core.csproj                              -o artifacts/
 dotnet pack sdk/KSR.Build/KSR.Build.csproj               -o artifacts/
 dotnet pack sdk/KSR.Sdk/KSR.Sdk.csproj                   -o artifacts/
 dotnet pack sdk/KSR.StdLib/KSR.StdLib.csproj             -o artifacts/
+dotnet pack sdk/KSR.Vision/KSR.Vision.csproj             -o artifacts/
+dotnet pack sdk/KSR.Creative/KSR.Creative.csproj         -o artifacts/
 dotnet pack sdk/KSR.Templates/KSR.Templates.csproj       -o artifacts/
 dotnet pack KSR.csproj                                   -o artifacts/
 ```

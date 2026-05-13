@@ -1,0 +1,13 @@
+<Project Sdk="KSR.Sdk/0.1.0">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="KSR.Creative" Version="0.1.0" />
+    <PackageReference Include="KSR.Vision" Version="0.1.0" />
+  </ItemGroup>
+
+</Project>
