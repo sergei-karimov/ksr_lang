@@ -78,4 +78,36 @@ public class DiagnosticsTests
         Assert.Equal(1, diagnostic.Line);
         Assert.Equal(15, diagnostic.Column);
     }
+
+    [Fact]
+    public void StringTemplateParserErrorUsesParentSourceLocation()
+    {
+        var parser = new KSR.Parser.Parser(
+            new KSR.Lexer.Lexer("fun f() { val message = \"${1 + }\" }").Tokenize(),
+            "src/template.ksr");
+
+        parser.Parse();
+
+        var diagnostic = Assert.Single(parser.Diagnostics);
+        Assert.Equal("Unexpected token '' (Eof) in expression", diagnostic.Message);
+        Assert.Equal("src/template.ksr", diagnostic.SourceFile);
+        Assert.Equal(1, diagnostic.Line);
+        Assert.Equal(32, diagnostic.Column);
+    }
+
+    [Fact]
+    public void StringTemplateLexerErrorUsesParentSourceLocation()
+    {
+        var parser = new KSR.Parser.Parser(
+            new KSR.Lexer.Lexer("fun f() { val message = \"${1 & 2}\" }").Tokenize(),
+            "src/template.ksr");
+
+        parser.Parse();
+
+        var diagnostic = Assert.Single(parser.Diagnostics);
+        Assert.Equal("Expected '&&'", diagnostic.Message);
+        Assert.Equal("src/template.ksr", diagnostic.SourceFile);
+        Assert.Equal(1, diagnostic.Line);
+        Assert.Equal(30, diagnostic.Column);
+    }
 }

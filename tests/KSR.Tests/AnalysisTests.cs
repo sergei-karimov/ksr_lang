@@ -68,12 +68,22 @@ public class AnalysisTests
     }
 
     [Fact]
-    public void AnalyzeSemanticExpressionErrorFallsBackToFirstSourcePosition()
+    public void AnalyzeSemanticExpressionErrorUsesIdentifierSourcePosition()
     {
-        var result = KsrAnalyzer.Analyze("fun main() { val x = y }", "main.ksr");
+        var result = KsrAnalyzer.Analyze("fun main() {\n    val x = missing\n}", "main.ksr");
 
         var diagnostic = Assert.Single(result.Diagnostics);
-        Assert.Equal(1, diagnostic.Line);
+        Assert.Equal(2, diagnostic.Line);
+        Assert.Equal(13, diagnostic.Column);
+    }
+
+    [Fact]
+    public void AnalyzeSemanticDeclarationErrorUsesDeclarationSourcePosition()
+    {
+        var result = KsrAnalyzer.Analyze("struct Item()\nstruct Item()", "main.ksr");
+
+        var diagnostic = Assert.Single(result.Diagnostics);
+        Assert.Equal(2, diagnostic.Line);
         Assert.Equal(1, diagnostic.Column);
     }
 }

@@ -35,11 +35,12 @@ public class SemanticAnalyzer : IAstVisitor<object?>
 
     private void Error(AstNode node, string message)
     {
-        var sourceFile = node is Stmt sourceStatement && !string.IsNullOrEmpty(sourceStatement.SourceFile)
-            ? sourceStatement.SourceFile
+        var sourceFile = !string.IsNullOrEmpty(node.SourceFile)
+            ? node.SourceFile
             : _currentFile;
-        var line = node is Stmt { Line: > 0 } locatedStatement ? locatedStatement.Line : 1;
-        _diagnostics.Add(new KsrDiagnostic(message, sourceFile, line, 1, DiagnosticSeverity.Error));
+        var line = node.Line > 0 ? node.Line : 1;
+        var column = node.Column > 0 ? node.Column : 1;
+        _diagnostics.Add(new KsrDiagnostic(message, sourceFile, line, column, DiagnosticSeverity.Error));
     }
 
     private static string FormatDiagnostic(KsrDiagnostic diagnostic) =>
@@ -296,7 +297,7 @@ public class SemanticAnalyzer : IAstVisitor<object?>
         var sym = _symbols.Resolve("this");
         if (sym == null)
         {
-            Error(new ExprStmt(node) { Line = 0 }, "'this' is only available in extension functions or record methods");
+            Error(node, "'this' is only available in extension functions or record methods");
             return new TypeRef("Any", false);
         }
         return sym.Metadata as TypeRef ?? new TypeRef("Any", false);
@@ -307,7 +308,7 @@ public class SemanticAnalyzer : IAstVisitor<object?>
         var sym = _symbols.Resolve(node.Name);
         if (sym == null)
         {
-            Error(new ExprStmt(node) { Line = 0 }, $"Undefined identifier '{node.Name}'");
+            Error(node, $"Undefined identifier '{node.Name}'");
             return new TypeRef("Any", false);
         }
         if (sym.Kind == SymbolKind.Function) return new TypeRef("Function", false);
@@ -335,7 +336,7 @@ public class SemanticAnalyzer : IAstVisitor<object?>
             if (sym?.Metadata is FunctionDecl fd)
             {
                 if (node.Arguments.Count != fd.Parameters.Count)
-                    Error(new ExprStmt(node) { Line = 0 }, $"Expected {fd.Parameters.Count} arguments but found {node.Arguments.Count}");
+                    Error(node, $"Expected {fd.Parameters.Count} arguments but found {node.Arguments.Count}");
                 return fd.ReturnType;
             }
             if (sym?.Metadata is StructDecl) return new TypeRef(id.Name, false);

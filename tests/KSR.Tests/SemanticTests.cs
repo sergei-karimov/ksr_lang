@@ -28,7 +28,7 @@ public class SemanticTests
         Assert.Equal("Type mismatch: cannot assign 'String' to 'Int'", diagnostic.Message);
         Assert.Equal("semantic.ksr", diagnostic.SourceFile);
         Assert.Equal(2, diagnostic.Line);
-        Assert.Equal(1, diagnostic.Column);
+        Assert.Equal(5, diagnostic.Column);
         Assert.Equal(DiagnosticSeverity.Error, diagnostic.Severity);
     }
 
