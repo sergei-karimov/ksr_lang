@@ -6,26 +6,44 @@ using KSR.Semantic;
 
 namespace KSR.Analysis;
 
+public sealed record KsrSource(string Source, string SourceFile);
+
 public static class KsrAnalyzer
 {
-    public static KsrAnalysisResult Analyze(string source, string sourceFile)
+    public static KsrAnalysisResult Analyze(string source, string sourceFile) =>
+        Analyze([new KsrSource(source, sourceFile)]);
+
+    public static KsrAnalysisResult Analyze(IEnumerable<KsrSource> sources)
     {
-        ProgramNode? program;
+        var declarations = new List<AstNode>();
+        var diagnostics = new List<KsrDiagnostic>();
 
-        try
+        foreach (var source in sources)
         {
-            var tokens = new Lexer.Lexer(source, sourceFile).Tokenize();
-            program = new Parser.Parser(tokens, sourceFile, throwOnError: true).Parse();
-        }
-        catch (KsrLexException exception)
-        {
-            return new KsrAnalysisResult(null, [exception.Diagnostic]);
-        }
-        catch (KsrParseException exception)
-        {
-            return new KsrAnalysisResult(null, [exception.Diagnostic]);
+            try
+            {
+                var tokens = new Lexer.Lexer(source.Source, source.SourceFile).Tokenize();
+                var program = new Parser.Parser(tokens, source.SourceFile, throwOnError: true).Parse();
+                declarations.AddRange(program.Declarations);
+            }
+            catch (KsrLexException exception)
+            {
+                diagnostics.Add(exception.Diagnostic);
+            }
+            catch (KsrParseException exception)
+            {
+                diagnostics.Add(exception.Diagnostic);
+            }
         }
 
+        if (diagnostics.Count > 0)
+            return new KsrAnalysisResult(null, diagnostics);
+
+        return Analyze(new ProgramNode(declarations));
+    }
+
+    public static KsrAnalysisResult Analyze(ProgramNode program, string sourceFile = "")
+    {
         var semanticAnalyzer = new SemanticAnalyzer();
         semanticAnalyzer.Analyze(program, sourceFile);
 

@@ -1,6 +1,9 @@
 using System.Text.Json;
 using System.Xml.Linq;
+using KSR.Analysis;
+using KSR.AST;
 using KSR.Build;
+using KSR.Diagnostics;
 using Microsoft.Build.Framework;
 using Microsoft.Build.Utilities;
 using Xunit;
@@ -31,6 +34,93 @@ public class DotnetTemplateTests
         Assert.True(error.LineNumber > 0);
         Assert.True(error.ColumnNumber > 0);
         Assert.False(File.Exists(output));
+    }
+
+    [Fact]
+    public void BuildTaskAllowsCrossFileFunctionReferences()
+    {
+        using var directory = new TemporaryDirectory();
+        var helper = directory.WriteFile("Helpers.ksr", "fun helper() { }");
+        var program = directory.WriteFile("Program.ksr", "fun main() { helper() }");
+        var output = Path.Combine(directory.Path, "generated", "Program.g.cs");
+        var task = new KsrCompileTask
+        {
+            BuildEngine = new RecordingBuildEngine(),
+            KsrCompile = [new TaskItem(helper), new TaskItem(program)],
+            OutputFile = output
+        };
+
+        var succeeded = task.Execute();
+
+        Assert.True(succeeded);
+        Assert.True(File.Exists(output));
+    }
+
+    [Fact]
+    public void BuildTaskReportsSecondFileErrorsFromTheirSourceFile()
+    {
+        using var directory = new TemporaryDirectory();
+        var helper = directory.WriteFile("Helpers.ksr", "fun helper() { }");
+        var program = directory.WriteFile("Program.ksr", "fun main() { unknownName() }");
+        var engine = new RecordingBuildEngine();
+        var task = new KsrCompileTask
+        {
+            BuildEngine = engine,
+            KsrCompile = [new TaskItem(helper), new TaskItem(program)],
+            OutputFile = Path.Combine(directory.Path, "generated", "Program.g.cs")
+        };
+
+        var succeeded = task.Execute();
+
+        Assert.False(succeeded);
+        var error = Assert.Single(engine.Errors);
+        Assert.Equal(program, error.File);
+    }
+
+    [Fact]
+    public void BuildTaskDeletesPreviousOutputAfterSourceBecomesInvalid()
+    {
+        using var directory = new TemporaryDirectory();
+        var input = directory.WriteFile("Program.ksr", "fun main() { }");
+        var output = Path.Combine(directory.Path, "generated", "Program.g.cs");
+        var task = new KsrCompileTask
+        {
+            BuildEngine = new RecordingBuildEngine(),
+            KsrCompile = [new TaskItem(input)],
+            OutputFile = output
+        };
+
+        Assert.True(task.Execute());
+        Assert.True(File.Exists(output));
+
+        File.WriteAllText(input, "fun main() { unknownName() }");
+
+        Assert.False(task.Execute());
+        Assert.False(File.Exists(output));
+    }
+
+    [Fact]
+    public void BuildTaskLogsWarningsWithLocationAndStillWritesOutput()
+    {
+        using var directory = new TemporaryDirectory();
+        var input = directory.WriteFile("Program.ksr", "fun main() { }");
+        var output = Path.Combine(directory.Path, "generated", "Program.g.cs");
+        var engine = new RecordingBuildEngine();
+        var task = new WarningKsrCompileTask(input)
+        {
+            BuildEngine = engine,
+            KsrCompile = [new TaskItem(input)],
+            OutputFile = output
+        };
+
+        var succeeded = task.Execute();
+
+        Assert.True(succeeded);
+        var warning = Assert.Single(engine.Warnings);
+        Assert.Equal(input, warning.File);
+        Assert.Equal(3, warning.LineNumber);
+        Assert.Equal(7, warning.ColumnNumber);
+        Assert.True(File.Exists(output));
     }
 
     [Fact]
@@ -127,6 +217,7 @@ public class DotnetTemplateTests
     private sealed class RecordingBuildEngine : IBuildEngine
     {
         public List<BuildErrorEventArgs> Errors { get; } = [];
+        public List<BuildWarningEventArgs> Warnings { get; } = [];
         public int ColumnNumberOfTaskNode => 1;
         public bool ContinueOnError => false;
         public int LineNumberOfTaskNode => 1;
@@ -134,9 +225,17 @@ public class DotnetTemplateTests
 
         public bool BuildProjectFile(string projectFileName, string[] targetNames, System.Collections.IDictionary globalProperties, System.Collections.IDictionary targetOutputs) => false;
         public void LogErrorEvent(BuildErrorEventArgs e) => Errors.Add(e);
-        public void LogWarningEvent(BuildWarningEventArgs e) { }
+        public void LogWarningEvent(BuildWarningEventArgs e) => Warnings.Add(e);
         public void LogMessageEvent(BuildMessageEventArgs e) { }
         public void LogCustomEvent(CustomBuildEventArgs e) { }
+    }
+
+    private sealed class WarningKsrCompileTask(string sourceFile) : KsrCompileTask
+    {
+        protected override KsrAnalysisResult AnalyzeSources(IReadOnlyList<KsrSource> sources) =>
+            new(new ProgramNode([]), [
+                new KsrDiagnostic("warning", sourceFile, 3, 7, DiagnosticSeverity.Warning)
+            ]);
     }
 
     private sealed class TemporaryDirectory : IDisposable

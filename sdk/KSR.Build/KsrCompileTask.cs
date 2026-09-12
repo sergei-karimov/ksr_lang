@@ -36,7 +36,7 @@ public class KsrCompileTask : Microsoft.Build.Utilities.Task
 
         // ── 1. Analyze each source file ───────────────────────────────────────
 
-        var allDeclarations = new List<AstNode>();
+        var sources = new List<KsrSource>();
         var hasErrors = false;
 
         foreach (var item in KsrCompile)
@@ -55,40 +55,46 @@ public class KsrCompileTask : Microsoft.Build.Utilities.Task
                 continue;
             }
 
-            KsrAnalysisResult result;
-            try
-            {
-                result = KsrAnalyzer.Analyze(source, path);
-            }
-            catch (Exception ex)
-            {
-                Log.LogError(null, null, null, path, 1, 1, 1, 1,
-                    $"Analysis error: {ex.Message}");
-                hasErrors = true;
-                continue;
-            }
-
-            foreach (var diagnostic in result.Diagnostics)
-            {
-                LogDiagnostic(diagnostic, path);
-                hasErrors |= diagnostic.Severity == DiagnosticSeverity.Error;
-            }
-
-            if (result.Program is not null)
-                allDeclarations.AddRange(result.Program.Declarations);
+            sources.Add(new KsrSource(source, path));
         }
 
         if (hasErrors)
+        {
+            RemoveOutputFile();
             return false;
+        }
+
+        KsrAnalysisResult result;
+        try
+        {
+            result = AnalyzeSources(sources);
+        }
+        catch (Exception ex)
+        {
+            Log.LogError($"KSR analysis error: {ex.Message}");
+            RemoveOutputFile();
+            return false;
+        }
+
+        foreach (var diagnostic in result.Diagnostics)
+        {
+            LogDiagnostic(diagnostic, "");
+            hasErrors |= diagnostic.Severity == DiagnosticSeverity.Error;
+        }
+
+        if (hasErrors)
+        {
+            RemoveOutputFile();
+            return false;
+        }
 
         // ── 2. Merge into one ProgramNode and generate C# ─────────────────────
 
-        var merged = new ProgramNode(allDeclarations);
         string csharp;
         try
         {
             var gen = new CodeGen.CodeGenerator();
-            csharp = gen.Generate(merged);
+            csharp = gen.Generate(result.Program ?? new ProgramNode([]));
         }
         catch (Exception ex)
         {
@@ -131,6 +137,9 @@ public class KsrCompileTask : Microsoft.Build.Utilities.Task
         return true;
     }
 
+    protected virtual KsrAnalysisResult AnalyzeSources(IReadOnlyList<KsrSource> sources) =>
+        KsrAnalyzer.Analyze(sources);
+
     private void LogDiagnostic(KsrDiagnostic diagnostic, string fallbackPath)
     {
         var path = string.IsNullOrEmpty(diagnostic.SourceFile) ? fallbackPath : diagnostic.SourceFile;
@@ -144,5 +153,21 @@ public class KsrCompileTask : Microsoft.Build.Utilities.Task
         }
 
         Log.LogWarning(null, null, null, path, line, column, line, column, diagnostic.Message);
+    }
+
+    private void RemoveOutputFile()
+    {
+        if (!File.Exists(OutputFile))
+            return;
+
+        try
+        {
+            File.Delete(OutputFile);
+            Log.LogMessage(MessageImportance.Low, $"KSR: removed stale generated output {OutputFile}");
+        }
+        catch (Exception ex)
+        {
+            Log.LogError($"KSR: cannot remove generated output file '{OutputFile}': {ex.Message}");
+        }
     }
 }

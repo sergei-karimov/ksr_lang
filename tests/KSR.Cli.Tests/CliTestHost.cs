@@ -39,6 +39,8 @@ public sealed class CliTestHost : IAsyncDisposable
         startInfo.ArgumentList.Add("run");
         startInfo.ArgumentList.Add("--project");
         startInfo.ArgumentList.Add(Path.Combine(RepositoryRoot(), "KSR.csproj"));
+        startInfo.ArgumentList.Add("--no-build");
+        startInfo.ArgumentList.Add("--no-restore");
         startInfo.ArgumentList.Add("--no-launch-profile");
         startInfo.ArgumentList.Add("--");
         startInfo.ArgumentList.Add(command);
