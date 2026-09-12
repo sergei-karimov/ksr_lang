@@ -1,4 +1,5 @@
 using KSR.AST;
+using KSR.Diagnostics;
 using KSR.Semantic;
 using Xunit;
 
@@ -13,6 +14,22 @@ public class SemanticTests
         var analyzer = new SemanticAnalyzer();
         analyzer.Analyze(program);
         return analyzer.Errors.ToList();
+    }
+
+    [Fact]
+    public void DiagnosticsExposeSemanticErrorWithoutParsingFormattedText()
+    {
+        var program = KsrHelper.Parse("fun f() {\n    val x: Int = \"str\"\n}", "semantic.ksr");
+        var analyzer = new SemanticAnalyzer();
+
+        analyzer.Analyze(program, "semantic.ksr");
+
+        var diagnostic = Assert.Single(analyzer.Diagnostics);
+        Assert.Equal("Type mismatch: cannot assign 'String' to 'Int'", diagnostic.Message);
+        Assert.Equal("semantic.ksr", diagnostic.SourceFile);
+        Assert.Equal(2, diagnostic.Line);
+        Assert.Equal(1, diagnostic.Column);
+        Assert.Equal(DiagnosticSeverity.Error, diagnostic.Severity);
     }
 
     [Fact]

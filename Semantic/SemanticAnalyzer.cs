@@ -1,16 +1,20 @@
 using KSR.AST;
+using KSR.Diagnostics;
 
 namespace KSR.Semantic;
 
 public class SemanticAnalyzer : IAstVisitor<object?>
 {
     private readonly SymbolTable _symbols = new();
-    private readonly List<string> _errors = new();
+    private readonly List<KsrDiagnostic> _diagnostics = new();
     private readonly HashSet<string> _usedNamespaces = new(StringComparer.Ordinal);
     private string _currentFile = "";
     private TypeRef? _currentReturnType;
 
-    public IReadOnlyList<string> Errors => _errors;
+    public IReadOnlyList<KsrDiagnostic> Diagnostics => _diagnostics;
+
+    // Transitional one-way projection for existing compiler and LSP callers.
+    public IReadOnlyList<string> Errors => _diagnostics.Select(FormatDiagnostic).ToArray();
 
     public SemanticAnalyzer()
     {
@@ -22,6 +26,7 @@ public class SemanticAnalyzer : IAstVisitor<object?>
     public void Analyze(ProgramNode program, string sourceFile = "")
     {
         _currentFile = sourceFile;
+        _diagnostics.Clear();
         _usedNamespaces.Clear();
         foreach (var use in program.Declarations.OfType<UseDecl>())
             _usedNamespaces.Add(use.Namespace);
@@ -30,10 +35,15 @@ public class SemanticAnalyzer : IAstVisitor<object?>
 
     private void Error(AstNode node, string message)
     {
-        int line = 0;
-        if (node is Stmt s) line = s.Line;
-        _errors.Add($"{_currentFile}({line},0): error: {message}");
+        var sourceFile = node is Stmt sourceStatement && !string.IsNullOrEmpty(sourceStatement.SourceFile)
+            ? sourceStatement.SourceFile
+            : _currentFile;
+        var line = node is Stmt { Line: > 0 } locatedStatement ? locatedStatement.Line : 1;
+        _diagnostics.Add(new KsrDiagnostic(message, sourceFile, line, 1, DiagnosticSeverity.Error));
     }
+
+    private static string FormatDiagnostic(KsrDiagnostic diagnostic) =>
+        $"{diagnostic.SourceFile}({diagnostic.Line},{diagnostic.Column}): error: {diagnostic.Message}";
 
     public object? Visit(ProgramNode node)
     {

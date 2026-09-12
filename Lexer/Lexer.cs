@@ -15,6 +15,7 @@ namespace KSR.Lexer;
 public class Lexer
 {
     private readonly string _src;
+    private readonly string _sourceFile;
     private int    _pos  = 0;
     private int    _line = 1;
     private int    _col  = 1;
@@ -46,7 +47,11 @@ public class Lexer
         ["await"]     = TokenType.Await,
     };
 
-    public Lexer(string source) => _src = source;
+    public Lexer(string source, string sourceFile = "")
+    {
+        _src = source;
+        _sourceFile = sourceFile;
+    }
 
     // ── helpers ───────────────────────────────────────────────────────────────
 
@@ -130,10 +135,10 @@ public class Lexer
                                   : Tok(TokenType.Gt,            ">",  line, col),
 
             '&' => Current == '&' ? StepTok(TokenType.AmpAmp,   "&&", line, col)
-                                  : throw new KsrLexException("Expected '&&'", line, col),
+                                  : throw LexError("Expected '&&'", line, col),
 
             '|' => Current == '|' ? StepTok(TokenType.PipePipe, "||", line, col)
-                                  : throw new KsrLexException("Expected '||'", line, col),
+                                  : throw LexError("Expected '||'", line, col),
 
             // ── dot / range ───────────────────────────────────────────────────
             '.' when Current == '.' =>
@@ -163,9 +168,12 @@ public class Lexer
 
             '@' => Tok(TokenType.At, "@", line, col),
 
-            _ => throw new KsrLexException($"Unexpected character '{c}'", line, col)
+            _ => throw LexError($"Unexpected character '{c}'", line, col)
         };
     }
+
+    private KsrLexException LexError(string message, int line, int col) =>
+        new(message, line, col, _sourceFile);
 
     private Token Tok(TokenType t, string v, int line, int col) => new(t, v, line, col);
 
@@ -285,7 +293,7 @@ public class Lexer
         }
 
         if (Current != '"')
-            throw new KsrLexException("Unterminated string literal", line, col);
+            throw LexError("Unterminated string literal", line, col);
         Step(); // closing "
 
         var type = isTemplate ? TokenType.StringTemplate : TokenType.StringLiteral;

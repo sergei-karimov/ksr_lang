@@ -62,4 +62,20 @@ public class DiagnosticsTests
         var diagnostic = Assert.Single(result.Diagnostics);
         Assert.Equal("error", diagnostic.Message);
     }
+
+    [Fact]
+    public void ParserDiagnosticExposesStructuredMessageAndLocation()
+    {
+        var parser = new KSR.Parser.Parser(
+            new KSR.Lexer.Lexer("fun f() { val = 1 }").Tokenize(),
+            "src/broken.ksr");
+
+        parser.Parse();
+
+        var diagnostic = Assert.Single(parser.Diagnostics);
+        Assert.Equal("Expected 'Identifier' but found '=' (Equals)", diagnostic.Message);
+        Assert.Equal("src/broken.ksr", diagnostic.SourceFile);
+        Assert.Equal(1, diagnostic.Line);
+        Assert.Equal(15, diagnostic.Column);
+    }
 }

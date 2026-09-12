@@ -1,4 +1,5 @@
 using KSR.AST;
+using KSR.Diagnostics;
 using KSR.Lexer;
 
 namespace KSR.Parser;
@@ -11,7 +12,7 @@ public class Parser
     private readonly List<Token> _tokens;
     private readonly string      _sourceFile;
     private int _pos;
-    private readonly List<string> _errors = new();
+    private readonly List<KsrDiagnostic> _diagnostics = new();
     private readonly bool _throwOnError;
 
     public Parser(List<Token> tokens, string sourceFile = "", bool throwOnError = false)
@@ -21,7 +22,10 @@ public class Parser
         _throwOnError = throwOnError;
     }
 
-    public IReadOnlyList<string> Errors => _errors;
+    public IReadOnlyList<KsrDiagnostic> Diagnostics => _diagnostics;
+
+    // Transitional one-way projection for existing compiler and LSP callers.
+    public IReadOnlyList<string> Errors => _diagnostics.Select(FormatDiagnostic).ToArray();
 
     // ── token helpers ─────────────────────────────────────────────────────────
 
@@ -36,7 +40,7 @@ public class Parser
         {
             Error($"Expected '{type}' but found '{Current.Value}' ({Current.Type})");
             // If we're at EOF, don't try to consume
-            if (Current.Type == TokenType.Eof) throw new KsrParseException("EOF", Current.Line, Current.Col);
+            if (Current.Type == TokenType.Eof) throw new KsrParseException("EOF", Current.Line, Current.Col, _sourceFile);
             return Consume(); // Pseudo-consume to avoid infinite loops in some callers
         }
         return Consume();
@@ -44,12 +48,19 @@ public class Parser
 
     private void Error(string message)
     {
-        var err = $"{_sourceFile}({Current.Line},{Current.Col}): error: {message}";
-        _errors.Add(err);
+        _diagnostics.Add(new KsrDiagnostic(
+            message,
+            _sourceFile,
+            Current.Line,
+            Current.Col,
+            DiagnosticSeverity.Error));
         // We still throw internally to trigger Synchronize() in caller loops,
         // or to satisfy tests that expect a fatal error.
-        throw new KsrParseException(message, Current.Line, Current.Col);
+        throw new KsrParseException(message, Current.Line, Current.Col, _sourceFile);
     }
+
+    private static string FormatDiagnostic(KsrDiagnostic diagnostic) =>
+        $"{diagnostic.SourceFile}({diagnostic.Line},{diagnostic.Column}): error: {diagnostic.Message}";
 
     private bool Check(TokenType type) => Current.Type == type;
 
@@ -1057,10 +1068,10 @@ public class Parser
 
             try
             {
-                var subTokens = new KSR.Lexer.Lexer(exprText).Tokenize();
-                var subParser = new Parser(subTokens);
+                var subTokens = new KSR.Lexer.Lexer(exprText, _sourceFile).Tokenize();
+                var subParser = new Parser(subTokens, _sourceFile);
                 parts.Add(new ExprPart(subParser.ParseExpr()));
-                _errors.AddRange(subParser.Errors); // Bubble up errors from templates
+                _diagnostics.AddRange(subParser.Diagnostics); // Bubble up errors from templates
             }
             catch
             {
