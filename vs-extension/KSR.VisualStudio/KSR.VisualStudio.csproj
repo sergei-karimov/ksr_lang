@@ -13,20 +13,31 @@
     <GenerateVsixContainer>true</GenerateVsixContainer>
     <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
     <NoWarn>$(NoWarn);NU1702</NoWarn>
+    <!-- Keep direct VSSDK packages on the Visual Studio 17.11 servicing line. -->
+    <VisualStudioSdkVersionLine>17.11</VisualStudioSdkVersionLine>
+    <VisualStudioSdkBuildToolsVersion>17.11.414</VisualStudioSdkBuildToolsVersion>
+    <VisualStudioSdkVersion>17.11.40262</VisualStudioSdkVersion>
+    <VisualStudioLanguageServerClientVersion>17.11.32</VisualStudioLanguageServerClientVersion>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.VSSDK.BuildTools" Version="17.11.36">
+    <PackageReference Include="Microsoft.VSSDK.BuildTools" Version="$(VisualStudioSdkBuildToolsVersion)">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
     </PackageReference>
-    <PackageReference Include="Microsoft.VisualStudio.SDK" Version="17.11.36" ExcludeAssets="runtime" />
-    <PackageReference Include="Microsoft.VisualStudio.LanguageServer.Client" Version="17.11.36" ExcludeAssets="runtime" />
+    <PackageReference Include="Microsoft.VisualStudio.SDK" Version="$(VisualStudioSdkVersion)" ExcludeAssets="runtime" />
+    <PackageReference Include="Microsoft.VisualStudio.LanguageServer.Client" Version="$(VisualStudioLanguageServerClientVersion)" ExcludeAssets="runtime" />
     <!-- Pin to resolve NU1605: VS.Utilities requires >= 8.0.5, LSP.Client pulls 8.0.4 -->
     <PackageReference Include="System.Text.Json" Version="8.0.5" ExcludeAssets="runtime" />
     <!-- MEF [Export] attribute; net472 SDK-style projects don't auto-reference this assembly -->
     <PackageReference Include="System.ComponentModel.Composition" Version="8.0.0" />
   </ItemGroup>
+
+  <!-- Fail restore if a direct VSSDK reference drifts outside the supported 17.11 line. -->
+  <Target Name="ValidateVisualStudioSdkDependencyLine" BeforeTargets="Restore">
+    <Error Condition="!$([System.String]::Copy('$(VisualStudioSdkBuildToolsVersion)').StartsWith('$(VisualStudioSdkVersionLine).')) Or !$([System.String]::Copy('$(VisualStudioSdkVersion)').StartsWith('$(VisualStudioSdkVersionLine).')) Or !$([System.String]::Copy('$(VisualStudioLanguageServerClientVersion)').StartsWith('$(VisualStudioSdkVersionLine).'))"
+           Text="Microsoft Visual Studio SDK package versions must remain on the $(VisualStudioSdkVersionLine) servicing line." />
+  </Target>
 
   <ItemGroup>
     <None Include="source.extension.vsixmanifest">
