@@ -42,8 +42,11 @@
     <Compile Remove="Lexer\**\*.cs" />
     <Compile Remove="Parser\**\*.cs" />
     <Compile Remove="AST\**\*.cs" />
+    <Compile Remove="Analysis\**\*.cs" />
     <Compile Remove="CodeGen\CodeGenerator.cs" />
     <Compile Remove="CodeGen\NameUtils.cs" />
+    <Compile Remove="Diagnostics\**\*.cs" />
+    <Compile Remove="Semantic\**\*.cs" />
     <!-- sdk/ and all obj/ sub-dirs are built separately; exclude them entirely -->
     <Compile Remove="sdk\**\*.cs" />
     <Compile Remove="vs-extension\**\*.cs" />

@@ -1,10 +1,45 @@
 using KSR.Diagnostics;
+using KSR.LSP;
+using System.Text.Json;
 using Xunit;
 
 namespace KSR.Tests;
 
 public class DiagnosticsTests
 {
+    [Fact]
+    public void CliDiagnosticSerializationPreservesStructuredFieldsAndEscapesMessage()
+    {
+        var diagnostics = new[]
+        {
+            new KsrDiagnostic("Bad \u03c0\nsecond line", "src/main.ksr", 4, 12, DiagnosticSeverity.Error)
+        };
+
+        using var json = JsonDocument.Parse(JsonSerializer.Serialize(diagnostics.Select(DiagnosticDto.FromDiagnostic)));
+        var diagnostic = json.RootElement[0];
+
+        Assert.Equal("Bad \u03c0\nsecond line", diagnostic.GetProperty("message").GetString());
+        Assert.Equal("src/main.ksr", diagnostic.GetProperty("sourceFile").GetString());
+        Assert.Equal(4, diagnostic.GetProperty("line").GetInt32());
+        Assert.Equal(12, diagnostic.GetProperty("col").GetInt32());
+        Assert.Equal("error", diagnostic.GetProperty("severity").GetString());
+    }
+
+    [Fact]
+    public void LspDiagnosticMappingConvertsOneBasedCoreLocationToZeroBasedRange()
+    {
+        var lsp = LspServer.ToLspDiagnostic(new KsrDiagnostic(
+            "Bad \u03c0\nsecond line", "file:///src/main.ksr", 4, 12, DiagnosticSeverity.Warning));
+
+        Assert.Equal(3, lsp.Range.Start.Line);
+        Assert.Equal(11, lsp.Range.Start.Character);
+        Assert.Equal(3, lsp.Range.End.Line);
+        Assert.Equal(11, lsp.Range.End.Character);
+        Assert.Equal(2, lsp.Severity);
+        Assert.Equal("Bad \u03c0\nsecond line", lsp.Message);
+        Assert.Equal("ksr", lsp.Source);
+    }
+
     [Fact]
     public void DiagnosticPreservesMessageLocationAndSeverity()
     {

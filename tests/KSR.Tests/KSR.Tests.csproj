@@ -19,4 +19,8 @@
     <ProjectReference Include="..\..\sdk\KSR.StdLib\KSR.StdLib.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Include="..\..\LspServer.cs" Link="LspServer.cs" />
+  </ItemGroup>
+
 </Project>
