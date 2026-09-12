@@ -56,4 +56,24 @@ public class AnalysisTests
         Assert.True(result.HasErrors);
         Assert.NotNull(result.Program);
     }
+
+    [Fact]
+    public void AnalyzeSemanticStatementErrorUsesOneBasedSourceLocation()
+    {
+        var result = KsrAnalyzer.Analyze("fun main() {\nval x: Int = \"text\"\n}", "main.ksr");
+
+        var diagnostic = Assert.Single(result.Diagnostics);
+        Assert.Equal(2, diagnostic.Line);
+        Assert.Equal(1, diagnostic.Column);
+    }
+
+    [Fact]
+    public void AnalyzeSemanticExpressionErrorFallsBackToFirstSourcePosition()
+    {
+        var result = KsrAnalyzer.Analyze("fun main() { val x = y }", "main.ksr");
+
+        var diagnostic = Assert.Single(result.Diagnostics);
+        Assert.Equal(1, diagnostic.Line);
+        Assert.Equal(1, diagnostic.Column);
+    }
 }

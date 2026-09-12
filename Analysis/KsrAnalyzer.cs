@@ -9,6 +9,7 @@ namespace KSR.Analysis;
 
 public static class KsrAnalyzer
 {
+    // Temporary semantic string adapter; remove in Task 2.
     private static readonly Regex SemanticErrorPattern = new(
         @"^.*\((?<line>\d+),(?<column>\d+)\): error: (?<message>.*)$",
         RegexOptions.Compiled);
@@ -46,13 +47,13 @@ public static class KsrAnalyzer
     {
         var match = SemanticErrorPattern.Match(error);
         if (!match.Success)
-            return new KsrDiagnostic(error, sourceFile, 0, 0, DiagnosticSeverity.Error);
+            return new KsrDiagnostic(error, sourceFile, 1, 1, DiagnosticSeverity.Error);
 
         return new KsrDiagnostic(
             match.Groups["message"].Value,
             sourceFile,
-            int.Parse(match.Groups["line"].Value),
-            int.Parse(match.Groups["column"].Value),
+            Math.Max(1, int.Parse(match.Groups["line"].Value)),
+            Math.Max(1, int.Parse(match.Groups["column"].Value)),
             DiagnosticSeverity.Error);
     }
 }

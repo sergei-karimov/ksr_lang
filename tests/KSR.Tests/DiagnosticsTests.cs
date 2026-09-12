@@ -47,4 +47,19 @@ public class DiagnosticsTests
 
         Assert.True(result.HasErrors);
     }
+
+    [Fact]
+    public void AnalysisResultDoesNotChangeWhenInputDiagnosticsAreMutated()
+    {
+        var diagnostics = new List<KsrDiagnostic>
+        {
+            new("error", "a.ksr", 2, 3, DiagnosticSeverity.Error)
+        };
+        var result = new KsrAnalysisResult(null, diagnostics);
+
+        diagnostics.Clear();
+
+        var diagnostic = Assert.Single(result.Diagnostics);
+        Assert.Equal("error", diagnostic.Message);
+    }
 }
