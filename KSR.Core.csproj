@@ -30,8 +30,10 @@
     <Compile Include="Lexer\**\*.cs" />
     <Compile Include="Parser\**\*.cs" />
     <Compile Include="AST\**\*.cs" />
+    <Compile Include="Analysis\**\*.cs" />
     <Compile Include="CodeGen\CodeGenerator.cs" />
     <Compile Include="CodeGen\NameUtils.cs" />
+    <Compile Include="Diagnostics\**\*.cs" />
     <Compile Include="Semantic\SymbolTable.cs" />
     <Compile Include="Semantic\SemanticAnalyzer.cs" />
   </ItemGroup>
