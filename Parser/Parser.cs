@@ -478,7 +478,11 @@ public class Parser
     private Expr ParseCallArg()
     {
         if (Current.Type == TokenType.Identifier && Peek().Type == TokenType.Equals)
-            return new NamedArgExpr(Consume().Value, (Consume(), ParseExpr()).Item2);
+        {
+            var name = Consume();
+            Consume(); // =
+            return WithLocation(new NamedArgExpr(name.Value, ParseExpr()), name);
+        }
         return ParseExpr();
     }
 
@@ -646,7 +650,12 @@ public class Parser
         return new ForInStmt(varName, iterable, ParseBlock());
     }
 
-    public Expr ParseExpr() => ParseElvis();
+    public Expr ParseExpr()
+    {
+        var start = Current;
+        var expression = ParseElvis();
+        return expression.Line > 0 ? expression : WithLocation(expression, start);
+    }
 
     private Expr ParseElvis()
     {
@@ -746,8 +755,8 @@ public class Parser
     {
         if (Check(TokenType.Await))
         {
-            Consume();
-            return new AwaitExpr(ParseUnary());
+            var start = Consume();
+            return WithLocation(new AwaitExpr(ParseUnary()), start);
         }
         if (Check(TokenType.Bang))
         {
@@ -783,8 +792,8 @@ public class Parser
             else if (Check(TokenType.Dot))
             {
                 Consume();
-                var member = Expect(TokenType.Identifier).Value;
-                expr = new MemberAccessExpr(expr, member);
+                var member = Expect(TokenType.Identifier);
+                expr = WithLocation(new MemberAccessExpr(expr, member.Value), member);
             }
             else if (Check(TokenType.LBracket))
             {
@@ -796,8 +805,8 @@ public class Parser
             else if (Check(TokenType.SafeCall))
             {
                 Consume();
-                var member = Expect(TokenType.Identifier).Value;
-                expr = new SafeCallExpr(expr, member);
+                var member = Expect(TokenType.Identifier);
+                expr = WithLocation(new SafeCallExpr(expr, member.Value), member);
             }
             else if (Check(TokenType.LBrace))
             {
@@ -930,7 +939,7 @@ public class Parser
                     Consume(); // [
                     var size = ParseExpr();
                     Expect(TokenType.RBracket);
-                    return new NewArrayExpr(new TypeRef(typeName, false), size);
+                    return WithLocation(new NewArrayExpr(new TypeRef(typeName, false), size), tok);
                 }
                 else
                 {
@@ -943,7 +952,7 @@ public class Parser
                             args.Add(ParseExpr());
                     }
                     Expect(TokenType.RParen);
-                    return new NewObjectExpr(typeName, args);
+                    return WithLocation(new NewObjectExpr(typeName, args), tok);
                 }
             }
 
@@ -970,7 +979,7 @@ public class Parser
 
     private WhenExpr ParseWhenExpr()
     {
-        Expect(TokenType.When);
+        var start = Expect(TokenType.When);
 
         Expr? subject = null;
         if (Match(TokenType.LParen))
@@ -1025,7 +1034,7 @@ public class Parser
         }
 
         Expect(TokenType.RBrace);
-        return new WhenExpr(subject, arms);
+        return WithLocation(new WhenExpr(subject, arms), start);
     }
 
     private Expr ParseCollectionLiteral()

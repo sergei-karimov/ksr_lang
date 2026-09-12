@@ -7,6 +7,140 @@ namespace KSR.Tests;
 
 public class SemanticTests
 {
+    [Theory]
+    [InlineData("add(\"nope\", 2)", "argument", 9)]
+    [InlineData("add(z = 1, b = 2)", "Unknown named argument", 9)]
+    [InlineData("add(a = 1, a = 2)", "Duplicate argument", 16)]
+    [InlineData("add(1, a = 2)", "Duplicate argument", 12)]
+    [InlineData("add(a = 1, 2)", "Positional argument", 16)]
+    [InlineData("add(b = \"nope\", a = 1)", "argument", 9)]
+    public void InvalidArgumentsProduceLocatedDiagnostics(string call, string message, int column)
+    {
+        var result = KSR.Analysis.KsrAnalyzer.Analyze(
+            "fun add(a: Int, b: Int): Int { return a + b }\nfun main() {\n    " + call + "\n}", "arguments.ksr");
+        Assert.NotNull(result.Program);
+        Assert.Contains(result.Diagnostics, d => d.Message.Contains(message, StringComparison.OrdinalIgnoreCase)
+            && d.SourceFile == "arguments.ksr" && d.Line == 3 && d.Column == column
+            && d.Severity == DiagnosticSeverity.Error);
+    }
+
+    [Theory]
+    [InlineData("fun f(): Int {}")]
+    [InlineData("fun f(x: Bool): Int { if (x) { return 1 } }")]
+    [InlineData("fun f(x: Bool): Int { while (x) { return 1 } }")]
+    [InlineData("fun f(): Int { val callback = { -> return 1 } }")]
+    [InlineData("fun Int.f(): Int {}")]
+    public void MissingReturnPathReportsFunctionDeclaration(string declaration)
+    {
+        var result = KSR.Analysis.KsrAnalyzer.Analyze("\n    " + declaration, "returns.ksr");
+        Assert.NotNull(result.Program);
+        Assert.Contains(result.Diagnostics, d => d.Message.Contains("return", StringComparison.OrdinalIgnoreCase)
+            && d.SourceFile == "returns.ksr" && d.Line == 2 && d.Column == 5);
+    }
+
+    [Theory]
+    [InlineData("User", "u.missing", 7)]
+    [InlineData("User?", "u?.missing", 8)]
+    [InlineData("User", "u.missing()", 7)]
+    public void UnknownMemberProducesLocatedDiagnostic(string type, string access, int column)
+    {
+        var result = KSR.Analysis.KsrAnalyzer.Analyze(
+            "struct User(name: String)\nfun f(u: " + type + ") {\n    " + access + "\n}", "members.ksr");
+        var diagnostic = Assert.Single(result.Diagnostics);
+        Assert.Contains("Unknown member 'missing'", diagnostic.Message);
+        Assert.Equal("members.ksr", diagnostic.SourceFile);
+        Assert.Equal(3, diagnostic.Line);
+        Assert.Equal(column, diagnostic.Column);
+    }
+
+    [Theory]
+    [InlineData("fun add(a: Int, b: Int = 2): Int { return a + b }\nfun f() { add(b = 2, a = 1)\nadd(1) }")]
+    [InlineData("fun f(a: Bool, b: Bool): Int { if (a) { if (b) { return 1 } else { return 2 } } else { return 3 } }")]
+    [InlineData("fun f(a: Bool): Int { if (a) { return 1 }\nreturn 2 }")]
+    [InlineData("fun f(x: Any) { x.arbitrary().field }")]
+    [InlineData("struct User(name: String)\nfun User.greet(n: Int): String { return this.name }\nfun f(u: User) { println(u.greet(1)) }")]
+    [InlineData("interface Named { fun name(): String }\nstruct User(value: String)\nimplement Named for User { fun name(): String { return this.value } }\nfun f(u: User, n: Named) { println(u.name())\nprintln(n.name()) }")]
+    [InlineData("fun <T> identity(x: T): T { return x }\nfun f() { val n: Int = identity(1) }")]
+    public void ValidCallsMembersAndReturnPathsRemainAccepted(string source)
+    {
+        Assert.Empty(Analyze(source));
+    }
+
+    [Theory]
+    [InlineData("struct Box(value: Int)\nfun f() { Box(\"bad\") }", "argument")]
+    [InlineData("struct Box(value: Int)\nfun f() { new Box(\"bad\") }", "argument")]
+    [InlineData("struct Box(value: Int)\nfun Box.add(n: Int): Int { return this.value + n }\nfun f(b: Box) { b.add(\"bad\") }", "argument")]
+    [InlineData("interface Adder { fun add(n: Int): Int }\nfun f(a: Adder) { a.add(\"bad\") }", "argument")]
+    [InlineData("fun f(s: String) { s.missing }", "Unknown member")]
+    [InlineData("fun f(n: Int) { n.missing() }", "Unknown member")]
+    [InlineData("fun f(x: Int?) {}\nfun main() { f(\"bad\") }", "argument")]
+    [InlineData("fun f(x: Int) {}\nfun main() { f(null) }", "argument")]
+    [InlineData("fun f(x: List<Int>) {}\nfun main() { f([\"bad\"]) }", "argument")]
+    public void KnownSignaturesAndMembersRejectInvalidValues(string source, string message)
+    {
+        var result = KSR.Analysis.KsrAnalyzer.Analyze(source, "types.ksr");
+        Assert.NotNull(result.Program);
+        Assert.Contains(result.Diagnostics, d => d.Message.Contains(message, StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Theory]
+    [InlineData("[1]", "Int")]
+    [InlineData("1 + 2", "String")]
+    [InlineData("-1", "String")]
+    [InlineData("new Box(1)", "Int")]
+    public void CompoundArgumentErrorsRetainExpressionLocation(string argument, string type)
+    {
+        var result = KSR.Analysis.KsrAnalyzer.Analyze(
+            "struct Box(n: Int)\nfun take(x: " + type + ") {}\nfun main() {\n    take(" + argument + ")\n}", "compound.ksr");
+        var diagnostic = Assert.Single(result.Diagnostics);
+        Assert.Contains("argument", diagnostic.Message);
+        Assert.Equal("compound.ksr", diagnostic.SourceFile);
+        Assert.Equal(4, diagnostic.Line);
+        Assert.Equal(10, diagnostic.Column);
+    }
+
+    [Theory]
+    [InlineData("fun <T> identity(x: T): T { return x }\nfun f() { val xs: List<List<Int>> = identity([[1]]) }")]
+    [InlineData("fun <T> identity(x: List<T>): List<T> { return x }\nfun f() { val xs: List<List<Int>> = identity([[1]]) }")]
+    [InlineData("interface Box<T> { fun get(): T }\nfun f(b: Box<Int>) { val x: Int = b.get() }")]
+    [InlineData("struct Box(value: Int)\nfun f(b: Box) { val text: String = b.toString() }")]
+    public void KnownGenericAndInheritedMembersRemainUsable(string source)
+    {
+        Assert.Empty(Analyze(source));
+    }
+
+    [Fact]
+    public void GenericInterfaceDoesNotMakeMissingMembersDynamic()
+    {
+        var result = KSR.Analysis.KsrAnalyzer.Analyze(
+            "interface Box<T> { fun get(): T }\nfun f(b: Box<Int>) { b.missing() }", "generic.ksr");
+        Assert.Contains(result.Diagnostics, d => d.Message.Contains("Unknown member 'missing'"));
+    }
+
+    [Theory]
+    [InlineData("interface Box<T> { fun put(value: T) }\nfun f(b: Box<Int>) { b.put(\"bad\") }")]
+    [InlineData("interface Adder { fun add(n: Int): Int }\nstruct Box(value: Int)\nimplement Adder for Box { fun add(n: Int): Int { return this.value + n } }\nfun f(b: Box) { b.add(n = \"bad\") }")]
+    public void MemberCallsUseResolvedParameterTypes(string source)
+    {
+        var result = KSR.Analysis.KsrAnalyzer.Analyze(source, "members.ksr");
+        var diagnostic = Assert.Single(result.Diagnostics);
+        Assert.Contains("argument", diagnostic.Message);
+    }
+
+    [Fact]
+    public void MethodResultRetainsItsTypeForFollowingArgumentCheck()
+    {
+        var result = KSR.Analysis.KsrAnalyzer.Analyze("""
+            struct Box(value: Int)
+            fun Box.text(): String { return "text" }
+            fun take(n: Int) {}
+            fun f(b: Box) { take(b.text()) }
+            """, "members.ksr");
+        var diagnostic = Assert.Single(result.Diagnostics);
+        Assert.Contains("argument", diagnostic.Message);
+        Assert.Contains("String", diagnostic.Message);
+    }
+
     private static List<string> Analyze(string src)
     {
         var tokens = new Lexer.Lexer(src).Tokenize();

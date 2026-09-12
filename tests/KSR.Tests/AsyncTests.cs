@@ -14,6 +14,41 @@ namespace KSR.Tests;
 //    4. CodeGen — generated C# content
 // ─────────────────────────────────────────────────────────────────────────────
 
+public class AsyncTests
+{
+    [Theory]
+    [InlineData("fun f() {", "    await g()", 5)]
+    [InlineData("fun Int.f() {", "    await g()", 5)]
+    [InlineData("async fun f() {", "    val callback = { -> await g() }", 25)]
+    public void AwaitOutsideAsyncContextReportsAwaitLocation(string header, string body, int column)
+    {
+        var result = KSR.Analysis.KsrAnalyzer.Analyze(
+            "async fun g() {}\n" + header + "\n" + body + "\n}", "await.ksr");
+        Assert.NotNull(result.Program);
+        var diagnostic = Assert.Single(result.Diagnostics);
+        Assert.Contains("await", diagnostic.Message);
+        Assert.Equal(KSR.Diagnostics.DiagnosticSeverity.Error, diagnostic.Severity);
+        Assert.Equal("await.ksr", diagnostic.SourceFile);
+        Assert.Equal(3, diagnostic.Line);
+        Assert.Equal(column, diagnostic.Column);
+    }
+
+    [Fact]
+    public void AsyncContextIsRestoredAfterLambdaAndFunction()
+    {
+        var result = KSR.Analysis.KsrAnalyzer.Analyze("""
+            async fun g(): Int { return 1 }
+            async fun Int.f(): Int { val callback = { -> 1 }
+                return await g() }
+            async fun f(): Int { return await g() }
+            fun invalid() { await g() }
+            """, "await.ksr");
+        var diagnostic = Assert.Single(result.Diagnostics);
+        Assert.Contains("await", diagnostic.Message);
+        Assert.Equal(5, diagnostic.Line);
+    }
+}
+
 public class AsyncLexerTests
 {
     [Fact]

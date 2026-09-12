@@ -10,6 +10,15 @@ public class SemanticAnalyzer : IAstVisitor<object?>
     private readonly HashSet<string> _usedNamespaces = new(StringComparer.Ordinal);
     private string _currentFile = "";
     private TypeRef? _currentReturnType;
+    private bool _isAsyncFunction;
+    private readonly List<ExtFunctionDecl> _extensions = new();
+    private readonly List<ImplBlock> _implementations = new();
+    private readonly Dictionary<string, string> _sealedBases = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _externalTypes = new(StringComparer.Ordinal);
+    private readonly HashSet<WhenExpr> _statementWhens = new(ReferenceEqualityComparer.Instance);
+
+    private record MemberInfo(TypeRef Type, IReadOnlyList<Parameter>? Parameters = null,
+        IReadOnlyList<string>? TypeParams = null);
 
     public IReadOnlyList<KsrDiagnostic> Diagnostics => _diagnostics;
 
@@ -48,6 +57,8 @@ public class SemanticAnalyzer : IAstVisitor<object?>
 
     public object? Visit(ProgramNode node)
     {
+        _extensions.AddRange(node.Declarations.OfType<ExtFunctionDecl>());
+        _implementations.AddRange(node.Declarations.OfType<ImplBlock>());
         // Pass 1: Register all top-level names
         foreach (var decl in node.Declarations)
         {
@@ -66,6 +77,7 @@ public class SemanticAnalyzer : IAstVisitor<object?>
                         Error(sd, $"Redeclaration of sealed type '{sd.Name}'");
                     foreach (var v in sd.Variants)
                     {
+                        _sealedBases.TryAdd(v.Name, sd.Name);
                         if (!_symbols.Declare(v.Name, SymbolKind.Struct, false, v))
                             Error(v, $"Redeclaration of struct '{v.Name}' (in sealed '{sd.Name}')");
                     }
@@ -88,7 +100,10 @@ public class SemanticAnalyzer : IAstVisitor<object?>
     public object? Visit(InterfaceDecl id) => null;
     public object? Visit(ImplBlock node)
     {
+        _symbols.EnterScope();
+        _symbols.Declare("this", SymbolKind.Parameter, false, new TypeRef(node.TypeName, false));
         foreach (var m in node.Methods) m.Accept(this);
+        _symbols.ExitScope();
         return null;
     }
     public object? Visit(UseDecl node) => null;
@@ -98,6 +113,8 @@ public class SemanticAnalyzer : IAstVisitor<object?>
     public object? Visit(FunctionDecl fd)
     {
         var previousReturnType = _currentReturnType;
+        var previousAsync = _isAsyncFunction;
+        _isAsyncFunction = fd.IsAsync;
         _currentReturnType = fd.ReturnType ?? new TypeRef("Unit", false);
 
         _symbols.EnterScope();
@@ -107,15 +124,19 @@ public class SemanticAnalyzer : IAstVisitor<object?>
                 Error(fd, $"Duplicate parameter name '{p.Name}' in function '{fd.Name}'");
         }
         VisitFunctionBody(fd.Body);
+        CheckReturnPaths(fd, fd.Body, _currentReturnType);
         _symbols.ExitScope();
 
         _currentReturnType = previousReturnType;
+        _isAsyncFunction = previousAsync;
         return null;
     }
 
     public object? Visit(ExtFunctionDecl efd)
     {
         var previousReturnType = _currentReturnType;
+        var previousAsync = _isAsyncFunction;
+        _isAsyncFunction = efd.IsAsync;
         _currentReturnType = efd.ReturnType ?? new TypeRef("Unit", false);
 
         _symbols.EnterScope();
@@ -126,9 +147,11 @@ public class SemanticAnalyzer : IAstVisitor<object?>
                 Error(efd, $"Duplicate parameter name '{p.Name}' in extension function '{efd.MethodName}'");
         }
         VisitFunctionBody(efd.Body);
+        CheckReturnPaths(efd, efd.Body, _currentReturnType);
         _symbols.ExitScope();
 
         _currentReturnType = previousReturnType;
+        _isAsyncFunction = previousAsync;
         return null;
     }
 
@@ -281,7 +304,13 @@ public class SemanticAnalyzer : IAstVisitor<object?>
 
     public object? Visit(ExprStmt node)
     {
-        node.Expression.Accept(this);
+        if (node.Expression is WhenExpr when)
+        {
+            _statementWhens.Add(when);
+            try { when.Accept(this); }
+            finally { _statementWhens.Remove(when); }
+        }
+        else node.Expression.Accept(this);
         return null;
     }
 
@@ -328,51 +357,36 @@ public class SemanticAnalyzer : IAstVisitor<object?>
 
     public object? Visit(CallExpr node)
     {
-        foreach (var a in node.Arguments) a.Accept(this);
-
         if (node.Callee is IdentifierExpr id)
         {
             var sym = _symbols.Resolve(id.Name);
             if (sym?.Metadata is FunctionDecl fd)
             {
-                if (node.Arguments.Count != fd.Parameters.Count)
-                    Error(node, $"Expected {fd.Parameters.Count} arguments but found {node.Arguments.Count}");
-                return fd.ReturnType;
+                return CheckArguments(node, node.Arguments, new MemberInfo(
+                    fd.ReturnType ?? new TypeRef("Unit", false), fd.Parameters, fd.TypeParams));
             }
-            if (sym?.Metadata is StructDecl) return new TypeRef(id.Name, false);
-            if (sym?.Metadata is InterfaceDecl) return new TypeRef(id.Name, false);
+            if (sym?.Metadata is StructDecl sd)
+                return CheckArguments(node, node.Arguments, new MemberInfo(new TypeRef(id.Name, false), sd.Properties));
         }
-        
+        if (node.Callee is MemberAccessExpr member)
+            return CheckArguments(node, node.Arguments, AnalyzeMember(member, member.Target, member.Member, false));
+        if (node.Callee is SafeCallExpr safe)
+            return CheckArguments(node, node.Arguments, AnalyzeMember(safe, safe.Target, safe.Member, true));
+
         node.Callee.Accept(this);
-        return new TypeRef("Any", false);
+        return CheckArguments(node, node.Arguments, null);
     }
 
     public object? Visit(MemberAccessExpr node)
     {
-        if (LooksLikeExternalStaticAccess(node.Target))
-            return new TypeRef("Any", false);
-
-        var targetType = (TypeRef?)node.Target.Accept(this);
-        if (targetType != null)
-        {
-            var memberType = ResolveMemberType(targetType, node.Member);
-            return memberType ?? new TypeRef("Any", false);
-        }
-        return new TypeRef("Any", false); 
+        var member = AnalyzeMember(node, node.Target, node.Member, false);
+        return member?.Parameters != null ? new TypeRef("Function", false) : member?.Type;
     }
 
     public object? Visit(SafeCallExpr node)
     {
-        if (LooksLikeExternalStaticAccess(node.Target))
-            return new TypeRef("Any", true);
-
-        var targetType = (TypeRef?)node.Target.Accept(this);
-        if (targetType != null)
-        {
-            var memberType = ResolveMemberType(targetType, node.Member);
-            return memberType != null ? memberType with { Nullable = true } : new TypeRef("Any", true);
-        }
-        return new TypeRef("Any", true);
+        var member = AnalyzeMember(node, node.Target, node.Member, true);
+        return member?.Parameters != null ? new TypeRef("Function", true) : member?.Type;
     }
 
     public object? Visit(ElvisExpr node)
@@ -411,6 +425,8 @@ public class SemanticAnalyzer : IAstVisitor<object?>
     public object? Visit(LambdaExpr node)
     {
         var previousReturnType = _currentReturnType;
+        var previousAsync = _isAsyncFunction;
+        _isAsyncFunction = false; // Lambda syntax currently has no async modifier.
         _currentReturnType = null;
 
         try
@@ -427,11 +443,16 @@ public class SemanticAnalyzer : IAstVisitor<object?>
         finally
         {
             _currentReturnType = previousReturnType;
+            _isAsyncFunction = previousAsync;
         }
     }
 
     public object? Visit(NewObjectExpr node)
     {
+        if (_symbols.ResolveType(node.TypeName)?.Metadata is StructDecl sd)
+            return CheckArguments(node, node.Arguments, new MemberInfo(new TypeRef(sd.Name, false), sd.Properties));
+        // CLR constructor signatures are resolved later by the C# compiler.
+        _externalTypes.Add(node.TypeName);
         foreach (var a in node.Arguments) a.Accept(this);
         return new TypeRef(node.TypeName, false);
     }
@@ -462,12 +483,36 @@ public class SemanticAnalyzer : IAstVisitor<object?>
 
     public object? Visit(WhenExpr node)
     {
-        node.Subject?.Accept(this);
+        var subjectType = (TypeRef?)node.Subject?.Accept(this);
+        if (!_statementWhens.Contains(node) && subjectType != null
+            && _symbols.ResolveType(subjectType.Name)?.Metadata is SealedDecl sealedType
+            && !node.Arms.Any(a => a.Pattern == null))
+        {
+            var covered = node.Arms.Select(a => a.Pattern).OfType<IsPatternExpr>()
+                .Select(p => p.TypeName).ToHashSet(StringComparer.Ordinal);
+            var missing = sealedType.Variants.Where(v => !covered.Contains(v.Name)
+                && !covered.Contains(sealedType.Name)).Select(v => v.Name).ToList();
+            if (subjectType.Nullable && !node.Arms.Any(a => a.Pattern is NullLiteral)) missing.Add("null");
+            if (missing.Count > 0)
+                Error(node, $"Non-exhaustive when: missing {string.Join(", ", missing)}");
+        }
         TypeRef? first = null;
         foreach (var arm in node.Arms)
         {
+            _symbols.EnterScope();
+            if (arm.Pattern is IsPatternExpr { Binding: not null } pattern)
+                _symbols.Declare(pattern.Binding, SymbolKind.Variable, false, new TypeRef(pattern.TypeName, false));
             arm.Pattern?.Accept(this);
-            var t = (TypeRef?)arm.Body.Accept(this);
+            // Only the arm's direct expression inherits statement context.
+            var statementWhen = _statementWhens.Contains(node) ? arm.Body as WhenExpr : null;
+            if (statementWhen != null) _statementWhens.Add(statementWhen);
+            TypeRef? t;
+            try { t = (TypeRef?)arm.Body.Accept(this); }
+            finally
+            {
+                if (statementWhen != null) _statementWhens.Remove(statementWhen);
+                _symbols.ExitScope();
+            }
             first ??= t;
         }
         return first ?? new TypeRef("Any", false);
@@ -485,6 +530,7 @@ public class SemanticAnalyzer : IAstVisitor<object?>
 
     public object? Visit(AwaitExpr node)
     {
+        if (!_isAsyncFunction) Error(node, "'await' is only allowed inside an async function");
         return node.Operand.Accept(this);
     }
 
@@ -500,14 +546,225 @@ public class SemanticAnalyzer : IAstVisitor<object?>
 
     // ── Helpers ──────────────────────────────────────────────────────────────
 
-    private TypeRef? ResolveMemberType(TypeRef target, string member)
+    private void CheckReturnPaths(AstNode declaration, Block body, TypeRef returnType)
     {
-        var sym = _symbols.Resolve(target.Name);
-        if (sym?.Metadata is StructDecl sd)
+        if (returnType.Name != "Unit" && !AlwaysReturns(body))
+            Error(declaration, $"Not all paths return a value of type '{returnType.Name}'");
+    }
+
+    private static bool AlwaysReturns(AstNode node) => node switch
+    {
+        ReturnStmt => true,
+        Block block => block.Statements.Any(AlwaysReturns),
+        IfStmt conditional => AlwaysReturns(conditional.Then)
+            && conditional.Else != null && AlwaysReturns(conditional.Else),
+        // Loops may execute zero times; lambda returns belong to the lambda.
+        _ => false,
+    };
+
+    private TypeRef? CheckArguments(AstNode call, IReadOnlyList<Expr> arguments, MemberInfo? signature)
+    {
+        var parameters = signature?.Parameters;
+        var supplied = new HashSet<int>();
+        var names = new HashSet<string>(StringComparer.Ordinal);
+        var substitutions = new Dictionary<string, TypeRef>(StringComparer.Ordinal);
+        var sawNamed = false;
+        var malformed = false;
+        for (var i = 0; i < arguments.Count; i++)
         {
-            var prop = sd.Properties.FirstOrDefault(p => p.Name == member);
-            if (prop != null) return prop.Type;
+            var argument = arguments[i];
+            var actual = (TypeRef?)argument.Accept(this);
+            var index = i;
+            if (argument is NamedArgExpr named)
+            {
+                sawNamed = true;
+                if (!names.Add(named.Name))
+                {
+                    Error(argument, $"Duplicate argument '{named.Name}'");
+                    malformed = true;
+                    continue;
+                }
+                if (parameters != null)
+                {
+                    index = -1;
+                    for (var p = 0; p < parameters.Count; p++)
+                        if (parameters[p].Name == named.Name) { index = p; break; }
+                    if (index < 0)
+                    {
+                        Error(argument, $"Unknown named argument '{named.Name}'");
+                        malformed = true;
+                        continue;
+                    }
+                }
+            }
+            else if (sawNamed)
+            {
+                Error(argument, "Positional argument cannot follow a named argument");
+                malformed = true;
+            }
+
+            if (parameters == null || index >= parameters.Count) continue;
+            var parameter = parameters[index];
+            if (!supplied.Add(index))
+            {
+                Error(argument, $"Duplicate argument '{parameter.Name}'");
+                malformed = true;
+                continue;
+            }
+            if (actual == null) continue;
+            InferTypeArguments(parameter.Type, actual, signature?.TypeParams, substitutions);
+            var expected = SubstituteType(parameter.Type, substitutions);
+            if (!IsCompatible(expected, actual))
+                Error(argument, $"Type mismatch for argument '{parameter.Name}': expected '{DisplayType(expected)}' but found '{DisplayType(actual)}'");
         }
+
+        if (parameters != null && !malformed
+            && (arguments.Count > parameters.Count
+                || parameters.Where((p, i) => p.Default == null && !supplied.Contains(i)).Any()))
+            Error(call, $"Expected {parameters.Count} arguments but found {arguments.Count} (required parameters must be supplied)");
+        return signature == null ? null : SubstituteType(signature.Type, substitutions);
+    }
+
+    private static string DisplayType(TypeRef type) => type.Name + (type.Nullable ? "?" : "");
+
+    private static TypeRef SubstituteType(TypeRef type, IReadOnlyDictionary<string, TypeRef> substitutions)
+    {
+        if (substitutions.TryGetValue(type.Name, out var replacement))
+            return replacement with { Nullable = type.Nullable || replacement.Nullable };
+        if (type.Name.EndsWith("[]"))
+            return type with { Name = DisplayType(SubstituteType(new TypeRef(type.Name[..^2], false), substitutions)) + "[]" };
+        var (name, arguments) = TypeShape(type);
+        return arguments.Count == 0 ? type : type with
+        {
+            Name = $"{name}<{string.Join(", ", arguments.Select(a => DisplayType(SubstituteType(a, substitutions))))}>"
+        };
+    }
+
+    // Keep the existing TypeRef representation while reading nested generic shapes
+    // in one place for inference, substitution and member lookup.
+    private static (string Name, List<TypeRef> Arguments) TypeShape(TypeRef type)
+    {
+        var open = type.Name.IndexOf('<');
+        if (open < 0 || !type.Name.EndsWith('>')) return (type.Name, []);
+        var arguments = new List<TypeRef>();
+        var depth = 0;
+        var start = open + 1;
+        for (var i = start; i < type.Name.Length; i++)
+        {
+            var ch = type.Name[i];
+            if ((ch == ',' && depth == 0) || i == type.Name.Length - 1)
+            {
+                var argument = type.Name[start..i].Trim();
+                arguments.Add(new TypeRef(argument.TrimEnd('?'), argument.EndsWith('?')));
+                start = i + 1;
+            }
+            else if (ch == '<') depth++;
+            else if (ch == '>') depth--;
+        }
+        return (type.Name[..open], arguments);
+    }
+
+    private static void InferTypeArguments(TypeRef expected, TypeRef actual, IReadOnlyList<string>? typeParams,
+        Dictionary<string, TypeRef> substitutions)
+    {
+        if (typeParams == null) return;
+        if (typeParams.Contains(expected.Name))
+        {
+            substitutions.TryAdd(expected.Name, actual with { Nullable = actual.Nullable && !expected.Nullable });
+            return;
+        }
+        if (expected.Name.EndsWith("[]") && actual.Name.EndsWith("[]"))
+        {
+            InferTypeArguments(new TypeRef(expected.Name[..^2], false), new TypeRef(actual.Name[..^2], false), typeParams, substitutions);
+            return;
+        }
+        var expectedShape = TypeShape(expected);
+        var actualShape = TypeShape(actual);
+        if (expectedShape.Name != actualShape.Name || expectedShape.Arguments.Count != actualShape.Arguments.Count) return;
+        for (var i = 0; i < expectedShape.Arguments.Count; i++)
+            InferTypeArguments(expectedShape.Arguments[i], actualShape.Arguments[i], typeParams, substitutions);
+    }
+
+    private MemberInfo? AnalyzeMember(AstNode node, Expr target, string name, bool safe)
+    {
+        if (LooksLikeExternalStaticAccess(target)) return new MemberInfo(new TypeRef("Any", safe));
+        var targetType = (TypeRef?)target.Accept(this);
+        if (targetType == null) return null; // A prior diagnostic already explains the unresolved target.
+        var member = ResolveMember(targetType, name);
+        if (member == null)
+        {
+            Error(node, $"Unknown member '{name}' on type '{targetType.Name}'");
+            return null;
+        }
+        return safe ? member with { Type = member.Type with { Nullable = true } } : member;
+    }
+
+    private MemberInfo? ResolveMember(TypeRef target, string member)
+    {
+        var targetShape = TypeShape(target);
+        var declaration = _symbols.ResolveType(targetShape.Name)?.Metadata;
+        if (declaration is StructDecl sd)
+        {
+            var property = sd.Properties.FirstOrDefault(p => p.Name == member);
+            if (property != null) return new MemberInfo(property.Type);
+        }
+        if (declaration is InterfaceDecl id)
+        {
+            var method = id.Methods.FirstOrDefault(m => m.Name == member);
+            if (method != null)
+            {
+                var bindings = id.TypeParams.Zip(targetShape.Arguments)
+                    .ToDictionary(pair => pair.First, pair => pair.Second, StringComparer.Ordinal);
+                return new MemberInfo(SubstituteType(method.ReturnType ?? new TypeRef("Unit", false), bindings),
+                    method.Parameters.Select(p => p with { Type = SubstituteType(p.Type, bindings) }).ToArray());
+            }
+        }
+        var implementation = _implementations.Where(i => i.TypeName == target.Name)
+            .SelectMany(i => i.Methods).FirstOrDefault(m => m.Name == member);
+        if (implementation != null)
+            return new MemberInfo(implementation.ReturnType ?? new TypeRef("Unit", false),
+                implementation.Parameters, implementation.TypeParams);
+        foreach (var extension in _extensions.Where(e => e.MethodName == member))
+        {
+            var bindings = new Dictionary<string, TypeRef>(StringComparer.Ordinal);
+            var receiver = new TypeRef(extension.ReceiverType, false);
+            InferTypeArguments(receiver, target, extension.TypeParams, bindings);
+            if (!IsCompatible(SubstituteType(receiver, bindings), target with { Nullable = false })) continue;
+            return new MemberInfo(SubstituteType(extension.ReturnType ?? new TypeRef("Unit", false), bindings),
+                extension.Parameters.Select(p => p with { Type = SubstituteType(p.Type, bindings) }).ToArray(), extension.TypeParams);
+        }
+        // Language records and interfaces retain the standard object methods.
+        if (declaration != null)
+            return member switch
+            {
+                "toString" or "ToString" => new MemberInfo(new TypeRef("String", false), []),
+                "getHashCode" or "GetHashCode" => new MemberInfo(new TypeRef("Int", false), []),
+                "equals" or "Equals" => new MemberInfo(new TypeRef("Bool", false), [new Parameter("obj", new TypeRef("Any", true))]),
+                _ => null,
+            };
+
+        var runtimeType = target.Name switch
+        {
+            "String" => typeof(string), "Int" => typeof(int), "Double" => typeof(double),
+            "Bool" => typeof(bool), "Long" => typeof(long), "Float" => typeof(float),
+            _ => null,
+        };
+        if (runtimeType != null)
+        {
+            var clrName = char.ToUpperInvariant(member[0]) + member[1..];
+            var property = runtimeType.GetProperty(clrName);
+            if (property != null)
+                return new MemberInfo(property.PropertyType == typeof(int) ? new TypeRef("Int", false) : new TypeRef("Any", false));
+            if (runtimeType.GetMethods().Any(m => m.Name == clrName))
+                return new MemberInfo(new TypeRef("Any", false)); // CLR overload resolution is deferred.
+            return null;
+        }
+
+        // Imported APIs, CLR objects, collection extensions and untyped lambda
+        // parameters are intentionally dynamic until external metadata is available.
+        if (target.Name is "Any" or "Function" || _externalTypes.Contains(target.Name)
+            || target.Name.EndsWith("[]") || target.Name.Contains('<') || _usedNamespaces.Count > 0)
+            return new MemberInfo(new TypeRef("Any", false));
         return null;
     }
 
@@ -539,8 +796,9 @@ public class SemanticAnalyzer : IAstVisitor<object?>
         {
             // 'null' (Any?) is compatible with any nullable target
             if (source.Nullable && target.Nullable) return true;
-            // 'Any' (non-null) is only compatible if target is 'Any'
-            return target.Name == "Any";
+            // Non-null Any is the intentional dynamic representation for external
+            // calls and untyped lambda parameters; Any? represents the null literal.
+            return !source.Nullable;
         }
 
         if (target.Name == source.Name)
@@ -548,6 +806,9 @@ public class SemanticAnalyzer : IAstVisitor<object?>
             if (!target.Nullable && source.Nullable) return false;
             return true;
         }
+        if (!target.Nullable && source.Nullable) return false;
+        if (_sealedBases.TryGetValue(source.Name, out var sealedBase) && sealedBase == target.Name) return true;
+        if (_implementations.Any(i => i.TypeName == source.Name && i.InterfaceName == target.Name)) return true;
         return false;
     }
 }
