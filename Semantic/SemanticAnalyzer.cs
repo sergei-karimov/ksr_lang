@@ -369,9 +369,9 @@ public class SemanticAnalyzer : IAstVisitor<object?>
                 return CheckArguments(node, node.Arguments, new MemberInfo(new TypeRef(id.Name, false), sd.Properties));
         }
         if (node.Callee is MemberAccessExpr member)
-            return CheckArguments(node, node.Arguments, AnalyzeMember(member, member.Target, member.Member, false));
+            return CheckArguments(node, node.Arguments, AnalyzeMember(member, member.Target, member.Member, false, isCall: true));
         if (node.Callee is SafeCallExpr safe)
-            return CheckArguments(node, node.Arguments, AnalyzeMember(safe, safe.Target, safe.Member, true));
+            return CheckArguments(node, node.Arguments, AnalyzeMember(safe, safe.Target, safe.Member, true, isCall: true));
 
         node.Callee.Accept(this);
         return CheckArguments(node, node.Arguments, null);
@@ -685,12 +685,12 @@ public class SemanticAnalyzer : IAstVisitor<object?>
             InferTypeArguments(expectedShape.Arguments[i], actualShape.Arguments[i], typeParams, substitutions);
     }
 
-    private MemberInfo? AnalyzeMember(AstNode node, Expr target, string name, bool safe)
+    private MemberInfo? AnalyzeMember(AstNode node, Expr target, string name, bool safe, bool isCall = false)
     {
         if (LooksLikeExternalStaticAccess(target)) return new MemberInfo(new TypeRef("Any", safe));
         var targetType = (TypeRef?)target.Accept(this);
         if (targetType == null) return null; // A prior diagnostic already explains the unresolved target.
-        var member = ResolveMember(targetType, name);
+        var member = ResolveMember(targetType, name, isCall);
         if (member == null)
         {
             Error(node, $"Unknown member '{name}' on type '{targetType.Name}'");
@@ -699,8 +699,11 @@ public class SemanticAnalyzer : IAstVisitor<object?>
         return safe ? member with { Type = member.Type with { Nullable = true } } : member;
     }
 
-    private MemberInfo? ResolveMember(TypeRef target, string member)
+    private MemberInfo? ResolveMember(TypeRef target, string member, bool isCall)
     {
+        // Dynamic values are explicit or originate at an external API boundary.
+        // Neither an import nor generic/array syntax makes a typed value dynamic.
+        if (target.Name == "Any") return new MemberInfo(new TypeRef("Any", false));
         var targetShape = TypeShape(target);
         var declaration = _symbols.ResolveType(targetShape.Name)?.Metadata;
         if (declaration is StructDecl sd)
@@ -743,28 +746,130 @@ public class SemanticAnalyzer : IAstVisitor<object?>
                 _ => null,
             };
 
-        var runtimeType = target.Name switch
+        var runtimeType = targetShape.Name switch
         {
             "String" => typeof(string), "Int" => typeof(int), "Double" => typeof(double),
             "Bool" => typeof(bool), "Long" => typeof(long), "Float" => typeof(float),
+            "List" when targetShape.Arguments.Count == 1 => typeof(IReadOnlyList<>),
+            "MutableList" when targetShape.Arguments.Count == 1 => typeof(List<>),
+            "Map" when targetShape.Arguments.Count == 2 => typeof(IReadOnlyDictionary<,>),
+            "MutableMap" when targetShape.Arguments.Count == 2 => typeof(Dictionary<,>),
+            _ when target.Name.EndsWith("[]") => typeof(Array),
             _ => null,
         };
         if (runtimeType != null)
         {
             var clrName = char.ToUpperInvariant(member[0]) + member[1..];
-            var property = runtimeType.GetProperty(clrName);
+            if (isCall)
+            {
+                var extension = ResolveCollectionExtension(target, clrName);
+                if (extension != null) return extension;
+                // System.Linq is always imported by the generator. Array Count
+                // (including its predicate overload) is a known Enumerable API.
+                if (target.Name.EndsWith("[]") && clrName == "Count")
+                    return new MemberInfo(new TypeRef("Int", false));
+            }
+            var bindings = runtimeType.GetGenericArguments().Zip(targetShape.Arguments)
+                .ToDictionary(pair => pair.First.Name, pair => pair.Second, StringComparer.Ordinal);
+            var surfaces = runtimeType.IsInterface
+                ? runtimeType.GetInterfaces().Prepend(runtimeType).Append(typeof(object)) : [runtimeType];
+            const System.Reflection.BindingFlags flags = System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance;
+            var property = surfaces.SelectMany(t => t.GetProperties(flags)).FirstOrDefault(p => p.Name == clrName);
             if (property != null)
-                return new MemberInfo(property.PropertyType == typeof(int) ? new TypeRef("Int", false) : new TypeRef("Any", false));
-            if (runtimeType.GetMethods().Any(m => m.Name == clrName))
-                return new MemberInfo(new TypeRef("Any", false)); // CLR overload resolution is deferred.
-            return null;
+                return new MemberInfo(RuntimeTypeRef(property.PropertyType, bindings));
+            var methods = surfaces.SelectMany(t => t.GetMethods(flags)).Where(m => m.Name == clrName).ToArray();
+            if (methods.Length > 0)
+            {
+                // Overload argument validation is still deferred, but a concrete
+                // shared return type must not become Any (e.g. String.Trim).
+                var results = methods.Select(m => RuntimeTypeRef(m.ReturnType, bindings)).Distinct().ToArray();
+                if (results.Length == 1) return new MemberInfo(results[0]);
+            }
+            return ResolveCollectionExtension(target, clrName);
         }
 
-        // Imported APIs, CLR objects, collection extensions and untyped lambda
-        // parameters are intentionally dynamic until external metadata is available.
-        if (target.Name is "Any" or "Function" || _externalTypes.Contains(target.Name)
-            || target.Name.EndsWith("[]") || target.Name.Contains('<') || _usedNamespaces.Count > 0)
+        // Only constructor-observed external types retain opaque member lookup.
+        if (_externalTypes.Contains(target.Name))
             return new MemberInfo(new TypeRef("Any", false));
+        return null;
+    }
+
+    private static TypeRef RuntimeTypeRef(Type type, IReadOnlyDictionary<string, TypeRef> bindings)
+    {
+        if (type.IsGenericParameter)
+            return bindings.TryGetValue(type.Name, out var bound) ? bound : new TypeRef(type.Name, false);
+        if (type.IsArray) return new TypeRef(DisplayType(RuntimeTypeRef(type.GetElementType()!, bindings)) + "[]", false);
+        if (Nullable.GetUnderlyingType(type) is Type inner) return RuntimeTypeRef(inner, bindings) with { Nullable = true };
+        if (type.IsGenericType)
+        {
+            var definition = type.GetGenericTypeDefinition();
+            var name = definition == typeof(IReadOnlyList<>) ? "List"
+                : definition == typeof(List<>) ? "MutableList"
+                : definition == typeof(IReadOnlyDictionary<,>) ? "Map"
+                : definition == typeof(Dictionary<,>) ? "MutableMap" : type.Name.Split('`')[0];
+            return new TypeRef($"{name}<{string.Join(", ", type.GetGenericArguments().Select(a => DisplayType(RuntimeTypeRef(a, bindings))))}>", false);
+        }
+        return new TypeRef(type == typeof(string) ? "String" : type == typeof(int) ? "Int"
+            : type == typeof(bool) ? "Bool" : type == typeof(double) ? "Double"
+            : type == typeof(long) ? "Long" : type == typeof(float) ? "Float"
+            : type == typeof(void) ? "Unit" : type == typeof(object) ? "Any" : type.Name, false);
+    }
+
+    private MemberInfo? ResolveCollectionExtension(TypeRef target, string member)
+    {
+        if (!_usedNamespaces.Contains("ksr.collections")) return null;
+        var (name, arguments) = TypeShape(target);
+        // These named APIs are declared in sdk/KSR.StdLib/Collections.cs. Unknown
+        // members never get an interop fallback. Lambda-dependent generic results
+        // retain their container shape while only the uninferred element is Any.
+        if ((name is "List" or "MutableList" && arguments.Count == 1) || target.Name.EndsWith("[]"))
+        {
+            var element = arguments.Count == 1 ? arguments[0] : new TypeRef(target.Name[..^2], false);
+            var list = new TypeRef($"List<{DisplayType(element)}>", false);
+            TypeRef? result = member switch
+            {
+                "Filter" or "Sorted" or "SortedBy" or "SortedByDescending" or "Reversed"
+                    or "Take" or "Drop" or "TakeWhile" or "DropWhile" or "Distinct" or "Concat" or "Plus" => list,
+                "First" or "Last" or "Get" => element,
+                "Find" => element with { Nullable = true },
+                "Size" or "Count" or "Sum" => new TypeRef("Int", false),
+                "SumLong" => new TypeRef("Long", false),
+                "SumDouble" => new TypeRef("Double", false),
+                "Min" or "Max" => new TypeRef("Int", true),
+                "MinDouble" or "MaxDouble" => new TypeRef("Double", true),
+                "Any" or "All" or "None" or "IsEmpty" or "Contains" => new TypeRef("Bool", false),
+                "ForEach" or "ForEachIndexed" => new TypeRef("Unit", false),
+                "JoinToString" => new TypeRef("String", false),
+                "ToMutable" => new TypeRef($"MutableList<{DisplayType(element)}>", false),
+                "Map" or "FlatMap" => new TypeRef("List<Any>", false),
+                "Flatten" when TypeShape(element) is { Name: "List", Arguments.Count: 1 } => element,
+                "GroupBy" => new TypeRef($"Map<Any, {list.Name}>", false),
+                "Zip" => new TypeRef($"List<ValueTuple<{DisplayType(element)}, Any>>", false),
+                "Fold" => new TypeRef("Any", false), // Result depends on the callback/initial value.
+                _ => null,
+            };
+            return result == null ? null : new MemberInfo(result);
+        }
+        if (name is "Map" or "MutableMap" && arguments.Count == 2)
+        {
+            var key = arguments[0];
+            var value = arguments[1];
+            TypeRef? result = member switch
+            {
+                "Keys" => new TypeRef($"List<{DisplayType(key)}>", false),
+                "Values" => new TypeRef($"List<{DisplayType(value)}>", false),
+                "ContainsKey" or "IsEmpty" => new TypeRef("Bool", false),
+                "Get" => value with { Nullable = true },
+                "GetOrDefault" => value,
+                "Size" => new TypeRef("Int", false),
+                "Filter" => new TypeRef($"Map<{DisplayType(key)}, {DisplayType(value)}>", false),
+                "MapValues" => new TypeRef($"Map<{DisplayType(key)}, Any>", false),
+                "ToMutable" => new TypeRef($"MutableMap<{DisplayType(key)}, {DisplayType(value)}>", false),
+                "ForEach" => new TypeRef("Unit", false),
+                _ => null,
+            };
+            return result == null ? null : new MemberInfo(result);
+        }
         return null;
     }
 

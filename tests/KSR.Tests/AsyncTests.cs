@@ -26,7 +26,7 @@ public class AsyncTests
             "async fun g() {}\n" + header + "\n" + body + "\n}", "await.ksr");
         Assert.NotNull(result.Program);
         var diagnostic = Assert.Single(result.Diagnostics);
-        Assert.Contains("await", diagnostic.Message);
+        Assert.Equal("'await' is only allowed inside an async function", diagnostic.Message);
         Assert.Equal(KSR.Diagnostics.DiagnosticSeverity.Error, diagnostic.Severity);
         Assert.Equal("await.ksr", diagnostic.SourceFile);
         Assert.Equal(3, diagnostic.Line);

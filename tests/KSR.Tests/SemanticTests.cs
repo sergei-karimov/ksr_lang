@@ -8,6 +8,89 @@ namespace KSR.Tests;
 public class SemanticTests
 {
     [Theory]
+    [InlineData("", "List<Int>")]
+    [InlineData("use ksr.collections", "List<Int>")]
+    [InlineData("use System", "List<Int>")]
+    [InlineData("", "Int[]")]
+    [InlineData("use System", "Int[]")]
+    [InlineData("", "Box<Int>")]
+    [InlineData("use System", "Box<Int>")]
+    [InlineData("use System", "Unresolved")]
+    [InlineData("", "Unresolved<Int>")]
+    public void KnownOrUnresolvedTypesDoNotBecomeDynamicForMissingMembers(string import, string type)
+    {
+        var result = KSR.Analysis.KsrAnalyzer.Analyze(import
+            + "\ninterface Box<T> { fun get(): T }\nfun f(value: " + type + ") {\n    value.missing()\n}", "boundary.ksr");
+        Assert.NotNull(result.Program);
+        var diagnostic = Assert.Single(result.Diagnostics);
+        Assert.Equal($"Unknown member 'missing' on type '{type}'", diagnostic.Message);
+        Assert.Equal(DiagnosticSeverity.Error, diagnostic.Severity);
+        Assert.Equal("boundary.ksr", diagnostic.SourceFile);
+        Assert.Equal(4, diagnostic.Line);
+        Assert.Equal(11, diagnostic.Column);
+    }
+
+    [Theory]
+    [InlineData("fun f(value: Any) { val n: Int = value.missing().another }")]
+    [InlineData("fun f(value: Any?) { val n: Int? = value?.missing() }")]
+    [InlineData("use ksr.text\nfun f() { val n: Int = Text.split(\"a,b\", \",\").externalMember() }")]
+    [InlineData("fun f() { val external = new ExternalApi()\nexternal.deferred().another }")]
+    [InlineData("fun f() { val callback = { value -> value.deferred() } }")]
+    [InlineData("fun f() { val value: Any = [1, 2]\nvalue.missing() }")]
+    [InlineData("struct Box(value: Any)\nfun f(box: Box) { box.value.missing() }")]
+    public void ExplicitAndDemonstratedDynamicFlowsRemainDynamic(string source)
+    {
+        var result = KSR.Analysis.KsrAnalyzer.Analyze(source, "dynamic.ksr");
+        Assert.NotNull(result.Program);
+        Assert.Empty(result.Diagnostics);
+    }
+
+    [Theory]
+    [InlineData("use ksr.collections\nfun f(xs: List<Int>) {\n    xs.filter { true }.missing()\n}", "List<Int>", 3, 24)]
+    [InlineData("fun f(xs: Int[]) {\n    xs.length.missing()\n}", "Int", 2, 15)]
+    [InlineData("fun f(xs: String) {\n    xs.trim().missing()\n}", "String", 2, 15)]
+    [InlineData("interface Box<T> { fun get(): T }\nfun f(xs: Box<Int>) {\n    xs.get().missing()\n}", "Int", 3, 14)]
+    public void KnownMemberResultsDoNotBecomeDynamic(string source, string type, int line, int column)
+    {
+        var result = KSR.Analysis.KsrAnalyzer.Analyze(source, "results.ksr");
+        var diagnostic = Assert.Single(result.Diagnostics);
+        Assert.Equal($"Unknown member 'missing' on type '{type}'", diagnostic.Message);
+        Assert.Equal(DiagnosticSeverity.Error, diagnostic.Severity);
+        Assert.Equal("results.ksr", diagnostic.SourceFile);
+        Assert.Equal(line, diagnostic.Line);
+        Assert.Equal(column, diagnostic.Column);
+    }
+
+    [Theory]
+    [InlineData("List<Int>", "xs.count")]
+    [InlineData("Int[]", "xs.length")]
+    [InlineData("List<Int>", "xs.first()")]
+    public void KnownMemberTypesStillRejectIncompatibleAssignments(string type, string expression)
+    {
+        var result = KSR.Analysis.KsrAnalyzer.Analyze("use ksr.collections\nfun f(xs: " + type
+            + ") {\n    val text: String = " + expression + "\n}", "assignment.ksr");
+        var diagnostic = Assert.Single(result.Diagnostics);
+        Assert.Equal("Type mismatch: cannot assign 'Int' to 'String'", diagnostic.Message);
+        Assert.Equal(DiagnosticSeverity.Error, diagnostic.Severity);
+        Assert.Equal("assignment.ksr", diagnostic.SourceFile);
+        Assert.Equal(3, diagnostic.Line);
+        Assert.Equal(5, diagnostic.Column);
+    }
+
+    [Theory]
+    [InlineData("fun f(xs: Int[]) { val n: Int = xs.length }")]
+    [InlineData("fun f(xs: List<Int>) { val n: Int = xs.count }")]
+    [InlineData("fun f(xs: List<Int>) { val text: String = xs.toString() }")]
+    [InlineData("fun f(xs: Map<String, Int>) { val n: Int = xs.getHashCode() }")]
+    [InlineData("use ksr.collections\nfun f(xs: List<Int>) { val n: Int = xs.first()\nval rest: List<Int> = xs.filter { true } }")]
+    public void SupportedKnownMembersRetainConcreteTypes(string source)
+    {
+        var result = KSR.Analysis.KsrAnalyzer.Analyze(source, "known.ksr");
+        Assert.NotNull(result.Program);
+        Assert.Empty(result.Diagnostics);
+    }
+
+    [Theory]
     [InlineData("add(\"nope\", 2)", "argument", 9)]
     [InlineData("add(z = 1, b = 2)", "Unknown named argument", 9)]
     [InlineData("add(a = 1, a = 2)", "Duplicate argument", 16)]
@@ -34,8 +117,12 @@ public class SemanticTests
     {
         var result = KSR.Analysis.KsrAnalyzer.Analyze("\n    " + declaration, "returns.ksr");
         Assert.NotNull(result.Program);
-        Assert.Contains(result.Diagnostics, d => d.Message.Contains("return", StringComparison.OrdinalIgnoreCase)
-            && d.SourceFile == "returns.ksr" && d.Line == 2 && d.Column == 5);
+        var diagnostic = Assert.Single(result.Diagnostics);
+        Assert.Equal("Not all paths return a value of type 'Int'", diagnostic.Message);
+        Assert.Equal(DiagnosticSeverity.Error, diagnostic.Severity);
+        Assert.Equal("returns.ksr", diagnostic.SourceFile);
+        Assert.Equal(2, diagnostic.Line);
+        Assert.Equal(5, diagnostic.Column);
     }
 
     [Theory]
@@ -48,6 +135,7 @@ public class SemanticTests
             "struct User(name: String)\nfun f(u: " + type + ") {\n    " + access + "\n}", "members.ksr");
         var diagnostic = Assert.Single(result.Diagnostics);
         Assert.Contains("Unknown member 'missing'", diagnostic.Message);
+        Assert.Equal(DiagnosticSeverity.Error, diagnostic.Severity);
         Assert.Equal("members.ksr", diagnostic.SourceFile);
         Assert.Equal(3, diagnostic.Line);
         Assert.Equal(column, diagnostic.Column);
@@ -95,6 +183,7 @@ public class SemanticTests
         var diagnostic = Assert.Single(result.Diagnostics);
         Assert.Contains("argument", diagnostic.Message);
         Assert.Equal("compound.ksr", diagnostic.SourceFile);
+        Assert.Equal(DiagnosticSeverity.Error, diagnostic.Severity);
         Assert.Equal(4, diagnostic.Line);
         Assert.Equal(10, diagnostic.Column);
     }

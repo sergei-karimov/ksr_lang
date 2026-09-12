@@ -16,8 +16,12 @@ public class WhenTests
             "sealed Shape { struct Circle(r: Int) struct Rect(w: Int) }\nfun f(s: " + type
             + "): Int {\n    return when (s) { " + arms + " }\n}", "when.ksr");
         Assert.NotNull(result.Program);
-        Assert.Contains(result.Diagnostics, d => d.Message.Contains("exhaustive") && d.Message.Contains(missing)
-            && d.SourceFile == "when.ksr" && d.Line == 3 && d.Column == 12);
+        var diagnostic = Assert.Single(result.Diagnostics);
+        Assert.Equal($"Non-exhaustive when: missing {missing}", diagnostic.Message);
+        Assert.Equal(KSR.Diagnostics.DiagnosticSeverity.Error, diagnostic.Severity);
+        Assert.Equal("when.ksr", diagnostic.SourceFile);
+        Assert.Equal(3, diagnostic.Line);
+        Assert.Equal(12, diagnostic.Column);
     }
 
     [Theory]
