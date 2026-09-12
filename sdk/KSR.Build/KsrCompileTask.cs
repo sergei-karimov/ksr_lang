@@ -2,8 +2,8 @@ using System.Text;
 using Microsoft.Build.Framework;
 using Microsoft.Build.Utilities;
 using KSR.AST;
-using KSR.Lexer;
-using KSR.Parser;
+using KSR.Analysis;
+using KSR.Diagnostics;
 
 namespace KSR.Build;
 
@@ -34,7 +34,7 @@ public class KsrCompileTask : Microsoft.Build.Utilities.Task
         Log.LogMessage(MessageImportance.Normal,
             $"KSR: compiling {KsrCompile.Length} source file(s) → {OutputFile}");
 
-        // ── 1. Lex + Parse each source file ───────────────────────────────────
+        // ── 1. Analyze each source file ───────────────────────────────────────
 
         var allDeclarations = new List<AstNode>();
         var hasErrors = false;
@@ -55,51 +55,27 @@ public class KsrCompileTask : Microsoft.Build.Utilities.Task
                 continue;
             }
 
-            List<Token> tokens;
+            KsrAnalysisResult result;
             try
             {
-                var lexer = new Lexer.Lexer(source);
-                tokens = lexer.Tokenize();
-            }
-            catch (KsrLexException lex)
-            {
-                Log.LogError(null, null, null, path,
-                    lex.Line, lex.Col, lex.Line, lex.Col,
-                    lex.Message);
-                hasErrors = true;
-                continue;
+                result = KsrAnalyzer.Analyze(source, path);
             }
             catch (Exception ex)
             {
                 Log.LogError(null, null, null, path, 1, 1, 1, 1,
-                    $"Lexer error: {ex.Message}");
+                    $"Analysis error: {ex.Message}");
                 hasErrors = true;
                 continue;
             }
 
-            ProgramNode ast;
-            try
+            foreach (var diagnostic in result.Diagnostics)
             {
-                var parser = new KSR.Parser.Parser(tokens, path);
-                ast = parser.Parse();
-            }
-            catch (KsrParseException pex)
-            {
-                Log.LogError(null, null, null, path,
-                    pex.Line, pex.Col, pex.Line, pex.Col,
-                    pex.Message);
-                hasErrors = true;
-                continue;
-            }
-            catch (Exception ex)
-            {
-                Log.LogError(null, null, null, path, 1, 1, 1, 1,
-                    $"Parse error: {ex.Message}");
-                hasErrors = true;
-                continue;
+                LogDiagnostic(diagnostic, path);
+                hasErrors |= diagnostic.Severity == DiagnosticSeverity.Error;
             }
 
-            allDeclarations.AddRange(ast.Declarations);
+            if (result.Program is not null)
+                allDeclarations.AddRange(result.Program.Declarations);
         }
 
         if (hasErrors)
@@ -153,5 +129,20 @@ public class KsrCompileTask : Microsoft.Build.Utilities.Task
         }
 
         return true;
+    }
+
+    private void LogDiagnostic(KsrDiagnostic diagnostic, string fallbackPath)
+    {
+        var path = string.IsNullOrEmpty(diagnostic.SourceFile) ? fallbackPath : diagnostic.SourceFile;
+        var line = Math.Max(diagnostic.Line, 1);
+        var column = Math.Max(diagnostic.Column, 1);
+
+        if (diagnostic.Severity == DiagnosticSeverity.Error)
+        {
+            Log.LogError(null, null, null, path, line, column, line, column, diagnostic.Message);
+            return;
+        }
+
+        Log.LogWarning(null, null, null, path, line, column, line, column, diagnostic.Message);
     }
 }

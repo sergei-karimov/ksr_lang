@@ -1,11 +1,57 @@
 using System.Text.Json;
 using System.Xml.Linq;
+using KSR.Build;
+using Microsoft.Build.Framework;
+using Microsoft.Build.Utilities;
 using Xunit;
 
 namespace KSR.Tests;
 
 public class DotnetTemplateTests
 {
+    [Fact]
+    public void BuildTaskLogsSemanticErrorsAndDoesNotWriteGeneratedOutput()
+    {
+        using var directory = new TemporaryDirectory();
+        var input = directory.WriteFile("Program.ksr", "fun main() { unknownName() }");
+        var output = Path.Combine(directory.Path, "generated", "Program.g.cs");
+        var engine = new RecordingBuildEngine();
+        var task = new KsrCompileTask
+        {
+            BuildEngine = engine,
+            KsrCompile = [new TaskItem(input)],
+            OutputFile = output
+        };
+
+        var succeeded = task.Execute();
+
+        Assert.False(succeeded);
+        var error = Assert.Single(engine.Errors);
+        Assert.Equal(input, error.File);
+        Assert.True(error.LineNumber > 0);
+        Assert.True(error.ColumnNumber > 0);
+        Assert.False(File.Exists(output));
+    }
+
+    [Fact]
+    public void BuildTaskWritesGeneratedOutputForValidSource()
+    {
+        using var directory = new TemporaryDirectory();
+        var input = directory.WriteFile("Program.ksr", "fun main() { }");
+        var output = Path.Combine(directory.Path, "generated", "Program.g.cs");
+        var task = new KsrCompileTask
+        {
+            BuildEngine = new RecordingBuildEngine(),
+            KsrCompile = [new TaskItem(input)],
+            OutputFile = output
+        };
+
+        var succeeded = task.Execute();
+
+        Assert.True(succeeded);
+        Assert.True(File.Exists(output));
+        Assert.Contains("auto-generated", File.ReadAllText(output));
+    }
     [Theory]
     [InlineData("ksr-console", "ksr-console", "KSR Console Application")]
     [InlineData("ksr-creative", "ksr-creative", "KSR Creative Application")]
@@ -76,5 +122,44 @@ public class DotnetTemplateTests
         }
 
         throw new DirectoryNotFoundException("Could not locate sdk/KSR.Templates/content.");
+    }
+
+    private sealed class RecordingBuildEngine : IBuildEngine
+    {
+        public List<BuildErrorEventArgs> Errors { get; } = [];
+        public int ColumnNumberOfTaskNode => 1;
+        public bool ContinueOnError => false;
+        public int LineNumberOfTaskNode => 1;
+        public string ProjectFileOfTaskNode => "KSR.Tests";
+
+        public bool BuildProjectFile(string projectFileName, string[] targetNames, System.Collections.IDictionary globalProperties, System.Collections.IDictionary targetOutputs) => false;
+        public void LogErrorEvent(BuildErrorEventArgs e) => Errors.Add(e);
+        public void LogWarningEvent(BuildWarningEventArgs e) { }
+        public void LogMessageEvent(BuildMessageEventArgs e) { }
+        public void LogCustomEvent(CustomBuildEventArgs e) { }
+    }
+
+    private sealed class TemporaryDirectory : IDisposable
+    {
+        public TemporaryDirectory()
+        {
+            Path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "ksr-build-tests", Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(Path);
+        }
+
+        public string Path { get; }
+
+        public string WriteFile(string name, string contents)
+        {
+            var file = System.IO.Path.Combine(Path, name);
+            File.WriteAllText(file, contents);
+            return file;
+        }
+
+        public void Dispose()
+        {
+            if (Directory.Exists(Path))
+                Directory.Delete(Path, recursive: true);
+        }
     }
 }

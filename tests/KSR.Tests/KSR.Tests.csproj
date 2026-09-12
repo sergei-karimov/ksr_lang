@@ -9,12 +9,15 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk"  Version="17.11.1" />
+    <PackageReference Include="Microsoft.Build.Framework" Version="17.11.4" />
+    <PackageReference Include="Microsoft.Build.Utilities.Core" Version="17.11.4" />
     <PackageReference Include="xunit"                   Version="2.9.2"   />
     <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\KSR.Core.csproj" />
+    <ProjectReference Include="..\..\sdk\KSR.Build\KSR.Build.csproj" />
     <ProjectReference Include="..\..\sdk\KSR.Creative\KSR.Creative.csproj" />
     <ProjectReference Include="..\..\sdk\KSR.StdLib\KSR.StdLib.csproj" />
   </ItemGroup>
