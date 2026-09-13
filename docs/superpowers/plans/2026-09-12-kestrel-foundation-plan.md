@@ -486,4 +486,3 @@ git commit -m "docs: finalize Kestrel migration and verification notes"
 - Legacy CLI/template aliases: Tasks 7 and 8.
 - `.ksr` and internal `KSR.*` compatibility: Tasks 3, 7, and 9.
 - Documentation and platform limitations: Tasks 7 and 9.
-

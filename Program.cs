@@ -1,18 +1,19 @@
 using System.Text.Json;
+using KSR.Analysis;
 using KSR.CodeGen;
+using KSR.Diagnostics;
 using KSR.Parser;
-using KSR.Semantic;
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  KSR — Kotlin-Style Runtime language
+//  Kestrel — Kotlin-style language for .NET
 //
 //  USAGE
-//    ksr <file.ksr> [--debug]     compile and run a single .ksr file
-//    ksr check <file>             output JSON diagnostics (for editors)
-//    ksr lsp                      start Language Server (JSON-RPC over stdio)
+//    kestrel <file.ksr> [--debug] compile and run a single .ksr file
+//    kestrel check <file>         output JSON diagnostics (for editors)
+//    kestrel lsp                  start Language Server (JSON-RPC over stdio)
 //
 //  PROJECT WORKFLOW  (standard .NET commands)
-//    dotnet new ksr-console -n MyApp
+//    dotnet new kestrel-console -n MyApp
 //    dotnet add package Raylib-cs
 //    dotnet run / dotnet build / dotnet publish
 // ─────────────────────────────────────────────────────────────────────────────
@@ -34,7 +35,7 @@ try
     switch (positional[0])
     {
         case "check":
-            CheckFile(positional.ElementAtOrDefault(1) ?? "");
+            Environment.ExitCode = CheckFile(positional.ElementAtOrDefault(1) ?? "") ? 1 : 0;
             break;
 
         case "lsp":
@@ -46,7 +47,7 @@ try
             var path = positional[0];
             if (!File.Exists(path))
             {
-                Console.Error.WriteLine($"ksr: file not found: {path}");
+                Console.Error.WriteLine($"kestrel: file not found: {path}");
                 PrintHelp();
                 Environment.Exit(1);
             }
@@ -62,50 +63,30 @@ catch (Exception                    ex) { Fail($"Internal error: {ex}"); }
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
-static void CheckFile(string path)
+static bool CheckFile(string path)
 {
+    var fullPath = Path.GetFullPath(path);
     if (!File.Exists(path))
     {
         Console.WriteLine("[]");
-        return;
+        return false;
     }
 
     try
     {
-        var fullPath = Path.GetFullPath(path);
-        var source   = File.ReadAllText(path);
-        var tokens   = new KSR.Lexer.Lexer(source).Tokenize();
-        var parser   = new KSR.Parser.Parser(tokens, fullPath);
-        var program  = parser.Parse();
+        var source = File.ReadAllText(path);
+        var result = KsrAnalyzer.Analyze(source, fullPath);
 
-        var diagnostics = parser.Errors.Select(ParseDiagnostic).ToList();
-
-        var analyzer = new SemanticAnalyzer();
-        analyzer.Analyze(program, fullPath);
-        diagnostics.AddRange(analyzer.Errors.Select(ParseDiagnostic));
-
-        Console.WriteLine(JsonSerializer.Serialize(diagnostics));
-    }
-    catch (KSR.Lexer.KsrLexException ex)
-    {
-        Console.WriteLine(JsonSerializer.Serialize(new[]
-        {
-            new { message = ex.Message, line = ex.Line, col = ex.Col }
-        }));
-    }
-    catch (KsrParseException ex)
-    {
-        Console.WriteLine(JsonSerializer.Serialize(new[]
-        {
-            new { message = ex.Message, line = ex.Line, col = ex.Col }
-        }));
+        Console.WriteLine(JsonSerializer.Serialize(result.Diagnostics.Select(DiagnosticDto.FromDiagnostic)));
+        return result.HasErrors;
     }
     catch (Exception ex)
     {
         Console.WriteLine(JsonSerializer.Serialize(new[]
         {
-            new { message = ex.Message, line = 1, col = 1 }
+            new DiagnosticDto(ex.Message, 1, 1, "error", fullPath)
         }));
+        return true;
     }
 }
 
@@ -121,16 +102,13 @@ static void RunSingleFile(
     _ = typeof(KSR.Creative.CreativeApp).Assembly;
     _ = typeof(KSR.Vision.Camera).Assembly;
 
-    var source  = File.ReadAllText(path);
-    var tokens  = new KSR.Lexer.Lexer(source).Tokenize();
+    var source = File.ReadAllText(path);
     var fullPath = Path.GetFullPath(path);
-    var program = new Parser(tokens, fullPath, throwOnError: true).Parse();
+    var result = KsrAnalyzer.Analyze(source, fullPath);
+    if (result.HasErrors || result.Program is null)
+        throw new KsrCompileException(FormatDiagnostics(result.Diagnostics));
 
-    var analyzer = new SemanticAnalyzer();
-    analyzer.Analyze(program, fullPath);
-    if (analyzer.Errors.Count > 0)
-        throw new KsrCompileException(
-            "Semantic analysis failed:\n" + string.Join(Environment.NewLine, analyzer.Errors));
+    var program = result.Program;
 
     if (debugMode)
     {
@@ -152,34 +130,26 @@ static void Fail(string msg)
     Environment.Exit(1);
 }
 
-static DiagnosticDto ParseDiagnostic(string err)
-{
-    var match = System.Text.RegularExpressions.Regex.Match(err, @"\((\d+),(\d+)\): error: (.*)");
-    if (!match.Success)
-        return new DiagnosticDto(err, 1, 1);
-
-    return new DiagnosticDto(
-        match.Groups[3].Value,
-        int.Parse(match.Groups[1].Value),
-        int.Parse(match.Groups[2].Value));
-}
+static string FormatDiagnostics(IEnumerable<KsrDiagnostic> diagnostics) =>
+    "Analysis failed:\n" + string.Join(Environment.NewLine, diagnostics.Select(diagnostic =>
+        $"{diagnostic.SourceFile}({diagnostic.Line},{diagnostic.Column}): {diagnostic.Severity.ToString().ToLowerInvariant()}: {diagnostic.Message}"));
 
 static void PrintHelp()
 {
     Console.WriteLine("""
-        KSR — Kotlin-Style Runtime language
+        Kestrel — Kotlin-style language for .NET
 
         SINGLE-FILE MODE
-          ksr <file.ksr>                        Compile and run a .ksr file
-          ksr <file.ksr> --debug                Also print the generated C# source
-          ksr <file.ksr> --async-return=valuetask  Use ValueTask for all async functions
+          kestrel <file.ksr>                    Compile and run a .ksr file
+          kestrel <file.ksr> --debug            Also print the generated C# source
+          kestrel <file.ksr> --async-return=valuetask  Use ValueTask for all async functions
 
         EDITOR INTEGRATION
-          ksr check <file>             Output JSON diagnostics
-          ksr lsp                      Language Server (JSON-RPC/stdio)
+          kestrel check <file>          Output JSON diagnostics
+          kestrel lsp                   Language Server (JSON-RPC/stdio)
 
         PROJECT WORKFLOW  (standard .NET)
-          dotnet new ksr-console -n MyApp
+          dotnet new kestrel-console -n MyApp
           cd MyApp
           dotnet add package Raylib-cs
           dotnet run
@@ -205,8 +175,3 @@ static void PrintHelp()
           Append ? for nullable:  String?   User?
         """);
 }
-
-public sealed record DiagnosticDto(
-    [property: System.Text.Json.Serialization.JsonPropertyName("message")] string Message,
-    [property: System.Text.Json.Serialization.JsonPropertyName("line")] int Line,
-    [property: System.Text.Json.Serialization.JsonPropertyName("col")] int Col);

@@ -9,11 +9,11 @@
     <RootNamespace>KSR</RootNamespace>
 
     <!-- NuGet package metadata -->
-    <PackageId>KSR.Core</PackageId>
+    <PackageId>Kestrel.Core</PackageId>
     <Version>0.1.0</Version>
-    <Authors>KSR Authors</Authors>
-    <Description>KSR language compiler library — Lexer, Parser, AST and C# code generator.</Description>
-    <PackageTags>ksr;language;compiler</PackageTags>
+    <Authors>Kestrel Authors</Authors>
+    <Description>Kestrel language compiler library — Lexer, Parser, AST and C# code generator.</Description>
+    <PackageTags>kestrel;ksr;language;compiler</PackageTags>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <NoWarn>1570;1591</NoWarn>
 
@@ -30,8 +30,10 @@
     <Compile Include="Lexer\**\*.cs" />
     <Compile Include="Parser\**\*.cs" />
     <Compile Include="AST\**\*.cs" />
+    <Compile Include="Analysis\**\*.cs" />
     <Compile Include="CodeGen\CodeGenerator.cs" />
     <Compile Include="CodeGen\NameUtils.cs" />
+    <Compile Include="Diagnostics\**\*.cs" />
     <Compile Include="Semantic\SymbolTable.cs" />
     <Compile Include="Semantic\SemanticAnalyzer.cs" />
   </ItemGroup>

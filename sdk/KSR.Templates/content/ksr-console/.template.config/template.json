@@ -1,13 +1,13 @@
 {
   "$schema": "http://json.schemastore.org/template",
-  "author": "KSR Authors",
-  "classifications": [ "KSR", "Console" ],
-  "identity": "KSR.Console",
-  "name": "KSR Console Application",
-  "shortName": "ksr-console",
-  "description": "A KSR language console application.",
+  "author": "Kestrel Authors",
+  "classifications": [ "Kestrel", "Console" ],
+  "identity": "Kestrel.Console",
+  "name": "Kestrel Console Application",
+  "shortName": [ "kestrel-console", "ksr-console" ],
+  "description": "A Kestrel language console application.",
   "tags": {
-    "language": "KSR",
+    "language": "Kestrel",
     "type": "project"
   },
   "sourceName": "MyApp",

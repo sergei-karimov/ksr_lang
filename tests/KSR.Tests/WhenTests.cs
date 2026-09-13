@@ -6,6 +6,83 @@ namespace KSR.Tests;
 
 public class WhenTests
 {
+    [Theory]
+    [InlineData("Shape", "is Circle -> 1", "Rect")]
+    [InlineData("Shape", "is Circle -> 1 is Circle -> 2", "Rect")]
+    [InlineData("Shape?", "is Circle -> 1 is Rect -> 2", "null")]
+    public void NonExhaustiveSealedWhenInValueContextIsLocated(string type, string arms, string missing)
+    {
+        var result = KSR.Analysis.KsrAnalyzer.Analyze(
+            "sealed Shape { struct Circle(r: Int) struct Rect(w: Int) }\nfun f(s: " + type
+            + "): Int {\n    return when (s) { " + arms + " }\n}", "when.ksr");
+        Assert.NotNull(result.Program);
+        var diagnostic = Assert.Single(result.Diagnostics);
+        Assert.Equal($"Non-exhaustive when: missing {missing}", diagnostic.Message);
+        Assert.Equal(KSR.Diagnostics.DiagnosticSeverity.Error, diagnostic.Severity);
+        Assert.Equal("when.ksr", diagnostic.SourceFile);
+        Assert.Equal(3, diagnostic.Line);
+        Assert.Equal(12, diagnostic.Column);
+    }
+
+    [Theory]
+    [InlineData("return when (s) { is Circle(c) -> c.r is Rect(r) -> r.w }")]
+    [InlineData("return when (s) { is Circle(c) -> c.r else -> 0 }")]
+    [InlineData("when (s) { is Circle(c) -> println(c.r) }\nreturn 0")]
+    public void SealedWhenSupportsBindingsElseAndPartialStatement(string body)
+    {
+        var result = KSR.Analysis.KsrAnalyzer.Analyze(
+            "sealed Shape { struct Circle(r: Int) struct Rect(w: Int) }\nfun f(s: Shape): Int { " + body + " }", "when.ksr");
+        Assert.Empty(result.Diagnostics);
+    }
+
+    [Fact]
+    public void SealedVariantCanBePassedToBaseParameter()
+    {
+        var result = KSR.Analysis.KsrAnalyzer.Analyze("""
+            sealed Shape { struct Circle(r: Int) struct Rect(w: Int) }
+            fun radius(s: Shape): Int { return when (s) { is Circle(c) -> c.r else -> 0 } }
+            fun f() { radius(Circle(1)) }
+            """, "when.ksr");
+        Assert.Empty(result.Diagnostics);
+    }
+
+    [Theory]
+    [InlineData("val value = when (s) { is Circle -> 1 }")]
+    [InlineData("println(when (s) { is Circle -> 1 })")]
+    [InlineData("when (s) { is Circle -> println(when (s) { is Circle -> 1 }) }")]
+    public void SealedWhenValueContextsRequireExhaustiveness(string body)
+    {
+        var result = KSR.Analysis.KsrAnalyzer.Analyze(
+            "sealed Shape { struct Circle struct Rect }\nfun f(s: Shape) { " + body + " }", "when.ksr");
+        var diagnostic = Assert.Single(result.Diagnostics);
+        Assert.Contains("Non-exhaustive", diagnostic.Message);
+        Assert.Contains("Rect", diagnostic.Message);
+    }
+
+    [Fact]
+    public void NullableSealedWhenAcceptsExplicitNullArm()
+    {
+        var result = KSR.Analysis.KsrAnalyzer.Analyze("""
+            sealed Shape { struct Circle struct Rect }
+            fun f(s: Shape?): Int { return when (s) { is Circle -> 1 is Rect -> 2 null -> 0 } }
+            """, "when.ksr");
+        Assert.Empty(result.Diagnostics);
+    }
+
+    [Fact]
+    public void PatternBindingsDoNotLeakIntoOtherArmsOrOuterScope()
+    {
+        var result = KSR.Analysis.KsrAnalyzer.Analyze("""
+            sealed Shape { struct Circle(r: Int) struct Rect(w: Int) }
+            fun f(s: Shape) {
+                when (s) { is Circle(c) -> println(c.r) is Rect(r) -> println(c.r) }
+                println(c)
+            }
+            """, "when.ksr");
+        Assert.Equal(2, result.Diagnostics.Count);
+        Assert.All(result.Diagnostics, d => Assert.Contains("Undefined identifier 'c'", d.Message));
+    }
+
     private static string Gen(string src)  => KsrHelper.Generate(src);
     private static string Flat(string src) => KsrHelper.Flatten(Gen(src));
 

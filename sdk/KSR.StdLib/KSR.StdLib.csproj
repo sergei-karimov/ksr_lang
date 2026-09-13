@@ -7,11 +7,11 @@
     <LangVersion>latest</LangVersion>
 
     <!-- NuGet metadata -->
-    <PackageId>KSR.StdLib</PackageId>
+    <PackageId>Kestrel.StdLib</PackageId>
     <Version>0.1.0</Version>
-    <Authors>KSR Authors</Authors>
-    <Description>KSR standard library — ksr.io (file/console I/O) and ksr.text (string utilities).</Description>
-    <PackageTags>ksr;language;stdlib</PackageTags>
+    <Authors>Kestrel Authors</Authors>
+    <Description>Kestrel standard library — ksr.io (file/console I/O) and ksr.text (string utilities).</Description>
+    <PackageTags>kestrel;ksr;language;stdlib</PackageTags>
   </PropertyGroup>
 
 </Project>

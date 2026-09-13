@@ -43,4 +43,10 @@ public class SymbolTable
     }
 
     public bool IsInCurrentScope(string name) => _scopes[^1].ContainsKey(name);
+
+    // Type lookup must not be hidden by a local value with the same name.
+    public Symbol? ResolveType(string name) =>
+        _scopes[0].TryGetValue(name, out var symbol)
+        && symbol.Kind is SymbolKind.Struct or SymbolKind.Sealed or SymbolKind.Interface
+            ? symbol : null;
 }

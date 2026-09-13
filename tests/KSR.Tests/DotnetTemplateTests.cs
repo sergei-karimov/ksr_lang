@@ -1,28 +1,246 @@
 using System.Text.Json;
 using System.Xml.Linq;
+using KSR.Analysis;
+using KSR.AST;
+using KSR.Build;
+using KSR.Diagnostics;
+using Microsoft.Build.Framework;
+using Microsoft.Build.Utilities;
 using Xunit;
 
 namespace KSR.Tests;
 
 public class DotnetTemplateTests
 {
+    [Fact]
+    public void BuildTaskLogsSemanticErrorsAndDoesNotWriteGeneratedOutput()
+    {
+        using var directory = new TemporaryDirectory();
+        var input = directory.WriteFile("Program.ksr", "fun main() { unknownName() }");
+        var output = Path.Combine(directory.Path, "generated", "Program.g.cs");
+        var engine = new RecordingBuildEngine();
+        var task = new KsrCompileTask
+        {
+            BuildEngine = engine,
+            KsrCompile = [new TaskItem(input)],
+            OutputFile = output
+        };
+
+        var succeeded = task.Execute();
+
+        Assert.False(succeeded);
+        var error = Assert.Single(engine.Errors);
+        Assert.Equal(input, error.File);
+        Assert.True(error.LineNumber > 0);
+        Assert.True(error.ColumnNumber > 0);
+        Assert.False(File.Exists(output));
+    }
+
+    [Fact]
+    public void BuildTaskAllowsCrossFileFunctionReferences()
+    {
+        using var directory = new TemporaryDirectory();
+        var helper = directory.WriteFile("Helpers.ksr", "fun helper() { }");
+        var program = directory.WriteFile("Program.ksr", "fun main() { helper() }");
+        var output = Path.Combine(directory.Path, "generated", "Program.g.cs");
+        var task = new KsrCompileTask
+        {
+            BuildEngine = new RecordingBuildEngine(),
+            KsrCompile = [new TaskItem(helper), new TaskItem(program)],
+            OutputFile = output
+        };
+
+        var succeeded = task.Execute();
+
+        Assert.True(succeeded);
+        Assert.True(File.Exists(output));
+    }
+
+    [Fact]
+    public void BuildTaskReportsSecondFileErrorsFromTheirSourceFile()
+    {
+        using var directory = new TemporaryDirectory();
+        var helper = directory.WriteFile("Helpers.ksr", "fun helper() { }");
+        var program = directory.WriteFile("Program.ksr", "fun main() { unknownName() }");
+        var engine = new RecordingBuildEngine();
+        var task = new KsrCompileTask
+        {
+            BuildEngine = engine,
+            KsrCompile = [new TaskItem(helper), new TaskItem(program)],
+            OutputFile = Path.Combine(directory.Path, "generated", "Program.g.cs")
+        };
+
+        var succeeded = task.Execute();
+
+        Assert.False(succeeded);
+        var error = Assert.Single(engine.Errors);
+        Assert.Equal(program, error.File);
+    }
+
+    [Fact]
+    public void BuildTaskDeletesPreviousOutputAfterSourceBecomesInvalid()
+    {
+        using var directory = new TemporaryDirectory();
+        var input = directory.WriteFile("Program.ksr", "fun main() { }");
+        var output = Path.Combine(directory.Path, "generated", "Program.g.cs");
+        var task = new KsrCompileTask
+        {
+            BuildEngine = new RecordingBuildEngine(),
+            KsrCompile = [new TaskItem(input)],
+            OutputFile = output
+        };
+
+        Assert.True(task.Execute());
+        Assert.True(File.Exists(output));
+
+        File.WriteAllText(input, "fun main() { unknownName() }");
+
+        Assert.False(task.Execute());
+        Assert.False(File.Exists(output));
+    }
+
+    [Fact]
+    public void BuildTaskLogsWarningsWithLocationAndStillWritesOutput()
+    {
+        using var directory = new TemporaryDirectory();
+        var input = directory.WriteFile("Program.ksr", "fun main() { }");
+        var output = Path.Combine(directory.Path, "generated", "Program.g.cs");
+        var engine = new RecordingBuildEngine();
+        var task = new WarningKsrCompileTask(input)
+        {
+            BuildEngine = engine,
+            KsrCompile = [new TaskItem(input)],
+            OutputFile = output
+        };
+
+        var succeeded = task.Execute();
+
+        Assert.True(succeeded);
+        var warning = Assert.Single(engine.Warnings);
+        Assert.Equal(input, warning.File);
+        Assert.Equal(3, warning.LineNumber);
+        Assert.Equal(7, warning.ColumnNumber);
+        Assert.True(File.Exists(output));
+    }
+
+    [Fact]
+    public void BuildTaskWritesGeneratedOutputForValidSource()
+    {
+        using var directory = new TemporaryDirectory();
+        var input = directory.WriteFile("Program.ksr", "fun main() { }");
+        var output = Path.Combine(directory.Path, "generated", "Program.g.cs");
+        var task = new KsrCompileTask
+        {
+            BuildEngine = new RecordingBuildEngine(),
+            KsrCompile = [new TaskItem(input)],
+            OutputFile = output
+        };
+
+        var succeeded = task.Execute();
+
+        Assert.True(succeeded);
+        Assert.True(File.Exists(output));
+        Assert.Contains("auto-generated", File.ReadAllText(output));
+    }
+
+    [Fact]
+    public void BuildTaskLogsUseKestrelBrand()
+    {
+        using var directory = new TemporaryDirectory();
+        var input = directory.WriteFile("Program.ksr", "fun main() { }");
+        var engine = new RecordingBuildEngine();
+        var task = new KsrCompileTask
+        {
+            BuildEngine = engine,
+            KsrCompile = [new TaskItem(input)],
+            OutputFile = Path.Combine(directory.Path, "generated", "Program.g.cs")
+        };
+
+        Assert.True(task.Execute());
+        Assert.Contains(engine.Messages, message => message.Message?.Contains("Kestrel:", StringComparison.Ordinal) == true);
+        Assert.DoesNotContain(engine.Messages, message => message.Message?.Contains("KSR:", StringComparison.Ordinal) == true);
+    }
     [Theory]
-    [InlineData("ksr-console", "ksr-console", "KSR Console Application")]
-    [InlineData("ksr-creative", "ksr-creative", "KSR Creative Application")]
-    [InlineData("ksr-creative-camera", "ksr-creative-camera", "KSR Creative Camera Application")]
-    public void ProjectTemplates_HaveExpectedMetadata(string directory, string shortName, string name)
+    [InlineData("ksr-console", "kestrel-console", "ksr-console", "Kestrel Console Application", "Kestrel.Console")]
+    [InlineData("ksr-library", "kestrel-lib", "ksr-lib", "Kestrel Class Library", "Kestrel.Library")]
+    [InlineData("ksr-creative", "kestrel-creative", "ksr-creative", "Kestrel Creative Application", "Kestrel.CreativeApp")]
+    [InlineData("ksr-creative-camera", "kestrel-creative-camera", "ksr-creative-camera", "Kestrel Creative Camera Application", "Kestrel.CreativeCameraApp")]
+    public void ProjectTemplates_HaveExpectedMetadata(string directory, string shortName, string alias, string name, string identity)
     {
         var template = LoadTemplate(directory);
 
-        Assert.Equal(shortName, template.RootElement.GetProperty("shortName").GetString());
+        Assert.Equal(new[] { shortName, alias }, template.RootElement.GetProperty("shortName").EnumerateArray().Select(e => e.GetString()));
+        Assert.Equal(identity, template.RootElement.GetProperty("identity").GetString());
+        Assert.Equal("Kestrel", template.RootElement.GetProperty("tags").GetProperty("language").GetString());
         Assert.Equal(name, template.RootElement.GetProperty("name").GetString());
         Assert.Equal("project", template.RootElement.GetProperty("tags").GetProperty("type").GetString());
     }
 
+    [Fact]
+    public void PublicPackageMetadata_UsesKestrelNamesAndKeepsInternalAssemblies()
+    {
+        var expectedPackages = new Dictionary<string, string>
+        {
+            ["KSR.csproj"] = "Kestrel",
+            ["KSR.Core.csproj"] = "Kestrel.Core",
+            ["sdk/KSR.Build/KSR.Build.csproj"] = "Kestrel.Build",
+            ["sdk/KSR.Sdk/KSR.Sdk.csproj"] = "Kestrel.Sdk",
+            ["sdk/KSR.StdLib/KSR.StdLib.csproj"] = "Kestrel.StdLib",
+            ["sdk/KSR.Vision/KSR.Vision.csproj"] = "Kestrel.Vision",
+            ["sdk/KSR.Creative/KSR.Creative.csproj"] = "Kestrel.Creative",
+            ["sdk/KSR.Templates/KSR.Templates.csproj"] = "Kestrel.Templates"
+        };
+
+        foreach (var (relativePath, packageId) in expectedPackages)
+        {
+            var project = XDocument.Load(Path.Combine(RepoRoot(), relativePath));
+            Assert.Equal(packageId, project.Descendants("PackageId").Single().Value);
+        }
+
+        var cli = File.ReadAllText(Path.Combine(RepoRoot(), "KSR.csproj"));
+        Assert.Contains("<AssemblyName>kestrel</AssemblyName>", cli);
+        Assert.Contains("<ToolCommandName>kestrel</ToolCommandName>", cli);
+        Assert.Contains("ksr", cli);
+
+        var core = File.ReadAllText(Path.Combine(RepoRoot(), "KSR.Core.csproj"));
+        Assert.Contains("<AssemblyName>KSR.Core</AssemblyName>", core);
+        Assert.Contains("<RootNamespace>KSR</RootNamespace>", core);
+    }
+
+    [Fact]
+    public void SdkAndBuildMetadata_UseCanonicalPackageIdsWithoutRenamingTasks()
+    {
+        var sdkProps = File.ReadAllText(Path.Combine(RepoRoot(), "sdk/KSR.Sdk/Sdk/Sdk.props"));
+        Assert.Contains("PackageReference Include=\"Kestrel.Build\"", sdkProps);
+        Assert.Contains("PackageReference Include=\"Kestrel.StdLib\"", sdkProps);
+
+        var buildProject = File.ReadAllText(Path.Combine(RepoRoot(), "sdk/KSR.Build/KSR.Build.csproj"));
+        Assert.Contains("Kestrel.Build.props", buildProject);
+        Assert.Contains("Kestrel.Build.targets", buildProject);
+        Assert.Contains("<AssemblyName>KSR.Build</AssemblyName>", buildProject);
+
+        var buildTargets = File.ReadAllText(Path.Combine(RepoRoot(), "sdk/KSR.Build/build/Kestrel.Build.targets"));
+        Assert.Contains("TaskName=\"KSR.Build.KsrCompileTask\"", buildTargets);
+    }
+
+    [Fact]
+    public void RootNuGetConfig_MapsRootAndDottedKestrelPackagesToLocalArtifacts()
+    {
+        var config = XDocument.Load(Path.Combine(RepoRoot(), "nuget.config"));
+        var localSource = config.Descendants("packageSource")
+            .Single(element => (string?)element.Attribute("key") == "local-artifacts");
+        var patterns = localSource.Elements("package")
+            .Select(element => (string?)element.Attribute("pattern"))
+            .ToArray();
+
+        Assert.Contains("Kestrel", patterns);
+        Assert.Contains("Kestrel.*", patterns);
+    }
+
     [Theory]
-    [InlineData("ksr-creative", "MyCreativeApp.csproj", "KSR.Creative")]
-    [InlineData("ksr-creative-camera", "MyCameraApp.csproj", "KSR.Creative")]
-    [InlineData("ksr-creative-camera", "MyCameraApp.csproj", "KSR.Vision")]
+    [InlineData("ksr-creative", "MyCreativeApp.csproj", "Kestrel.Creative")]
+    [InlineData("ksr-creative-camera", "MyCameraApp.csproj", "Kestrel.Creative")]
+    [InlineData("ksr-creative-camera", "MyCameraApp.csproj", "Kestrel.Vision")]
     public void CreativeTemplates_ReferenceRuntimePackages(string directory, string projectFile, string packageName)
     {
         var projectPath = Path.Combine(TemplatesRoot(), directory, projectFile);
@@ -76,5 +294,68 @@ public class DotnetTemplateTests
         }
 
         throw new DirectoryNotFoundException("Could not locate sdk/KSR.Templates/content.");
+    }
+
+    private static string RepoRoot()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null)
+        {
+            if (File.Exists(Path.Combine(dir.FullName, "KSR.sln")))
+                return dir.FullName;
+
+            dir = dir.Parent;
+        }
+
+        throw new DirectoryNotFoundException("Could not locate KSR.sln.");
+    }
+
+    private sealed class RecordingBuildEngine : IBuildEngine
+    {
+        public List<BuildErrorEventArgs> Errors { get; } = [];
+        public List<BuildWarningEventArgs> Warnings { get; } = [];
+        public List<BuildMessageEventArgs> Messages { get; } = [];
+        public int ColumnNumberOfTaskNode => 1;
+        public bool ContinueOnError => false;
+        public int LineNumberOfTaskNode => 1;
+        public string ProjectFileOfTaskNode => "KSR.Tests";
+
+        public bool BuildProjectFile(string projectFileName, string[] targetNames, System.Collections.IDictionary globalProperties, System.Collections.IDictionary targetOutputs) => false;
+        public void LogErrorEvent(BuildErrorEventArgs e) => Errors.Add(e);
+        public void LogWarningEvent(BuildWarningEventArgs e) => Warnings.Add(e);
+        public void LogMessageEvent(BuildMessageEventArgs e) => Messages.Add(e);
+        public void LogCustomEvent(CustomBuildEventArgs e) { }
+    }
+
+    private sealed class WarningKsrCompileTask(string sourceFile) : KsrCompileTask
+    {
+        protected override KsrAnalysisResult AnalyzeSources(IReadOnlyList<KsrSource> sources) =>
+            new(new ProgramNode([]), [
+                new KsrDiagnostic("warning", sourceFile, 3, 7, DiagnosticSeverity.Warning)
+            ]);
+    }
+
+    private sealed class TemporaryDirectory : IDisposable
+    {
+        public TemporaryDirectory()
+        {
+            Path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "ksr-build-tests", Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(Path);
+        }
+
+        public string Path { get; }
+
+        public string WriteFile(string name, string contents)
+        {
+            var file = System.IO.Path.Combine(Path, name);
+            File.WriteAllText(file, contents);
+            return file;
+        }
+
+        public void Dispose()
+        {
+            if (Directory.Exists(Path))
+                Directory.Delete(Path, recursive: true);
+        }
     }
 }

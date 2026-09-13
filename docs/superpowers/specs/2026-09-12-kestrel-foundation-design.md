@@ -1,6 +1,6 @@
 # Kestrel Compiler Foundation and Branding Migration Design
 
-**Date:** 2026-09-12  
+**Date:** 2026-09-12
 **Status:** Proposed for review
 
 ## Goal
@@ -175,4 +175,3 @@ The design is considered implemented when:
 4. Add CLI/LSP/MSBuild integration coverage.
 5. Align Visual Studio dependencies and verify the supported build paths.
 6. Perform the external Kestrel branding migration, add aliases, update templates/installers/docs, and run the full validation matrix.
-

@@ -1,13 +1,13 @@
 {
   "$schema": "http://json.schemastore.org/template",
-  "author": "KSR Authors",
-  "classifications": [ "KSR", "Library" ],
-  "identity": "KSR.Library",
-  "name": "KSR Class Library",
-  "shortName": "ksr-lib",
-  "description": "A KSR language class library.",
+  "author": "Kestrel Authors",
+  "classifications": [ "Kestrel", "Library" ],
+  "identity": "Kestrel.Library",
+  "name": "Kestrel Class Library",
+  "shortName": [ "kestrel-lib", "ksr-lib" ],
+  "description": "A Kestrel language class library.",
   "tags": {
-    "language": "KSR",
+    "language": "Kestrel",
     "type": "project"
   },
   "sourceName": "MyLibrary",

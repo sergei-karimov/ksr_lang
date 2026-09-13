@@ -566,7 +566,7 @@ public class CodeGenerator : IAstVisitor<string>
     public string Visit(AwaitExpr node)
     {
         if (!_inAsyncFunction)
-            Line("#error KSR: 'await' used outside an async function");
+            Line("#error Kestrel: 'await' used outside an async function");
         return $"(await {node.Operand.Accept(this)})";
     }
 

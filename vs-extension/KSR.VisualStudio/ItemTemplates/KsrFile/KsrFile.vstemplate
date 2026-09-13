@@ -3,12 +3,12 @@
     Type="Item"
     xmlns="http://schemas.microsoft.com/developer/vstemplate/2005">
   <TemplateData>
-    <Name>KSR File</Name>
-    <Description>A new KSR source file.</Description>
+    <Name>Kestrel File</Name>
+    <Description>A new Kestrel source file.</Description>
     <ProjectType>CSharp</ProjectType>
     <SortOrder>10</SortOrder>
     <DefaultName>NewFile.ksr</DefaultName>
-    <TemplateGroupID>KSR</TemplateGroupID>
+    <TemplateGroupID>Kestrel</TemplateGroupID>
   </TemplateData>
   <TemplateContent>
     <ProjectItem ReplaceParameters="true" TargetFileName="$fileinputname$.ksr">

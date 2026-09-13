@@ -1,19 +1,20 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Installs the KSR language toolchain.
+    Installs the Kestrel language toolchain.
 
 .DESCRIPTION
     Builds all NuGet packages from source, then installs:
-      - ksr       global CLI tool  (dotnet tool install -g KSR)
-      - templates dotnet new templates (dotnet new install KSR.Templates)
+      - kestrel   global CLI tool  (dotnet tool install -g Kestrel)
+      - ksr       compatibility launcher for the global tool
+      - templates dotnet new templates (dotnet new install Kestrel.Templates)
       - VS Code extension (optional, if 'code' is on PATH)
 
 .PARAMETER SkipVsCode
     Skip VS Code extension installation.
 
 .PARAMETER Uninstall
-    Remove the KSR toolchain instead of installing it.
+    Remove the Kestrel toolchain instead of installing it.
 
 .EXAMPLE
     .\install.ps1
@@ -54,17 +55,23 @@ $RepoRoot  = Split-Path -Parent $ScriptDir
 
 if ($Uninstall) {
     Write-Host ""
-    Write-Host "Uninstalling KSR..." -ForegroundColor Magenta
+    Write-Host "Uninstalling Kestrel..." -ForegroundColor Magenta
 
-    Write-Step "Removing ksr global tool"
-    & dotnet tool uninstall -g KSR 2>$null
-    if ($LASTEXITCODE -eq 0) { Write-Ok "ksr tool removed" }
-    else                      { Write-Warn "ksr tool was not installed" }
+    Write-Step "Removing kestrel global tool"
+    & dotnet tool uninstall -g Kestrel 2>$null
+    if ($LASTEXITCODE -eq 0) { Write-Ok "kestrel tool removed" }
+    else                      { Write-Warn "kestrel tool was not installed" }
 
-    Write-Step "Removing KSR.Templates"
-    & dotnet new uninstall KSR.Templates 2>$null
-    if ($LASTEXITCODE -eq 0) { Write-Ok "KSR.Templates removed" }
-    else                      { Write-Warn "KSR.Templates were not installed" }
+    $dotnetCliHome = if ($env:DOTNET_CLI_HOME) { $env:DOTNET_CLI_HOME } else { $env:USERPROFILE }
+    $toolsPath = Join-Path $dotnetCliHome '.dotnet\tools'
+    Write-Step "Removing ksr compatibility aliases"
+    Remove-Item -Force -ErrorAction SilentlyContinue (Join-Path $toolsPath 'ksr.cmd'), (Join-Path $toolsPath 'ksr.ps1')
+    Write-Ok "ksr compatibility aliases removed"
+
+    Write-Step "Removing Kestrel.Templates"
+    & dotnet new uninstall Kestrel.Templates 2>$null
+    if ($LASTEXITCODE -eq 0) { Write-Ok "Kestrel.Templates removed" }
+    else                      { Write-Warn "Kestrel.Templates were not installed" }
 
     Write-Step "Removing VS Code extension"
     & code --uninstall-extension ksr-lang 2>$null
@@ -72,14 +79,14 @@ if ($Uninstall) {
     else                      { Write-Warn "VS Code extension was not installed (or 'code' not found)" }
 
     Write-Host ""
-    Write-Host "KSR uninstalled." -ForegroundColor Green
+    Write-Host "Kestrel uninstalled." -ForegroundColor Green
     exit 0
 }
 
 # ── install ───────────────────────────────────────────────────────────────────
 
 Write-Host ""
-Write-Host "Installing KSR language toolchain..." -ForegroundColor Magenta
+Write-Host "Installing Kestrel language toolchain..." -ForegroundColor Magenta
 Write-Host ""
 
 # ── 1. Check .NET SDK ─────────────────────────────────────────────────────────
@@ -101,42 +108,42 @@ Write-Ok ".NET $dotnetVersion"
 $ArtifactsDir = Join-Path $RepoRoot "artifacts"
 New-Item -ItemType Directory -Force -Path $ArtifactsDir | Out-Null
 
-Write-Step "Building KSR.Core"
+Write-Step "Building Kestrel.Core"
 Invoke-Cmd dotnet @('pack', (Join-Path $RepoRoot 'KSR.Core.csproj'), '-c', 'Release', '-o', $ArtifactsDir, '-v', 'q', '--nologo')
-Write-Ok "KSR.Core packed"
+Write-Ok "Kestrel.Core packed"
 
-Write-Step "Building KSR.Build"
+Write-Step "Building Kestrel.Build"
 Invoke-Cmd dotnet @('pack', (Join-Path $RepoRoot 'sdk\KSR.Build\KSR.Build.csproj'), '-c', 'Release', '-o', $ArtifactsDir, '-v', 'q', '--nologo')
-Write-Ok "KSR.Build packed"
+Write-Ok "Kestrel.Build packed"
 
-Write-Step "Building KSR.Sdk"
+Write-Step "Building Kestrel.Sdk"
 Invoke-Cmd dotnet @('pack', (Join-Path $RepoRoot 'sdk\KSR.Sdk\KSR.Sdk.csproj'), '-c', 'Release', '-o', $ArtifactsDir, '-v', 'q', '--nologo')
-Write-Ok "KSR.Sdk packed"
+Write-Ok "Kestrel.Sdk packed"
 
-Write-Step "Building KSR.StdLib"
+Write-Step "Building Kestrel.StdLib"
 Invoke-Cmd dotnet @('pack', (Join-Path $RepoRoot 'sdk\KSR.StdLib\KSR.StdLib.csproj'), '-c', 'Release', '-o', $ArtifactsDir, '-v', 'q', '--nologo')
-Write-Ok "KSR.StdLib packed"
+Write-Ok "Kestrel.StdLib packed"
 
-Write-Step "Building KSR.Vision"
+Write-Step "Building Kestrel.Vision"
 Invoke-Cmd dotnet @('pack', (Join-Path $RepoRoot 'sdk\KSR.Vision\KSR.Vision.csproj'), '-c', 'Release', '-o', $ArtifactsDir, '-v', 'q', '--nologo')
-Write-Ok "KSR.Vision packed"
+Write-Ok "Kestrel.Vision packed"
 
-Write-Step "Building KSR.Creative"
+Write-Step "Building Kestrel.Creative"
 Invoke-Cmd dotnet @('pack', (Join-Path $RepoRoot 'sdk\KSR.Creative\KSR.Creative.csproj'), '-c', 'Release', '-o', $ArtifactsDir, '-v', 'q', '--nologo')
-Write-Ok "KSR.Creative packed"
+Write-Ok "Kestrel.Creative packed"
 
-Write-Step "Building KSR.Templates"
+Write-Step "Building Kestrel.Templates"
 Invoke-Cmd dotnet @('pack', (Join-Path $RepoRoot 'sdk\KSR.Templates\KSR.Templates.csproj'), '-c', 'Release', '-o', $ArtifactsDir, '-v', 'q', '--nologo')
-Write-Ok "KSR.Templates packed"
+Write-Ok "Kestrel.Templates packed"
 
-Write-Step "Building KSR CLI"
+Write-Step "Building Kestrel CLI"
 Invoke-Cmd dotnet @('pack', (Join-Path $RepoRoot 'KSR.csproj'), '-c', 'Release', '-o', $ArtifactsDir, '-v', 'q', '--nologo')
-Write-Ok "KSR CLI packed"
+Write-Ok "Kestrel CLI packed"
 
 # ── 3. Register local NuGet feed ──────────────────────────────────────────────
 
 Write-Step "Registering local NuGet feed"
-$feedName = 'ksr-local'
+$feedName = 'kestrel-local'
 $existingSources = & dotnet nuget list source
 if ($existingSources -match $feedName) {
     & dotnet nuget update source $feedName --source $ArtifactsDir | Out-Null
@@ -145,26 +152,43 @@ if ($existingSources -match $feedName) {
 }
 Write-Ok "Feed '$feedName' → $ArtifactsDir"
 
-# ── 4. Install ksr global tool ────────────────────────────────────────────────
+# ── 4. Install kestrel global tool and ksr aliases ────────────────────────────
 
-Write-Step "Installing ksr global tool"
-# Remove all KSR packages from NuGet cache so fresh local builds are always used
-foreach ($pkg in @('ksr', 'ksr.core', 'ksr.build', 'ksr.sdk', 'ksr.stdlib', 'ksr.vision', 'ksr.creative', 'ksr.templates')) {
+Write-Step "Installing kestrel global tool"
+# Remove all Kestrel packages from NuGet cache so fresh local builds are always used
+foreach ($pkg in @('kestrel', 'kestrel.core', 'kestrel.build', 'kestrel.sdk', 'kestrel.stdlib', 'kestrel.vision', 'kestrel.creative', 'kestrel.templates')) {
     $cacheDir = Join-Path $env:USERPROFILE ".nuget\packages\$pkg\0.1.0"
     if (Test-Path $cacheDir) { Remove-Item -Recurse -Force $cacheDir }
 }
 # Uninstall first in case a previous version is installed (ignore errors)
-try { & dotnet tool uninstall -g KSR *>&1 | Out-Null } catch {}
-Invoke-Cmd dotnet @('tool', 'install', '-g', 'KSR', '--add-source', $ArtifactsDir, '--version', '0.1.0')
-Write-Ok "ksr tool installed"
+try { & dotnet tool uninstall -g Kestrel *>&1 | Out-Null } catch {}
+$dotnetCliHome = if ($env:DOTNET_CLI_HOME) { $env:DOTNET_CLI_HOME } else { $env:USERPROFILE }
+$toolsPath = Join-Path $dotnetCliHome '.dotnet\tools'
+New-Item -ItemType Directory -Force -Path $toolsPath | Out-Null
+$toolConfig = Join-Path $toolsPath 'kestrel-artifacts.nuget.config'
+Remove-Item -Force -ErrorAction SilentlyContinue $toolConfig
+Set-Content -Path $toolConfig -Encoding UTF8 -Value '<?xml version="1.0" encoding="utf-8"?>', '<configuration><packageSources><clear /></packageSources></configuration>'
+Invoke-Cmd dotnet @('nuget', 'add', 'source', $ArtifactsDir, '--name', 'kestrel-artifacts', '--configfile', $toolConfig)
+Push-Location $toolsPath
+try {
+    Invoke-Cmd dotnet @('tool', 'install', '-g', 'Kestrel', '--version', '0.1.0', '--configfile', $toolConfig)
+}
+finally {
+    Pop-Location
+}
+Write-Ok "kestrel tool installed"
+Write-Step "Creating ksr compatibility aliases"
+Set-Content -Path (Join-Path $toolsPath 'ksr.cmd') -Encoding Ascii -Value '@echo off', '"%~dp0kestrel.exe" %*'
+Set-Content -Path (Join-Path $toolsPath 'ksr.ps1') -Encoding Ascii -Value '& (Join-Path $PSScriptRoot ''kestrel.exe'') @args', 'exit $LASTEXITCODE'
+Write-Ok "ksr compatibility aliases created"
 
 # ── 5. Install dotnet new templates ──────────────────────────────────────────
 
 Write-Step "Installing dotnet new templates"
-try { & dotnet new uninstall KSR.Templates *>&1 | Out-Null } catch {}
-$templatePkg = Join-Path $ArtifactsDir "KSR.Templates.0.1.0.nupkg"
+try { & dotnet new uninstall Kestrel.Templates *>&1 | Out-Null } catch {}
+$templatePkg = Join-Path $ArtifactsDir "Kestrel.Templates.0.1.0.nupkg"
 Invoke-Cmd dotnet @('new', 'install', $templatePkg)
-Write-Ok "KSR templates installed  (dotnet new ksr-console | ksr-creative | ksr-creative-camera)"
+Write-Ok "Kestrel templates installed  (dotnet new kestrel-console | kestrel-creative | kestrel-creative-camera; ksr-* aliases available)"
 
 # ── 6. Build & install VS Code extension (optional) ─────────────────────────
 
@@ -202,17 +226,17 @@ if (-not $SkipVsCode) {
 # ── Done ──────────────────────────────────────────────────────────────────────
 
 Write-Host ""
-Write-Host "KSR installed successfully!" -ForegroundColor Green
+Write-Host "Kestrel installed successfully!" -ForegroundColor Green
 Write-Host ""
 Write-Host "  Get started:" -ForegroundColor White
-Write-Host "    dotnet new ksr-console -n MyApp" -ForegroundColor Cyan
+Write-Host "    dotnet new kestrel-console -n MyApp" -ForegroundColor Cyan
 Write-Host "    cd MyApp" -ForegroundColor Cyan
 Write-Host "    dotnet run" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "  Creative coding:" -ForegroundColor White
-Write-Host "    dotnet new ksr-creative -n Sketch" -ForegroundColor Cyan
-Write-Host "    dotnet new ksr-creative-camera -n CameraSketch" -ForegroundColor Cyan
+Write-Host "    dotnet new kestrel-creative -n Sketch" -ForegroundColor Cyan
+Write-Host "    dotnet new kestrel-creative-camera -n CameraSketch" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "  Single-file mode:" -ForegroundColor White
-Write-Host "    ksr hello.ksr" -ForegroundColor Cyan
+Write-Host "    kestrel hello.ksr  (or legacy alias: ksr hello.ksr)" -ForegroundColor Cyan
 Write-Host ""
