@@ -1,4 +1,5 @@
 using KSR.AST;
+using KSR.Diagnostics;
 using KSR.Lexer;
 
 namespace KSR.Parser;
@@ -10,18 +11,30 @@ public class Parser
 {
     private readonly List<Token> _tokens;
     private readonly string      _sourceFile;
+    private readonly int _sourceStartLine;
+    private readonly int _sourceStartColumn;
     private int _pos;
-    private readonly List<string> _errors = new();
+    private readonly List<KsrDiagnostic> _diagnostics = new();
     private readonly bool _throwOnError;
 
-    public Parser(List<Token> tokens, string sourceFile = "", bool throwOnError = false)
+    public Parser(
+        List<Token> tokens,
+        string sourceFile = "",
+        bool throwOnError = false,
+        int sourceStartLine = 1,
+        int sourceStartColumn = 1)
     {
         _tokens     = tokens;
         _sourceFile = sourceFile;
         _throwOnError = throwOnError;
+        _sourceStartLine = sourceStartLine;
+        _sourceStartColumn = sourceStartColumn;
     }
 
-    public IReadOnlyList<string> Errors => _errors;
+    public IReadOnlyList<KsrDiagnostic> Diagnostics => _diagnostics;
+
+    // Transitional one-way projection for existing compiler and LSP callers.
+    public IReadOnlyList<string> Errors => _diagnostics.Select(FormatDiagnostic).ToArray();
 
     // ── token helpers ─────────────────────────────────────────────────────────
 
@@ -36,7 +49,11 @@ public class Parser
         {
             Error($"Expected '{type}' but found '{Current.Value}' ({Current.Type})");
             // If we're at EOF, don't try to consume
-            if (Current.Type == TokenType.Eof) throw new KsrParseException("EOF", Current.Line, Current.Col);
+            if (Current.Type == TokenType.Eof)
+            {
+                var location = SourceLocationFor(Current);
+                throw new KsrParseException("EOF", location.Line, location.Column, _sourceFile);
+            }
             return Consume(); // Pseudo-consume to avoid infinite loops in some callers
         }
         return Consume();
@@ -44,12 +61,33 @@ public class Parser
 
     private void Error(string message)
     {
-        var err = $"{_sourceFile}({Current.Line},{Current.Col}): error: {message}";
-        _errors.Add(err);
+        var location = SourceLocationFor(Current);
+        _diagnostics.Add(new KsrDiagnostic(
+            message,
+            _sourceFile,
+            location.Line,
+            location.Column,
+            DiagnosticSeverity.Error));
         // We still throw internally to trigger Synchronize() in caller loops,
         // or to satisfy tests that expect a fatal error.
-        throw new KsrParseException(message, Current.Line, Current.Col);
+        throw new KsrParseException(message, location.Line, location.Column, _sourceFile);
     }
+
+    private (int Line, int Column) SourceLocationFor(Token token) =>
+        (token.Line + _sourceStartLine - 1,
+         token.Line == 1 ? token.Col + _sourceStartColumn - 1 : token.Col);
+
+    private T WithLocation<T>(T node, Token token) where T : AstNode
+    {
+        var location = SourceLocationFor(token);
+        return node with { Line = location.Line, Column = location.Column, SourceFile = _sourceFile };
+    }
+
+    private T WithLocation<T>(T node, AstNode location) where T : AstNode =>
+        node with { Line = location.Line, Column = location.Column, SourceFile = location.SourceFile };
+
+    private static string FormatDiagnostic(KsrDiagnostic diagnostic) =>
+        $"{diagnostic.SourceFile}({diagnostic.Line},{diagnostic.Column}): error: {diagnostic.Message}";
 
     private bool Check(TokenType type) => Current.Type == type;
 
@@ -159,7 +197,7 @@ public class Parser
 
     private UseDecl ParseUseDecl()
     {
-        Expect(TokenType.Use);
+        var start = Expect(TokenType.Use);
         var sb = new System.Text.StringBuilder();
         sb.Append(Expect(TokenType.Identifier).Value);
         while (Check(TokenType.Dot))
@@ -168,22 +206,22 @@ public class Parser
             sb.Append('.');
             sb.Append(Expect(TokenType.Identifier).Value);
         }
-        return new UseDecl(sb.ToString());
+        return WithLocation(new UseDecl(sb.ToString()), start);
     }
 
     private StructDecl ParseStruct()
     {
-        Expect(TokenType.Struct);
+        var start = Expect(TokenType.Struct);
         var name = Expect(TokenType.Identifier).Value;
         Expect(TokenType.LParen);
         var props = Check(TokenType.RParen) ? [] : ParseParamList();
         Expect(TokenType.RParen);
-        return new StructDecl(name, props);
+        return WithLocation(new StructDecl(name, props), start);
     }
 
     private SealedDecl ParseSealedDecl()
     {
-        Expect(TokenType.Sealed);
+        var start = Expect(TokenType.Sealed);
         var name = Expect(TokenType.Identifier).Value;
         Expect(TokenType.LBrace);
 
@@ -192,7 +230,7 @@ public class Parser
         {
             try
             {
-                Expect(TokenType.Struct);
+                var variantStart = Expect(TokenType.Struct);
                 var vName = Expect(TokenType.Identifier).Value;
                 List<Parameter> props = [];
                 if (Check(TokenType.LParen))
@@ -201,7 +239,7 @@ public class Parser
                     props = Check(TokenType.RParen) ? [] : ParseParamList();
                     Expect(TokenType.RParen);
                 }
-                variants.Add(new StructDecl(vName, props));
+                variants.Add(WithLocation(new StructDecl(vName, props), variantStart));
             }
             catch (KsrParseException)
             {
@@ -212,12 +250,12 @@ public class Parser
         }
 
         Expect(TokenType.RBrace);
-        return new SealedDecl(name, variants);
+        return WithLocation(new SealedDecl(name, variants), start);
     }
 
     private InterfaceDecl ParseInterfaceDecl()
     {
-        Expect(TokenType.Interface);
+        var start = Expect(TokenType.Interface);
         var name = Expect(TokenType.Identifier).Value;
 
         var typeParams = new List<string>();
@@ -280,12 +318,12 @@ public class Parser
         }
 
         Expect(TokenType.RBrace);
-        return new InterfaceDecl(name, typeParams, constraints, methods);
+        return WithLocation(new InterfaceDecl(name, typeParams, constraints, methods), start);
     }
 
     private ImplBlock ParseImplBlock()
     {
-        Expect(TokenType.Implement);
+        var start = Expect(TokenType.Implement);
         var interfaceName = Expect(TokenType.Identifier).Value;
 
         var interfaceTypeArgs = new List<string>();
@@ -318,9 +356,9 @@ public class Parser
                 bool mIsAsync = false;
                 if (Check(TokenType.Async)) { mIsAsync = true; Consume(); }
 
-                Expect(TokenType.Fun);
+                var functionStart = Expect(TokenType.Fun);
                 var mname = Expect(TokenType.Identifier).Value;
-                methods.Add(ParseFunctionTail(mname, [], mIsAsync, mAsyncReturn));
+                methods.Add(ParseFunctionTail(mname, [], mIsAsync, mAsyncReturn, functionStart));
             }
             catch (KsrParseException)
             {
@@ -330,14 +368,14 @@ public class Parser
         }
 
         Expect(TokenType.RBrace);
-        return new ImplBlock(interfaceName, interfaceTypeArgs, typeName, methods);
+        return WithLocation(new ImplBlock(interfaceName, interfaceTypeArgs, typeName, methods), start);
     }
 
     private AstNode ParseFunctionOrExtension(
         bool isAsync = false,
         AsyncReturnKind asyncReturn = AsyncReturnKind.Task)
     {
-        Expect(TokenType.Fun);
+        var functionStart = Expect(TokenType.Fun);
 
         var typeParams = new List<string>();
         if (Check(TokenType.Lt))
@@ -355,17 +393,18 @@ public class Parser
         {
             Consume(); // .
             var methodName = Expect(TokenType.Identifier).Value;
-            return ParseExtFunctionTail(firstName, methodName, typeParams, isAsync, asyncReturn);
+            return ParseExtFunctionTail(firstName, methodName, typeParams, isAsync, asyncReturn, functionStart);
         }
 
-        return ParseFunctionTail(firstName, typeParams, isAsync, asyncReturn);
+        return ParseFunctionTail(firstName, typeParams, isAsync, asyncReturn, functionStart);
     }
 
     private FunctionDecl ParseFunctionTail(
         string name,
         List<string> typeParams,
         bool isAsync = false,
-        AsyncReturnKind asyncReturn = AsyncReturnKind.Task)
+        AsyncReturnKind asyncReturn = AsyncReturnKind.Task,
+        Token? start = null)
     {
         Expect(TokenType.LParen);
         var parms = new List<Parameter>();
@@ -377,7 +416,8 @@ public class Parser
 
         if (isAsync) ValidateAsyncReturnType(retType, name);
 
-        return new FunctionDecl(name, typeParams, parms, retType, ParseBlock(), isAsync, asyncReturn);
+        var function = new FunctionDecl(name, typeParams, parms, retType, ParseBlock(), isAsync, asyncReturn);
+        return start is null ? function : WithLocation(function, start);
     }
 
     private ExtFunctionDecl ParseExtFunctionTail(
@@ -385,7 +425,8 @@ public class Parser
         string methodName,
         List<string> typeParams,
         bool isAsync = false,
-        AsyncReturnKind asyncReturn = AsyncReturnKind.Task)
+        AsyncReturnKind asyncReturn = AsyncReturnKind.Task,
+        Token? start = null)
     {
         Expect(TokenType.LParen);
         var parms = new List<Parameter>();
@@ -397,8 +438,9 @@ public class Parser
 
         if (isAsync) ValidateAsyncReturnType(retType, $"{receiverType}.{methodName}");
 
-        return new ExtFunctionDecl(receiverType, methodName, typeParams, parms, retType,
-                                   ParseBlock(), isAsync, asyncReturn);
+        var function = new ExtFunctionDecl(receiverType, methodName, typeParams, parms, retType,
+                                           ParseBlock(), isAsync, asyncReturn);
+        return start is null ? function : WithLocation(function, start);
     }
 
     private void ValidateAsyncReturnType(TypeRef? ret, string funcName)
@@ -436,7 +478,11 @@ public class Parser
     private Expr ParseCallArg()
     {
         if (Current.Type == TokenType.Identifier && Peek().Type == TokenType.Equals)
-            return new NamedArgExpr(Consume().Value, (Consume(), ParseExpr()).Item2);
+        {
+            var name = Consume();
+            Consume(); // =
+            return WithLocation(new NamedArgExpr(name.Value, ParseExpr()), name);
+        }
         return ParseExpr();
     }
 
@@ -496,7 +542,7 @@ public class Parser
 
     private Stmt ParseStatement()
     {
-        int line = Current.Line;
+        var start = Current;
 
         Stmt stmt;
         if (Check(TokenType.Val))    stmt = ParseValDecl();
@@ -516,7 +562,7 @@ public class Parser
         }
         else stmt = new ExprStmt(ParseExpr());
 
-        return stmt with { Line = line, SourceFile = _sourceFile };
+        return WithLocation(stmt, start);
     }
 
     private ValDecl ParseValDecl()
@@ -604,7 +650,12 @@ public class Parser
         return new ForInStmt(varName, iterable, ParseBlock());
     }
 
-    public Expr ParseExpr() => ParseElvis();
+    public Expr ParseExpr()
+    {
+        var start = Current;
+        var expression = ParseElvis();
+        return expression.Line > 0 ? expression : WithLocation(expression, start);
+    }
 
     private Expr ParseElvis()
     {
@@ -704,8 +755,8 @@ public class Parser
     {
         if (Check(TokenType.Await))
         {
-            Consume();
-            return new AwaitExpr(ParseUnary());
+            var start = Consume();
+            return WithLocation(new AwaitExpr(ParseUnary()), start);
         }
         if (Check(TokenType.Bang))
         {
@@ -736,13 +787,13 @@ public class Parser
                         args.Add(ParseCallArg());
                 }
                 Expect(TokenType.RParen);
-                expr = new CallExpr(expr, args);
+                expr = WithLocation(new CallExpr(expr, args), expr);
             }
             else if (Check(TokenType.Dot))
             {
                 Consume();
-                var member = Expect(TokenType.Identifier).Value;
-                expr = new MemberAccessExpr(expr, member);
+                var member = Expect(TokenType.Identifier);
+                expr = WithLocation(new MemberAccessExpr(expr, member.Value), member);
             }
             else if (Check(TokenType.LBracket))
             {
@@ -754,15 +805,15 @@ public class Parser
             else if (Check(TokenType.SafeCall))
             {
                 Consume();
-                var member = Expect(TokenType.Identifier).Value;
-                expr = new SafeCallExpr(expr, member);
+                var member = Expect(TokenType.Identifier);
+                expr = WithLocation(new SafeCallExpr(expr, member.Value), member);
             }
             else if (Check(TokenType.LBrace))
             {
                 var lambda = ParseLambdaExpr();
                 expr = expr is CallExpr ce
-                    ? new CallExpr(ce.Callee, [..ce.Arguments, lambda])
-                    : new CallExpr(expr, [lambda]);
+                    ? WithLocation(new CallExpr(ce.Callee, [..ce.Arguments, lambda]), ce)
+                    : WithLocation(new CallExpr(expr, [lambda]), expr);
             }
             else break;
         }
@@ -847,37 +898,37 @@ public class Parser
         {
             case TokenType.IntLiteral:
                 Consume();
-                return new IntLiteral(int.Parse(tok.Value));
+                return WithLocation(new IntLiteral(int.Parse(tok.Value)), tok);
 
             case TokenType.FloatLiteral:
                 Consume();
-                return new DoubleLiteral(double.Parse(tok.Value,
-                    System.Globalization.CultureInfo.InvariantCulture));
+                return WithLocation(new DoubleLiteral(double.Parse(tok.Value,
+                    System.Globalization.CultureInfo.InvariantCulture)), tok);
 
             case TokenType.StringLiteral:
                 Consume();
-                return new StringLiteral(tok.Value);
+                return WithLocation(new StringLiteral(tok.Value), tok);
 
             case TokenType.StringTemplate:
                 Consume();
-                return ParseStringTemplate(tok.Value);
+                return ParseStringTemplate(tok);
 
             case TokenType.RawStringLiteral:
                 Consume();
-                return new StringLiteral(tok.Value, IsRaw: true);
+                return WithLocation(new StringLiteral(tok.Value, IsRaw: true), tok);
 
             case TokenType.RawStringTemplate:
                 Consume();
-                return ParseStringTemplate(tok.Value, isRaw: true);
+                return ParseStringTemplate(tok, isRaw: true);
 
-            case TokenType.True:  Consume(); return new BoolLiteral(true);
-            case TokenType.False: Consume(); return new BoolLiteral(false);
-            case TokenType.Null:  Consume(); return new NullLiteral();
-            case TokenType.This:  Consume(); return new ThisExpr();
+            case TokenType.True:  Consume(); return WithLocation(new BoolLiteral(true), tok);
+            case TokenType.False: Consume(); return WithLocation(new BoolLiteral(false), tok);
+            case TokenType.Null:  Consume(); return WithLocation(new NullLiteral(), tok);
+            case TokenType.This:  Consume(); return WithLocation(new ThisExpr(), tok);
 
             case TokenType.Identifier:
                 Consume();
-                return new IdentifierExpr(tok.Value);
+                return WithLocation(new IdentifierExpr(tok.Value), tok);
 
             case TokenType.New:
             {
@@ -888,7 +939,7 @@ public class Parser
                     Consume(); // [
                     var size = ParseExpr();
                     Expect(TokenType.RBracket);
-                    return new NewArrayExpr(new TypeRef(typeName, false), size);
+                    return WithLocation(new NewArrayExpr(new TypeRef(typeName, false), size), tok);
                 }
                 else
                 {
@@ -901,7 +952,7 @@ public class Parser
                             args.Add(ParseExpr());
                     }
                     Expect(TokenType.RParen);
-                    return new NewObjectExpr(typeName, args);
+                    return WithLocation(new NewObjectExpr(typeName, args), tok);
                 }
             }
 
@@ -928,7 +979,7 @@ public class Parser
 
     private WhenExpr ParseWhenExpr()
     {
-        Expect(TokenType.When);
+        var start = Expect(TokenType.When);
 
         Expr? subject = null;
         if (Match(TokenType.LParen))
@@ -983,7 +1034,7 @@ public class Parser
         }
 
         Expect(TokenType.RBrace);
-        return new WhenExpr(subject, arms);
+        return WithLocation(new WhenExpr(subject, arms), start);
     }
 
     private Expr ParseCollectionLiteral()
@@ -1025,8 +1076,9 @@ public class Parser
         return new ListLiteralExpr(elems);
     }
 
-    private StringTemplateExpr ParseStringTemplate(string rawValue, bool isRaw = false)
+    private StringTemplateExpr ParseStringTemplate(Token templateToken, bool isRaw = false)
     {
+        var rawValue = templateToken.Value;
         var parts = new List<StringPart>();
         int i = 0;
 
@@ -1054,22 +1106,65 @@ public class Parser
             }
 
             var exprText = rawValue[exprStart..(j - 1)];
+            var expressionStart = TemplateExpressionStart(templateToken, rawValue, exprStart);
 
             try
             {
-                var subTokens = new KSR.Lexer.Lexer(exprText).Tokenize();
-                var subParser = new Parser(subTokens);
+                var subTokens = new KSR.Lexer.Lexer(exprText, _sourceFile).Tokenize();
+                var subParser = new Parser(
+                    subTokens,
+                    _sourceFile,
+                    sourceStartLine: expressionStart.Line,
+                    sourceStartColumn: expressionStart.Column);
                 parts.Add(new ExprPart(subParser.ParseExpr()));
-                _errors.AddRange(subParser.Errors); // Bubble up errors from templates
+                _diagnostics.AddRange(subParser.Diagnostics);
             }
-            catch
+            catch (KsrParseException exception)
             {
+                _diagnostics.Add(exception.Diagnostic);
+                parts.Add(new LiteralPart("${" + exprText + "}"));
+            }
+            catch (KsrLexException exception)
+            {
+                _diagnostics.Add(TranslateTemplateDiagnostic(exception.Diagnostic, expressionStart));
                 parts.Add(new LiteralPart("${" + exprText + "}"));
             }
 
             i = j;
         }
 
-        return new StringTemplateExpr(parts, isRaw);
+        return WithLocation(new StringTemplateExpr(parts, isRaw), templateToken);
     }
+
+    private (int Line, int Column) TemplateExpressionStart(Token templateToken, string rawValue, int exprStart)
+    {
+        var location = SourceLocationFor(templateToken);
+        var line = location.Line;
+        var column = location.Column + 1; // Skip the opening quote.
+        foreach (var character in rawValue[..exprStart])
+        {
+            if (character == '\n')
+            {
+                line++;
+                column = 1;
+            }
+            else
+            {
+                column++;
+            }
+        }
+        return (line, column);
+    }
+
+    private KsrDiagnostic TranslateTemplateDiagnostic(
+        KsrDiagnostic diagnostic,
+        (int Line, int Column) expressionStart) =>
+        diagnostic with
+        {
+            SourceFile = _sourceFile,
+            Line = expressionStart.Line + diagnostic.Line - 1,
+            Column = diagnostic.Line == 1
+                ? expressionStart.Column + diagnostic.Column - 1
+                : diagnostic.Column
+        };
 }

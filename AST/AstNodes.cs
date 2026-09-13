@@ -6,16 +6,17 @@ namespace KSR.AST;
 
 public abstract record AstNode
 {
+    /// <summary>1-based line number in the original .ksr source file.</summary>
+    public int Line { get; init; }
+    /// <summary>1-based column number in the original .ksr source file.</summary>
+    public int Column { get; init; }
+    /// <summary>Absolute path of the .ksr source file this node came from.</summary>
+    public string SourceFile { get; init; } = "";
+
     public abstract T Accept<T>(IAstVisitor<T> visitor);
 }
 
-public abstract record Stmt : AstNode
-{
-    /// <summary>1-based line number in the original .ksr source file.</summary>
-    public int    Line       { get; init; }
-    /// <summary>Absolute path of the .ksr source file this statement came from.</summary>
-    public string SourceFile { get; init; } = "";
-}
+public abstract record Stmt : AstNode;
 
 public abstract record Expr : AstNode;
 

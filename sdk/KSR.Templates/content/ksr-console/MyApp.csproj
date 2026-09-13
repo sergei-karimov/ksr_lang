@@ -1,4 +1,4 @@
-<Project Sdk="KSR.Sdk/0.1.0">
+<Project Sdk="Kestrel.Sdk/0.1.0">
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>

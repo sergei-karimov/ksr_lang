@@ -15,7 +15,7 @@ namespace KSR.VisualStudio;
 [Guid(PackageGuidString)]
 [ProvideOptionPage(
     typeof(KsrOptionsPage),
-    categoryName:    "KSR",
+    categoryName:    "Kestrel",
     pageName:        "General",
     categoryResourceID: 0,
     pageNameResourceID: 0,

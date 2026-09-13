@@ -9,11 +9,11 @@
     <RootNamespace>KSR.Build</RootNamespace>
 
     <!-- NuGet metadata -->
-    <PackageId>KSR.Build</PackageId>
+    <PackageId>Kestrel.Build</PackageId>
     <Version>0.1.0</Version>
-    <Authors>KSR Authors</Authors>
-    <Description>MSBuild task package — compiles .ksr source files into C# during dotnet build.</Description>
-    <PackageTags>ksr;language;msbuild;task</PackageTags>
+    <Authors>Kestrel Authors</Authors>
+    <Description>Kestrel MSBuild task package — compiles .ksr source files into C# during dotnet build.</Description>
+    <PackageTags>kestrel;ksr;language;msbuild;task</PackageTags>
 
     <!--
       Place the DLL in build/net8.0/ so MSBuild can load the task.
@@ -52,8 +52,8 @@
     into every project that references this package.
   -->
   <ItemGroup>
-    <None Include="build\KSR.Build.props"   Pack="true" PackagePath="build\KSR.Build.props"   />
-    <None Include="build\KSR.Build.targets" Pack="true" PackagePath="build\KSR.Build.targets" />
+    <None Include="build\Kestrel.Build.props"   Pack="true" PackagePath="build\Kestrel.Build.props"   />
+    <None Include="build\Kestrel.Build.targets" Pack="true" PackagePath="build\Kestrel.Build.targets" />
   </ItemGroup>
 
   <!--

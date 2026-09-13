@@ -1,7 +1,7 @@
 <Project>
 
   <!--
-    Auto-imported by NuGet into every project that references KSR.Build.
+    Auto-imported by NuGet into every project that references Kestrel.Build.
     Declares the KsrCompileTask and wires it into the build pipeline.
   -->
 
@@ -10,7 +10,8 @@
   <!--
     AssemblyFile points to the task DLL inside the NuGet package cache.
     $(MSBuildThisFileDirectory) resolves to the build\ folder in the package,
-    so build\net8.0\KSR.Build.dll is the compiled task assembly.
+    so build\net8.0\KSR.Build.dll is the compiled task assembly. The assembly
+    name remains internal for source compatibility.
   -->
   <UsingTask
     TaskName="KSR.Build.KsrCompileTask"

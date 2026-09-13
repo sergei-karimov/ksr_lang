@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.ComponentModel.Composition;
 using System.Diagnostics;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.LanguageServer.Client;
@@ -14,7 +15,7 @@ using Microsoft.VisualStudio.Utilities;
 namespace KSR.VisualStudio;
 
 /// <summary>
-/// Starts `ksr lsp` as a child process and exposes it to Visual Studio
+/// Starts `kestrel lsp` as a child process and exposes it to Visual Studio
 /// as an LSP language client.  VS routes all .ksr documents through this
 /// client, which provides diagnostics, completions, and hover.
 /// </summary>
@@ -26,7 +27,7 @@ public sealed class KsrLanguageClient : ILanguageClient
 
     // ── ILanguageClient ───────────────────────────────────────────────────────
 
-    public string Name => "KSR Language Server";
+    public string Name => "Kestrel Language Server";
 
     /// <summary>
     /// VS uses these section names to forward workspace configuration to the
@@ -57,7 +58,7 @@ public sealed class KsrLanguageClient : ILanguageClient
 
     /// <summary>
     /// Called by VS to launch the LSP server.
-    /// Resolves the ksr executable, starts `ksr lsp`, and returns stdio streams.
+    /// Resolves the Kestrel executable, starts `kestrel lsp`, and returns stdio streams.
     /// </summary>
     public async Task<Connection?> ActivateAsync(CancellationToken token)
     {
@@ -68,16 +69,12 @@ public sealed class KsrLanguageClient : ILanguageClient
             return null;
         }
 
-        var psi = new ProcessStartInfo
-        {
-            FileName               = exe,
-            Arguments              = "lsp",
-            UseShellExecute        = false,
-            RedirectStandardInput  = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError  = false,
-            CreateNoWindow         = true,
-        };
+        var psi = CreateStartInfo(exe, Path.DirectorySeparatorChar == '\\');
+        psi.UseShellExecute        = false;
+        psi.RedirectStandardInput  = true;
+        psi.RedirectStandardOutput = true;
+        psi.RedirectStandardError  = false;
+        psi.CreateNoWindow         = true;
 
         var process = new Process
         {
@@ -116,13 +113,39 @@ public sealed class KsrLanguageClient : ILanguageClient
 
     public Task OnServerInitializedAsync() => Task.CompletedTask;
 
+    internal static ProcessStartInfo CreateStartInfo(
+        string executable,
+        bool isWindows,
+        string? commandProcessor = null,
+        string? powerShell = null)
+    {
+        if (!isWindows || !executable.EndsWith(".cmd", StringComparison.OrdinalIgnoreCase) &&
+            !executable.EndsWith(".ps1", StringComparison.OrdinalIgnoreCase))
+        {
+            return new ProcessStartInfo(executable, "lsp");
+        }
+
+        if (executable.EndsWith(".cmd", StringComparison.OrdinalIgnoreCase))
+        {
+            var shell = commandProcessor
+                ?? Environment.GetEnvironmentVariable("ComSpec")
+                ?? "cmd.exe";
+            return new ProcessStartInfo(shell, $"/d /s /c \"\"{executable}\" lsp\"");
+        }
+
+        var powershellPath = powerShell ?? "powershell.exe";
+        return new ProcessStartInfo(
+            powershellPath,
+            $"-NoLogo -NoProfile -ExecutionPolicy Bypass -File \"{executable}\" lsp");
+    }
+
     public Task<InitializationFailureContext?> OnServerInitializeFailedAsync(
         ILanguageClientInitializationInfo initializationFailureContext)
         => Task.FromResult<InitializationFailureContext?>(new InitializationFailureContext
         {
             FailureMessage = initializationFailureContext.StatusMessage
                 ?? initializationFailureContext.InitializationException?.Message
-                ?? "KSR language server failed to initialize."
+                ?? "Kestrel language server failed to initialize."
         });
 
     // ── Helpers ───────────────────────────────────────────────────────────────
@@ -130,12 +153,13 @@ public sealed class KsrLanguageClient : ILanguageClient
     /// <summary>
     /// Reads the configured executable path from the options page, then searches:
     ///   1. The path as-is (if absolute)
-    ///   2. %USERPROFILE%\.ksr\ksr.exe
-    ///   3. Falls back to just "ksr" (relies on PATH — returns it even if not confirmed)
+    ///   2. Kestrel install locations
+    ///   3. Legacy ksr install locations
+    ///   4. Falls back to the configured name for PATH resolution
     /// </summary>
     private static async Task<string?> ResolveExecutableAsync(CancellationToken token)
     {
-        var configured = "ksr";
+        var configured = KsrPathSettings.DefaultExecutableName;
         try
         {
             await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync(token);
@@ -168,9 +192,9 @@ public sealed class KsrLanguageClient : ILanguageClient
             await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
             VsShellUtilities.ShowMessageBox(
                 ServiceProvider.GlobalProvider,
-                "KSR executable not found. Install KSR or set the path under " +
-                "Tools → Options → KSR → General → KSR Executable Path.",
-                "KSR Language Server",
+                "Kestrel executable not found. Install Kestrel or set the path under " +
+                "Tools → Options → Kestrel → General → Kestrel Executable Path.",
+                "Kestrel Language Server",
                 Microsoft.VisualStudio.Shell.Interop.OLEMSGICON.OLEMSGICON_WARNING,
                 Microsoft.VisualStudio.Shell.Interop.OLEMSGBUTTON.OLEMSGBUTTON_OK,
                 Microsoft.VisualStudio.Shell.Interop.OLEMSGDEFBUTTON.OLEMSGDEFBUTTON_FIRST);

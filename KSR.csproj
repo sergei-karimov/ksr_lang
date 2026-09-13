@@ -6,17 +6,17 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
-    <AssemblyName>ksr</AssemblyName>
+    <AssemblyName>kestrel</AssemblyName>
     <RootNamespace>KSR</RootNamespace>
 
-    <!-- Publish as a dotnet global tool: dotnet tool install -g KSR -->
-    <PackageId>KSR</PackageId>
+    <!-- Publish as a dotnet global tool: dotnet tool install -g Kestrel -->
+    <PackageId>Kestrel</PackageId>
     <Version>0.1.0</Version>
-    <Authors>KSR Authors</Authors>
-    <Description>KSR language — CLI tool (ksr run, ksr new, ksr add)</Description>
+    <Authors>Kestrel Authors</Authors>
+    <Description>Kestrel language — CLI tool (kestrel run, kestrel new, kestrel add)</Description>
     <PackAsTool>true</PackAsTool>
-    <ToolCommandName>ksr</ToolCommandName>
-    <PackageTags>ksr;language;cli;tool</PackageTags>
+    <ToolCommandName>kestrel</ToolCommandName>
+    <PackageTags>kestrel;ksr;language;cli;tool</PackageTags>
   </PropertyGroup>
 
   <!-- ── Standalone publish settings ──────────────────────────────────────── -->
@@ -42,8 +42,11 @@
     <Compile Remove="Lexer\**\*.cs" />
     <Compile Remove="Parser\**\*.cs" />
     <Compile Remove="AST\**\*.cs" />
+    <Compile Remove="Analysis\**\*.cs" />
     <Compile Remove="CodeGen\CodeGenerator.cs" />
     <Compile Remove="CodeGen\NameUtils.cs" />
+    <Compile Remove="Diagnostics\**\*.cs" />
+    <Compile Remove="Semantic\**\*.cs" />
     <!-- sdk/ and all obj/ sub-dirs are built separately; exclude them entirely -->
     <Compile Remove="sdk\**\*.cs" />
     <Compile Remove="vs-extension\**\*.cs" />

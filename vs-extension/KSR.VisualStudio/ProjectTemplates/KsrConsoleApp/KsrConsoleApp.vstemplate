@@ -3,8 +3,8 @@
     Type="Project"
     xmlns="http://schemas.microsoft.com/developer/vstemplate/2005">
   <TemplateData>
-    <Name>KSR Console Application</Name>
-    <Description>A command-line application written in the KSR language.</Description>
+    <Name>Kestrel Console Application</Name>
+    <Description>A command-line application written in the Kestrel language.</Description>
     <ProjectType>CSharp</ProjectType>
     <ProjectSubType></ProjectSubType>
     <SortOrder>1000</SortOrder>
@@ -13,8 +13,8 @@
     <ProvideDefaultName>true</ProvideDefaultName>
     <LocationField>Enabled</LocationField>
     <EnableLocationBrowseButton>true</EnableLocationBrowseButton>
-    <!-- Show under the "KSR" category in New Project dialog -->
-    <TemplateGroupID>KSR</TemplateGroupID>
+    <!-- Show under the "Kestrel" category in New Project dialog -->
+    <TemplateGroupID>Kestrel</TemplateGroupID>
     <NumberOfParentCategoriesToRollUp>1</NumberOfParentCategoriesToRollUp>
   </TemplateData>
   <TemplateContent>

@@ -1,16 +1,16 @@
-# KSR
+# Kestrel
 
-**KSR** is a statically-typed, Kotlin-inspired language that compiles to C# and runs on the .NET runtime.
+**Kestrel** is a statically-typed, Kotlin-inspired language that compiles to C# and runs on the .NET runtime.
 It is designed to feel like Kotlin — concise, expressive, null-safe — while giving you full access to the entire .NET and NuGet ecosystem out of the box.
 
 ---
 
-## Why KSR?
+## Why Kestrel?
 
 Kotlin is a great language, but targeting the JVM means carrying the JVM.
 C# is powerful, but its syntax is verbose compared to modern languages.
 
-KSR sits in the middle: **Kotlin-style syntax, .NET runtime, zero JVM overhead**.
+Kestrel sits in the middle: **Kotlin-style syntax, .NET runtime, zero JVM overhead**.
 
 - Write code that looks like Kotlin
 - Use any NuGet package — Raylib, ASP.NET, Entity Framework, anything
@@ -24,7 +24,11 @@ KSR sits in the middle: **Kotlin-style syntax, .NET runtime, zero JVM overhead**
 
 ### Prerequisites
 
-- [.NET 8 SDK](https://dotnet.microsoft.com/download) or newer
+- [.NET 8 SDK](https://dotnet.microsoft.com/download) and the .NET 8 runtime
+
+Kestrel packages and generated projects target `net8.0`. A newer SDK can build the
+repository, but it does not install the .NET 8 runtime automatically; install that
+runtime as well to run Kestrel, generated projects, and the `net8.0` test targets.
 
 ### Install
 
@@ -38,25 +42,39 @@ KSR sits in the middle: **Kotlin-style syntax, .NET runtime, zero JVM overhead**
 ./scripts/install.sh
 ```
 
-The installer builds all packages from source and installs the `ksr` global tool, `dotnet new` templates, and the VS Code extension.
+The installer builds all packages from source and installs the `kestrel` global tool, `dotnet new` templates, and the VS Code extension. It also creates the legacy `ksr` command alias; the `ksr-*` template aliases are installed alongside the canonical `kestrel-*` names.
+
+### Platform and verification notes
+
+- The Visual Studio VSIX is Windows-only. Build, test, and install it from a
+  Windows machine with Visual Studio and its MSBuild tooling; non-Windows hosts do
+  not validate the VSIX. The `net472` Visual Studio test target additionally
+  requires Mono when it is run outside Windows.
+- The creative camera template and `Kestrel.Vision` use
+  `OpenCvSharp4.runtime.win`; camera capture is a Windows MVP and also requires a
+  usable camera device. Run those examples on Windows rather than treating a
+  non-Windows failure as a compiler result.
+- NuGet may emit `NU1900` when it cannot download vulnerability metadata. Current
+  restores also emit `NU1903` for `Microsoft.Build.Utilities.Core` 17.11.4; this is
+  a known dependency advisory, not a successful vulnerability remediation.
 
 ### Create a project
 
 ```bash
-dotnet new ksr-console -n MyApp
+dotnet new kestrel-console -n MyApp
 cd MyApp
 dotnet run
 ```
 
 ```
-Hello from KSR!
+Hello from Kestrel!
 ```
 
 Creative-coding starters are available too:
 
 ```bash
-dotnet new ksr-creative -n Sketch
-dotnet new ksr-creative-camera -n CameraSketch
+dotnet new kestrel-creative -n Sketch
+dotnet new kestrel-creative-camera -n CameraSketch
 ```
 
 ---
@@ -382,7 +400,7 @@ async fun main() {
 The global flag `--async-return=valuetask` makes all async functions use `ValueTask` by default:
 
 ```bash
-ksr myapp.ksr --async-return=valuetask
+kestrel myapp.ksr --async-return=valuetask
 ```
 
 ### Default and named arguments
@@ -480,9 +498,9 @@ Type arguments are inferred by the C# compiler from call-site context — you ne
 
 ### Collections
 
-KSR has immutable and mutable variants of list and map.
+Kestrel has immutable and mutable variants of list and map.
 
-| KSR type | C# type | Semantics |
+| Kestrel type | C# type | Semantics |
 |---|---|---|
 | `List<T>` | `IReadOnlyList<T>` | Immutable — default |
 | `MutableList<T>` | `List<T>` | Mutable — call `.add()`, `.remove()`, etc. |
@@ -523,7 +541,7 @@ use System.Collections.Generic
 
 ### Standard Library
 
-KSR ships three built-in modules. Add them with `use`:
+Kestrel ships three built-in modules. Add them with `use`:
 
 #### `ksr.io` — file system and console I/O
 
@@ -749,7 +767,7 @@ fun main() {
 ### Create a project
 
 ```bash
-dotnet new ksr-console -n MyApp
+dotnet new kestrel-console -n MyApp
 cd MyApp
 dotnet run
 ```
@@ -781,10 +799,10 @@ fun main() {
 
 ### Creative camera MVP
 
-KSR also includes a minimal creative-coding runtime for Windows:
+Kestrel also includes a minimal creative-coding runtime for Windows:
 
-- `KSR.Creative` uses `Raylib-cs` for a window, draw loop, FPS display, and texture output.
-- `KSR.Vision` uses `OpenCvSharp4` and `OpenCvSharp4.runtime.win` for webcam capture and frame processing.
+- `Kestrel.Creative` uses `Raylib-cs` for a window, draw loop, FPS display, and texture output. Its implementation namespace remains `KSR.Creative`.
+- `Kestrel.Vision` uses `OpenCvSharp4` and `OpenCvSharp4.runtime.win` for webcam capture and frame processing. Its implementation namespace remains `KSR.Vision`.
 - Supported frame operations in the MVP: `grayscale()`, `blur(radius)`, and `edges()`.
 - `app.init { ... }` creates reusable resources once, `app.draw { ... }` runs every frame, `app.cleanup { ... }` releases resources once, and `app.run()` starts the loop.
 - The lifecycle is generic: use it for cameras, textures, models, audio inputs, sockets, sensors, render targets, ML models, or any other expensive/disposable state. In the MVP, `draw` and `cleanup` can each be registered once; repeated registration throws an exception.
@@ -792,7 +810,7 @@ KSR also includes a minimal creative-coding runtime for Windows:
 Create a graphics-only sketch:
 
 ```bash
-dotnet new ksr-creative -n Sketch
+dotnet new kestrel-creative -n Sketch
 cd Sketch
 dotnet run
 ```
@@ -800,7 +818,7 @@ dotnet run
 Create the camera MVP project:
 
 ```bash
-dotnet new ksr-creative-camera -n CameraSketch
+dotnet new kestrel-creative-camera -n CameraSketch
 cd CameraSketch
 dotnet run
 ```
@@ -845,7 +863,7 @@ fun main() {
 Run the included example:
 
 ```bash
-ksr examples/camera_demo.ksr
+kestrel examples/camera_demo.ksr
 ```
 
 The MVP ships only the Windows OpenCV runtime package. Camera access can still fail if no camera is present, another app owns it, or Windows privacy permissions block the process.
@@ -859,10 +877,10 @@ dotnet publish -c Release -r win-x64 -p:PublishSingleFile=true
 
 ### Project file
 
-A KSR project is a standard `.csproj` using the KSR SDK:
+A Kestrel project is a standard `.csproj` using the Kestrel SDK:
 
 ```xml
-<Project Sdk="KSR.Sdk/0.1.0">
+<Project Sdk="Kestrel.Sdk/0.1.0">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net8.0</TargetFramework>
@@ -874,12 +892,12 @@ Creative projects add runtime packages:
 
 ```xml
 <ItemGroup>
-  <PackageReference Include="KSR.Creative" Version="0.1.0" />
-  <PackageReference Include="KSR.Vision" Version="0.1.0" />
+  <PackageReference Include="Kestrel.Creative" Version="0.1.0" />
+  <PackageReference Include="Kestrel.Vision" Version="0.1.0" />
 </ItemGroup>
 ```
 
-The `ksr-creative` and `ksr-creative-camera` templates include these references for you. No boilerplate, no extra build steps.
+The `kestrel-creative` and `kestrel-creative-camera` templates include these references for you. The legacy `ksr-creative` and `ksr-creative-camera` names are available as aliases. No boilerplate, no extra build steps.
 
 ---
 
@@ -888,16 +906,26 @@ The `ksr-creative` and `ksr-creative-camera` templates include these references 
 No project needed — run a `.ksr` file directly like a script.
 
 ```bash
+kestrel hello.ksr
+kestrel hello.ksr --debug                  # also prints the generated C# source
+kestrel hello.ksr --async-return=valuetask # use ValueTask for all async functions
+
+# Legacy compatibility alias:
 ksr hello.ksr
-ksr hello.ksr --debug                  # also prints the generated C# source
-ksr hello.ksr --async-return=valuetask # use ValueTask for all async functions
 ```
 
 ---
 
 ## Examples
 
-The `examples/` directory contains runnable `.ksr` files:
+The `examples/` directory contains compiler examples in different compatibility states. The following files are verified end-to-end by the CLI regression suite (analysis, generated C#, compilation, and execution):
+
+- `examples/hello.ksr`
+- `examples/async_demo.ksr`
+- `examples/generic_interfaces.ksr`
+- `examples/sealed_demo.ksr`
+
+The remaining examples cover optional packages or known semantic edge cases. Check one before running it:
 
 | File | Description |
 |---|---|
@@ -911,62 +939,67 @@ The `examples/` directory contains runnable `.ksr` files:
 | `examples/text_processing.ksr` | Text parsing + collection pipelines using `ksr.text` and `ksr.collections` together |
 | `examples/raylib_demo.ksr` | Raylib primitives demo (circles, rectangles, lines) |
 | `examples/game_of_life.ksr` | Conway's Game of Life at 1920×1080 using Raylib |
-| `examples/camera_demo.ksr` | Creative camera MVP using `KSR.Creative` and `KSR.Vision` |
+| `examples/camera_demo.ksr` | Creative camera MVP using the `Kestrel.Creative` and `Kestrel.Vision` packages |
 | `examples/lifecycle_demo.ksr` | Generic Creative lifecycle demo with reusable per-app state |
 
-Run any example:
+Run a verified example:
 
 ```bash
-ksr examples/hello.ksr
+kestrel examples/hello.ksr
 ```
 
 For the Raylib examples, install the package first:
 
 ```bash
 dotnet add package Raylib-cs
-ksr examples/game_of_life.ksr
+kestrel examples/game_of_life.ksr
 ```
 
 ---
 
 ## VS Code Extension
 
-The `ksr-lang` extension provides:
+The `ksr-lang` extension provides Kestrel language support:
 
 - **Syntax highlighting** — keywords, types, strings, operators, lambdas
 - **Real-time diagnostics** — parse errors shown inline as you type (powered by the LSP server)
 - **Completions** — keywords (`val`, `var`, `fun`, `async`, `await`, …), built-in types (`Int`, `String`, `List`, `MutableList`, …), stdlib symbols (`IO`, `File`, `Text`, `Lst`, `Mp`, …), stdlib module names (`ksr.io`, `ksr.text`, `ksr.collections`), struct names, interface names, and top-level function names from the current file
 - **Hover documentation** — describes keywords, built-in types, stdlib symbols (`Lst`, `Mp`, `IO`, …), and identifiers on hover
 
-The extension connects to the KSR Language Server (`ksr lsp`) via JSON-RPC over stdio using the standard Language Server Protocol. It works with VS Code and any other LSP-compatible editor.
+The extension connects to the Kestrel Language Server (`kestrel lsp`) via JSON-RPC over stdio using the standard Language Server Protocol. The legacy `ksr lsp` command is installed as a compatibility alias. It works with VS Code and any other LSP-compatible editor.
 
 Installed automatically by the installer scripts. After installation, reload VS Code (`Ctrl+Shift+P` → **Reload Window**) to activate the Language Server.
 
 To install manually:
 
 ```bash
-code --install-extension vscode-extension/ksr-lang-0.1.0.vsix
+cd vscode-extension
+npm ci
+npm run compile
+npm run bundle
+npx vsce package --allow-missing-repository
+code --install-extension ./ksr-lang-0.1.0.vsix
 ```
 
-If the Language Server fails to start, verify `ksr` is on your PATH:
+If the Language Server fails to start, verify `kestrel` is on your PATH:
 
 ```bash
-ksr lsp   # should hang waiting for input, not print an error
+kestrel lsp   # should hang waiting for input, not print an error
 ```
 
 ### Debugging
 
-KSR projects support full breakpoint debugging in VS Code via the C# extension (`ms-dotnettools.csharp` or C# Dev Kit).
+Kestrel projects support full breakpoint debugging in VS Code via the C# extension (`ms-dotnettools.csharp` or C# Dev Kit).
 
 **Requirements:**
 - C# extension installed in VS Code
-- Project mode only (`dotnet new ksr-console`) — single-file `ksr file.ksr` mode does not produce a PDB
+- Project mode only (`dotnet new kestrel-console`) — single-file `kestrel file.ksr` mode does not produce a PDB
 
-**Setup:** every project created with `dotnet new ksr-console` includes a `.vscode/launch.json` pre-configured for debugging:
+**Setup:** every project created with `dotnet new kestrel-console` includes a `.vscode/launch.json` pre-configured for debugging (the legacy `ksr-console` alias remains available for compatibility):
 
 ```json
 {
-    "name": "Debug KSR",
+    "name": "Debug Kestrel",
     "type": "coreclr",
     "request": "launch",
     "preLaunchTask": "build",
@@ -975,64 +1008,70 @@ KSR projects support full breakpoint debugging in VS Code via the C# extension (
 }
 ```
 
-Press **F5** to build and launch the debugger. Breakpoints set in `.ksr` files work because the KSR compiler embeds `#line` directives in the generated C# — the PDB maps every generated line back to the original `.ksr` file and line number.
+Press **F5** to build and launch the debugger. Breakpoints set in `.ksr` files work because the Kestrel compiler embeds `#line` directives in the generated C# — the PDB maps every generated line back to the original `.ksr` file and line number.
 
 ---
 
 ## Visual Studio Extension
 
-The `KSR.VisualStudio` VSIX extension adds first-class KSR support to **Visual Studio 2022 and later** (including Visual Studio 2026).
+The Kestrel Visual Studio extension adds first-class Kestrel support to **Visual Studio 2022 and later** (including Visual Studio 2026). Its internal `KSR.VisualStudio` assembly name is retained for compatibility.
 
 ### Features
 
-- **Syntax highlighting** — KSR-aware `.ksr` content type
+- **Syntax highlighting** — Kestrel-aware `.ksr` content type
 - **Real-time diagnostics** — parse errors shown inline as you type
-- **IntelliSense** — completions and hover documentation powered by the KSR Language Server
-- **Project templates** — _KSR Console App_ appears under **File → New Project**
-- **Item templates** — _KSR Source File_ appears under **Add → New Item**
+- **IntelliSense** — completions and hover documentation powered by the Kestrel Language Server
+- **Project templates** — _Kestrel Console App_ appears under **File → New Project**
+- **Item templates** — _Kestrel Source File_ appears under **Add → New Item**
 - **Breakpoint debugging** — F5 hits breakpoints in `.ksr` files (source-mapped via `#line` PDB entries; requires project mode)
 
 ### Install
 
-1. Build or download `KSR.VisualStudio.vsix` (found in `vs-extension/KSR.VisualStudio/`).
+1. Build or download the Kestrel Visual Studio VSIX from `vs-extension/KSR.VisualStudio/`.
 2. Close Visual Studio.
-3. Double-click `KSR.VisualStudio.vsix` and follow the installer prompts.
+3. Double-click the generated VSIX and follow the installer prompts.
 4. Reopen Visual Studio — the extension is active immediately.
 
 Alternatively, install from the command line:
 
 ```powershell
 & "C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\VSIXInstaller.exe" `
-    KSR.VisualStudio.vsix
+    path\to\bin\Release\net472\KSR.VisualStudio.vsix
 ```
+
+The generated filename retains the internal project name `KSR.VisualStudio.vsix`.
 
 Adjust the path for your VS edition (Professional / Enterprise) and year (2022, 2026, …).
 
 ### Requirements
 
 - Visual Studio 2022 or later (Community, Professional, or Enterprise)
-- `ksr` installed and available on your `PATH`
+- Windows; the VSIX and its `net472` test target are not verified on macOS/Linux
+  (Mono is required to run that test target outside Windows)
+- `kestrel` installed and available on your `PATH` (`ksr` is installed as a compatibility alias)
 
   The extension resolves the executable in this order:
-  1. The path configured under **Tools → Options → KSR → General → KSR Executable Path**
-  2. `%USERPROFILE%\.ksr\ksr.exe`
-  3. `ksr` via `PATH`
+  1. The path configured under **Tools → Options → Kestrel → General → Kestrel Executable Path**
+  2. The canonical global-tool shim in `%USERPROFILE%\.dotnet\tools\kestrel.exe`
+     (or `kestrel` on Unix), then the legacy `.dotnet\tools\ksr.cmd`/`ksr.ps1`
+     aliases and older `.ksr` locations
+  3. `kestrel` via `PATH`, then the legacy `ksr` aliases (`ksr.cmd`, `ksr.ps1`, or `ksr.exe`)
 
 ### Troubleshooting
 
 | Symptom | Fix |
 |---|---|
-| _"KSR executable not found"_ warning on startup | Install KSR or set the executable path at **Tools → Options → KSR → General** |
-| No IntelliSense in `.ksr` files | Verify `ksr lsp` runs without error in a terminal |
+| _"Kestrel executable not found"_ warning on startup | Install Kestrel or set the executable path at **Tools → Options → Kestrel → General** |
+| No IntelliSense in `.ksr` files | Verify `kestrel lsp` runs without error in a terminal |
 | Extension not listed after install | Ensure VS was closed before running the VSIX installer |
 
 ---
 
 ## How It Works
 
-KSR is a **source-to-source compiler**: `.ksr` → Roslyn SyntaxTree → .NET assembly.
+Kestrel is a **source-to-source compiler**: `.ksr` → Roslyn SyntaxTree → .NET assembly.
 
-**Single-file mode** (`ksr file.ksr`):
+**Single-file mode** (`kestrel file.ksr`; legacy alias: `ksr file.ksr`):
 
 ```
 .ksr source
@@ -1054,7 +1093,7 @@ The `SyntaxTreeGenerator` builds the Roslyn `SyntaxTree` via `SyntaxFactory` dir
     └── KsrCompileTask  → writes *.g.cs → standard Roslyn MSBuild pipeline
 ```
 
-The compiler hooks into `dotnet build` via a custom MSBuild task (`KSR.Build`), so `.ksr` files compile transparently alongside any other `.cs` files in your project.
+The compiler hooks into `dotnet build` via a custom MSBuild task (`Kestrel.Build`), so `.ksr` files compile transparently alongside any other `.cs` files in your project.
 
 ### Source mapping
 
@@ -1064,7 +1103,7 @@ The compiler embeds `#line` directives in the generated C# so that every error �
 error KSR001: hello.ksr(42,5): undefined variable 'naem'
 ```
 
-This works in both single-file mode (`ksr file.ksr`) and full project mode (`dotnet build`).
+This works in both single-file mode (`kestrel file.ksr`) and full project mode (`dotnet build`).
 
 ---
 
@@ -1072,14 +1111,14 @@ This works in both single-file mode (`ksr file.ksr`) and full project mode (`dot
 
 | Package | Purpose |
 |---|---|
-| `KSR` | Global CLI — `ksr <file.ksr>` single-file runner |
-| `KSR.Core` | Compiler library — Lexer, Parser, AST, CodeGen |
-| `KSR.Build` | MSBuild task — hooks KSR into `dotnet build` |
-| `KSR.Sdk` | MSBuild SDK — `Sdk="KSR.Sdk/0.1.0"` |
-| `KSR.StdLib` | Standard library — `ksr.io`, `ksr.text`, and `ksr.collections` modules |
-| `KSR.Vision` | Webcam capture and OpenCV frame processing (`OpenCvSharp4`, Windows runtime MVP) |
-| `KSR.Creative` | Minimal Raylib creative-coding window and draw API |
-| `KSR.Templates` | `dotnet new` templates |
+| `Kestrel` | Global CLI — `kestrel <file.ksr>` single-file runner (`ksr` compatibility alias) |
+| `Kestrel.Core` | Compiler library — Lexer, Parser, AST, CodeGen |
+| `Kestrel.Build` | MSBuild task — hooks Kestrel into `dotnet build` |
+| `Kestrel.Sdk` | MSBuild SDK — `Sdk="Kestrel.Sdk/0.1.0"` |
+| `Kestrel.StdLib` | Standard library — `ksr.io`, `ksr.text`, and `ksr.collections` modules |
+| `Kestrel.Vision` | Webcam capture and OpenCV frame processing (`OpenCvSharp4`, Windows runtime MVP) |
+| `Kestrel.Creative` | Minimal Raylib creative-coding window and draw API |
+| `Kestrel.Templates` | `dotnet new` templates (canonical `kestrel-*` names with `ksr-*` aliases) |
 
 ---
 
@@ -1109,7 +1148,7 @@ This works in both single-file mode (`ksr file.ksr`) and full project mode (`dot
 - [x] `List<T>` and `Map<K, V>` collection literals
 - [x] Interfaces / trait-style polymorphism (`interface` + `implement … for …`)
 - [x] Pattern matching — `when` expression (switch expr / ternary / if-else)
-- [x] Language server (LSP) — real-time diagnostics, completion, hover (`ksr lsp`)
+- [x] Language server (LSP) — real-time diagnostics, completion, hover (`kestrel lsp`)
 - [x] Standard library — `ksr.io` (file/console I/O) and `ksr.text` (string utilities)
 - [x] Async/await — `async fun`, `await`, `@ValueTask`, `--async-return=valuetask`
 - [x] Standard library — `ksr.collections` (`Lst` and `Mp` higher-order operations)

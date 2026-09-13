@@ -1,7 +1,7 @@
 <Project>
 
   <!--
-    Auto-imported by NuGet into every project that references KSR.Build.
+    Auto-imported by NuGet into every project that references Kestrel.Build.
     Sets up the KsrCompile item group and the generated-file path.
   -->
 

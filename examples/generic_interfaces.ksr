@@ -51,15 +51,19 @@ implement Container<Int> for Box {
 
 // ── Helper functions using the interfaces ─────────────────────────────────────
 
-fun printEnum(e: Enum) {
+fun printColorEnum(e: Enum<Color>) {
     println("name=${e.name()}, ordinal=${e.ordinal()}")
 }
 
-fun printIndexed(e: IndexDbEnum) {
+fun printStatusEnum(e: Enum<Status>) {
+    println("name=${e.name()}, ordinal=${e.ordinal()}")
+}
+
+fun printIndexed(e: IndexDbEnum<Status>) {
     println("key=${e.key()}")
 }
 
-fun printContainer(c: Container) {
+fun printContainer(c: Container<Int>) {
     if (c.isEmpty()) {
         println("(empty)")
     } else {
@@ -75,9 +79,9 @@ fun main() {
     val blue   = Color("BLUE", 2)
 
     println("── Colors (Enum<Color>) ─────────────────────")
-    printEnum(red)
-    printEnum(green)
-    printEnum(blue)
+    printColorEnum(red)
+    printColorEnum(green)
+    printColorEnum(blue)
 
     val active   = Status("ACTIVE",   0, "active")
     val inactive = Status("INACTIVE", 1, "inactive")
@@ -85,9 +89,9 @@ fun main() {
 
     println("")
     println("── Statuses (Enum<Status> + IndexDbEnum<Status>) ─")
-    printEnum(active)
+    printStatusEnum(active)
     printIndexed(active)
-    printEnum(inactive)
+    printStatusEnum(inactive)
     printIndexed(inactive)
 
     println("")

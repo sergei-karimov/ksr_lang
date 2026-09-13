@@ -1,6 +1,8 @@
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using KSR.Analysis;
+using KSR.Diagnostics;
 
 namespace KSR.LSP;
 
@@ -177,7 +179,7 @@ public static class LspServer {
                         completionProvider = new { triggerCharacters = Array.Empty<string>() },
                         hoverProvider = true,
                     },
-                    serverInfo = new { name = "KSR Language Server", version = "0.1.0" },
+                    serverInfo = new { name = "Kestrel Language Server", version = "0.1.0" },
                 });
                 break;
 
@@ -251,7 +253,7 @@ public static class LspServer {
                     if (p.TryGetProperty("textDocument", out var td)) {
                         var uri = td.GetProperty("uri").GetString()!;
                         if (_docs.TryGetValue(uri, out var docText)) {
-                            foreach (var decl in SafeParse(docText)) {
+                            foreach (var decl in SafeParse(docText, uri)) {
                                 if (decl is KSR.AST.StructDecl dc)
                                     items.Add(new { label = dc.Name, kind = 22 /* Struct */, detail = "struct" });
                                 if (decl is KSR.AST.SealedDecl sd)
@@ -297,59 +299,26 @@ public static class LspServer {
     // ── diagnostics ───────────────────────────────────────────────────────────
 
     private static void PublishDiagnostics(string uri, string text) {
-        var diags = new List<object>();
-        try {
-            var tokens = new KSR.Lexer.Lexer(text).Tokenize();
-            var parser = new KSR.Parser.Parser(tokens, uri);
-            var program = parser.Parse();
-
-            // Collect parser errors
-            foreach (var err in parser.Errors) {
-                AddDiagFromErrorString(diags, err);
-            }
-
-            // Run semantic analysis if no parser errors?
-            // Actually, we can run it even if there are some errors (recovery), but maybe it's safer to skip if too many.
-            var analyzer = new KSR.Semantic.SemanticAnalyzer();
-            analyzer.Analyze(program, uri);
-            foreach (var err in analyzer.Errors) {
-                AddDiagFromErrorString(diags, err);
-            }
-
-        } catch (KSR.Lexer.KsrLexException ex) {
-            diags.Add(MakeDiag(ex.Message, ex.Line - 1, ex.Col - 1));
-        } catch (KSR.Parser.KsrParseException ex) {
-            diags.Add(MakeDiag(ex.Message, ex.Line - 1, ex.Col - 1));
-        } catch { /* ignore other errors */ }
-
-        // Remove duplicates
-        var uniqueDiags = diags
-            .GroupBy(d => d.ToString())
-            .Select(g => g.First())
+        var result = KsrAnalyzer.Analyze(text, uri);
+        var diagnostics = result.Diagnostics
+            .Select(ToLspDiagnostic)
+            .Distinct()
             .ToList();
 
-        SendNotification("textDocument/publishDiagnostics", new { uri, diagnostics = uniqueDiags });
+        SendNotification("textDocument/publishDiagnostics", new { uri, diagnostics });
     }
 
-    private static void AddDiagFromErrorString(List<object> diags, string err) {
-        var match = System.Text.RegularExpressions.Regex.Match(err, @"\((\d+),(\d+)\): error: (.*)");
-        if (match.Success) {
-            int line = int.Parse(match.Groups[1].Value);
-            int col = int.Parse(match.Groups[2].Value);
-            string msg = match.Groups[3].Value;
-            diags.Add(MakeDiag(msg, line - 1, col - 1));
-        }
-    }
-
-    private static object MakeDiag(string message, int line, int col) => new {
-        range = new {
-            start = new { line = Math.Max(0, line), character = Math.Max(0, col) },
-            end = new { line = Math.Max(0, line), character = 1000 },
+    public static LspDiagnostic ToLspDiagnostic(KsrDiagnostic diagnostic) => new(
+        new LspRange(
+            new LspPosition(Math.Max(0, diagnostic.Line - 1), Math.Max(0, diagnostic.Column - 1)),
+            new LspPosition(Math.Max(0, diagnostic.Line - 1), Math.Max(0, diagnostic.Column - 1))),
+        diagnostic.Severity switch {
+            DiagnosticSeverity.Error => 1,
+            DiagnosticSeverity.Warning => 2,
+            _ => 3,
         },
-        severity = 1, // Error
-        message,
-        source = "ksr",
-    };
+        diagnostic.Message,
+        "kestrel");
 
     // ── hover ─────────────────────────────────────────────────────────────────
 
@@ -357,7 +326,7 @@ public static class LspServer {
         if (!_docs.TryGetValue(uri, out var text)) return null;
 
         try {
-            var tokens = new KSR.Lexer.Lexer(text).Tokenize();
+            var tokens = new KSR.Lexer.Lexer(text, uri).Tokenize();
             // LSP uses 0-based lines/chars; KSR lexer uses 1-based
             int ksrLine = lspLine + 1;
             int ksrCol = lspChar + 1;
@@ -429,10 +398,10 @@ public static class LspServer {
     };
 
     /// <summary>Parse source text, returning declarations or empty list on error.</summary>
-    private static IEnumerable<KSR.AST.AstNode> SafeParse(string text) {
+    private static IEnumerable<KSR.AST.AstNode> SafeParse(string text, string sourceFile) {
         try {
-            var tokens = new KSR.Lexer.Lexer(text).Tokenize();
-            return new KSR.Parser.Parser(tokens).Parse().Declarations;
+            var tokens = new KSR.Lexer.Lexer(text, sourceFile).Tokenize();
+            return new KSR.Parser.Parser(tokens, sourceFile).Parse().Declarations;
         } catch { return []; }
     }
 
@@ -442,3 +411,7 @@ public static class LspServer {
     private static void SendNotification(string method, object @params) =>
         WriteMessage(new { jsonrpc = "2.0", method, @params });
 }
+
+public sealed record LspPosition(int Line, int Character);
+public sealed record LspRange(LspPosition Start, LspPosition End);
+public sealed record LspDiagnostic(LspRange Range, int Severity, string Message, string Source);

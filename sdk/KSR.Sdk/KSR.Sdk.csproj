@@ -4,11 +4,11 @@
     <TargetFramework>net8.0</TargetFramework>
 
     <!-- NuGet metadata -->
-    <PackageId>KSR.Sdk</PackageId>
+    <PackageId>Kestrel.Sdk</PackageId>
     <Version>0.1.0</Version>
-    <Authors>KSR Authors</Authors>
-    <Description>MSBuild SDK for the KSR language — use Sdk="KSR.Sdk/0.1.0" in your .csproj.</Description>
-    <PackageTags>ksr;language;sdk;msbuild</PackageTags>
+    <Authors>Kestrel Authors</Authors>
+    <Description>MSBuild SDK for the Kestrel language — use Sdk="Kestrel.Sdk/0.1.0" in your .csproj.</Description>
+    <PackageTags>kestrel;ksr;language;sdk;msbuild</PackageTags>
 
     <!--
       PackageType=MSBuildSdk tells NuGet/MSBuild that this package is an SDK.

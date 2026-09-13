@@ -6,11 +6,11 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
 
-    <PackageId>KSR.Vision</PackageId>
+    <PackageId>Kestrel.Vision</PackageId>
     <Version>0.1.0</Version>
-    <Authors>KSR Authors</Authors>
-    <Description>KSR creative-coding vision runtime: webcam capture and minimal OpenCV frame processing.</Description>
-    <PackageTags>ksr;creative-coding;opencv;camera;vision</PackageTags>
+    <Authors>Kestrel Authors</Authors>
+    <Description>Kestrel creative-coding vision runtime: webcam capture and minimal OpenCV frame processing.</Description>
+    <PackageTags>kestrel;ksr;creative-coding;opencv;camera;vision</PackageTags>
   </PropertyGroup>
 
   <ItemGroup>
