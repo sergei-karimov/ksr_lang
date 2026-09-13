@@ -142,6 +142,24 @@ public class DotnetTemplateTests
         Assert.True(File.Exists(output));
         Assert.Contains("auto-generated", File.ReadAllText(output));
     }
+
+    [Fact]
+    public void BuildTaskLogsUseKestrelBrand()
+    {
+        using var directory = new TemporaryDirectory();
+        var input = directory.WriteFile("Program.ksr", "fun main() { }");
+        var engine = new RecordingBuildEngine();
+        var task = new KsrCompileTask
+        {
+            BuildEngine = engine,
+            KsrCompile = [new TaskItem(input)],
+            OutputFile = Path.Combine(directory.Path, "generated", "Program.g.cs")
+        };
+
+        Assert.True(task.Execute());
+        Assert.Contains(engine.Messages, message => message.Message?.Contains("Kestrel:", StringComparison.Ordinal) == true);
+        Assert.DoesNotContain(engine.Messages, message => message.Message?.Contains("KSR:", StringComparison.Ordinal) == true);
+    }
     [Theory]
     [InlineData("ksr-console", "kestrel-console", "ksr-console", "Kestrel Console Application", "Kestrel.Console")]
     [InlineData("ksr-library", "kestrel-lib", "ksr-lib", "Kestrel Class Library", "Kestrel.Library")]
@@ -296,6 +314,7 @@ public class DotnetTemplateTests
     {
         public List<BuildErrorEventArgs> Errors { get; } = [];
         public List<BuildWarningEventArgs> Warnings { get; } = [];
+        public List<BuildMessageEventArgs> Messages { get; } = [];
         public int ColumnNumberOfTaskNode => 1;
         public bool ContinueOnError => false;
         public int LineNumberOfTaskNode => 1;
@@ -304,7 +323,7 @@ public class DotnetTemplateTests
         public bool BuildProjectFile(string projectFileName, string[] targetNames, System.Collections.IDictionary globalProperties, System.Collections.IDictionary targetOutputs) => false;
         public void LogErrorEvent(BuildErrorEventArgs e) => Errors.Add(e);
         public void LogWarningEvent(BuildWarningEventArgs e) => Warnings.Add(e);
-        public void LogMessageEvent(BuildMessageEventArgs e) { }
+        public void LogMessageEvent(BuildMessageEventArgs e) => Messages.Add(e);
         public void LogCustomEvent(CustomBuildEventArgs e) { }
     }
 

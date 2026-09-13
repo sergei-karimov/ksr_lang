@@ -72,6 +72,40 @@ public sealed class KsrExecutableResolverTests
     }
 
     [Fact]
+    public void Resolve_WindowsCmdAliasPrecedesLegacyExeFallback()
+    {
+        var cmdCandidate = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            ".ksr", "ksr.cmd");
+        var exeCandidate = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            ".ksr", "ksr.exe");
+
+        var result = KSR.VisualStudio.KsrExecutableResolver.Resolve(
+            "kestrel",
+            path => path == cmdCandidate || path == exeCandidate);
+
+        Assert.Equal(cmdCandidate, result);
+    }
+
+    [Fact]
+    public void Resolve_WindowsPowerShellAliasPrecedesLegacyExeFallback()
+    {
+        var ps1Candidate = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            ".ksr", "ksr.ps1");
+        var exeCandidate = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            ".ksr", "ksr.exe");
+
+        var result = KSR.VisualStudio.KsrExecutableResolver.Resolve(
+            "kestrel",
+            path => path == ps1Candidate || path == exeCandidate);
+
+        Assert.Equal(ps1Candidate, result);
+    }
+
+    [Fact]
     public void Resolve_CanonicalProgramFilesCandidatePrecedesLegacyProgramFiles()
     {
         var canonicalCandidate = Path.Combine(

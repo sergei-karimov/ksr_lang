@@ -83,6 +83,31 @@ public sealed class CliTestHost : IAsyncDisposable
         return new CliProcessResult(process.ExitCode, await stdout, await stderr);
     }
 
+    public static async Task<CliProcessResult> RunWithoutArgumentsAsync()
+    {
+        var startInfo = new ProcessStartInfo("dotnet")
+        {
+            WorkingDirectory = RepositoryRoot(),
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false
+        };
+        startInfo.Environment["DOTNET_ROLL_FORWARD"] = "Major";
+        startInfo.ArgumentList.Add("run");
+        startInfo.ArgumentList.Add("--project");
+        startInfo.ArgumentList.Add(Path.Combine(RepositoryRoot(), "KSR.csproj"));
+        startInfo.ArgumentList.Add("--no-build");
+        startInfo.ArgumentList.Add("--no-restore");
+        startInfo.ArgumentList.Add("--no-launch-profile");
+
+        using var process = Process.Start(startInfo)
+            ?? throw new InvalidOperationException("Could not start the Kestrel CLI.");
+        var stdout = process.StandardOutput.ReadToEndAsync();
+        var stderr = process.StandardError.ReadToEndAsync();
+        await process.WaitForExitAsync();
+        return new CliProcessResult(process.ExitCode, await stdout, await stderr);
+    }
+
     public ValueTask DisposeAsync()
     {
         if (Directory.Exists(_temporaryDirectory))

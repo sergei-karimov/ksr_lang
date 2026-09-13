@@ -1,12 +1,11 @@
 import * as vscode from 'vscode';
-import * as path    from 'path';
-import * as fs      from 'fs';
 import {
     LanguageClient,
     LanguageClientOptions,
     ServerOptions,
     TransportKind,
 } from 'vscode-languageclient/node';
+import { resolveExecutable } from './executableResolver';
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Kestrel Language Extension
@@ -126,46 +125,4 @@ function defaultLaunchConfig(): vscode.DebugConfiguration {
         stopAtEntry: false,
         requireExactSource: false,
     };
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * Resolves the Kestrel executable path, with the legacy ksr name as a fallback.
- * Returns the path string to pass to child_process, or null if not found.
- */
-function resolveExecutable(configured: string): string | null {
-    // Absolute or relative path configured by user
-    if (isExplicitPath(configured) && fs.existsSync(configured)) return configured;
-
-    // Resolve through PATH in canonical-first order. The explicit configured
-    // path above remains untouched, including legacy workspace settings.
-    const canonical = findOnPath('kestrel');
-    if (canonical) return canonical;
-
-    const legacy = findOnPath('ksr');
-    if (legacy) return legacy;
-
-    // Let child_process perform the final PATH lookup so a shell-managed
-    // environment still works even when PATH is not visible to this process.
-    return isExplicitPath(configured) ? null : configured;
-}
-
-function isExplicitPath(value: string): boolean {
-    return path.isAbsolute(value) || value.includes(path.sep) || value.includes('/');
-}
-
-function findOnPath(command: string): string | null {
-    const pathValue = process.env['PATH'] ?? '';
-    const candidates = pathValue.split(path.delimiter).filter(Boolean);
-    const names = process.platform === 'win32' ? [command, `${command}.exe`] : [command];
-
-    for (const directory of candidates) {
-        for (const name of names) {
-            const candidate = path.join(directory, name);
-            if (fs.existsSync(candidate)) return candidate;
-        }
-    }
-
-    return null;
 }

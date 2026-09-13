@@ -205,13 +205,40 @@ public sealed class TemplateTests
     [Fact]
     public void VsCodeExecutableResolution_IsCanonicalFirstWithLegacyFallback()
     {
-        var source = File.ReadAllText(Path.Combine(RepoRoot, "vscode-extension", "src", "extension.ts"));
+        var source = File.ReadAllText(Path.Combine(RepoRoot, "vscode-extension", "src", "executableResolver.ts"));
 
-        Assert.Contains("if (isExplicitPath(configured) && fs.existsSync(configured))", source);
+        Assert.Contains("findOnPath('kestrel'", source);
+        Assert.Contains("`${command}.cmd`", source);
+        Assert.Contains("`${command}.ps1`", source);
         Assert.Contains("return configured;", source);
-        var canonicalIndex = source.IndexOf("findOnPath('kestrel')", StringComparison.Ordinal);
-        var legacyIndex = source.IndexOf("findOnPath('ksr')", StringComparison.Ordinal);
+        var canonicalIndex = source.IndexOf("findOnPath('kestrel'", StringComparison.Ordinal);
+        var legacyIndex = source.IndexOf("findOnPath('ksr'", StringComparison.Ordinal);
         Assert.True(canonicalIndex >= 0);
         Assert.True(legacyIndex > canonicalIndex);
+    }
+
+    [Fact]
+    public void VisualStudioLanguageClient_UsesKestrelBranding()
+    {
+        var source = File.ReadAllText(Path.Combine(
+            RepoRoot, "vs-extension", "KSR.VisualStudio", "KsrLanguageClient.cs"));
+
+        Assert.Contains("Name => \"Kestrel Language Server\"", source);
+        Assert.DoesNotContain("Name => \"KSR Language Server\"", source);
+    }
+
+    [Fact]
+    public void VisualStudioTemplates_UseKestrelBranding()
+    {
+        var package = File.ReadAllText(Path.Combine(
+            RepoRoot, "vs-extension", "KSR.VisualStudio", "KsrPackage.cs"));
+        var projectTemplate = File.ReadAllText(Path.Combine(ProjectTemplateDir, "KsrConsoleApp.vstemplate"));
+        var itemTemplate = File.ReadAllText(Path.Combine(ItemTemplateDir, "KsrFile.vstemplate"));
+
+        Assert.Contains("categoryName:    \"Kestrel\"", package);
+        Assert.Contains("<Name>Kestrel Console Application</Name>", projectTemplate);
+        Assert.Contains("<TemplateGroupID>Kestrel</TemplateGroupID>", projectTemplate);
+        Assert.Contains("<Name>Kestrel File</Name>", itemTemplate);
+        Assert.Contains("<TemplateGroupID>Kestrel</TemplateGroupID>", itemTemplate);
     }
 }

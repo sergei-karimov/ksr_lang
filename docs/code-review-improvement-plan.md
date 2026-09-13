@@ -60,11 +60,10 @@ below and are not equivalent to version-resolution failures.
   must be run on a host with the .NET 8 runtime.
 - [ ] Run the Visual Studio VSIX build/test/install validation on Windows with
   Visual Studio MSBuild. On macOS/Linux, the `net472` test target requires Mono.
-- [ ] Investigate representative examples that currently fail in the single-file
-  compiler path (`hello`, `async`, generic-interface, and sealed examples); the
-  standard-library example succeeds.
-- [ ] Investigate the CLI integration suite's package-metadata test, which can
-  hang after its first three passing tests in this environment.
+- [x] Verify representative single-file examples end-to-end: `hello`, `async`,
+  generic-interface, and sealed examples now compile and run through the CLI.
+- [x] Bound the CLI integration suite's package-metadata process harness; the
+  canonical-artifact test completes without hanging.
 
 ### Active dependency warnings
 

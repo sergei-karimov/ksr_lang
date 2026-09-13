@@ -78,6 +78,7 @@
   "scripts": {
     "compile": "tsc -p .",
     "bundle": "esbuild src/extension.ts --bundle --outfile=out/extension.js --external:vscode --format=cjs --platform=node",
+    "test:resolver": "npm run compile && node --test test/executableResolver.test.js",
     "watch": "npm run bundle -- --watch",
     "vscode:prepublish": "npm run bundle -- --minify",
     "package": "vsce package"

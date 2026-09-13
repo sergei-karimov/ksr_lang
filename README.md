@@ -1014,30 +1014,32 @@ Press **F5** to build and launch the debugger. Breakpoints set in `.ksr` files w
 
 ## Visual Studio Extension
 
-The `KSR.VisualStudio` VSIX extension adds first-class Kestrel support to **Visual Studio 2022 and later** (including Visual Studio 2026).
+The Kestrel Visual Studio extension adds first-class Kestrel support to **Visual Studio 2022 and later** (including Visual Studio 2026). Its internal `KSR.VisualStudio` assembly name is retained for compatibility.
 
 ### Features
 
 - **Syntax highlighting** — Kestrel-aware `.ksr` content type
 - **Real-time diagnostics** — parse errors shown inline as you type
-- **IntelliSense** — completions and hover documentation powered by the KSR Language Server
+- **IntelliSense** — completions and hover documentation powered by the Kestrel Language Server
 - **Project templates** — _Kestrel Console App_ appears under **File → New Project**
 - **Item templates** — _Kestrel Source File_ appears under **Add → New Item**
 - **Breakpoint debugging** — F5 hits breakpoints in `.ksr` files (source-mapped via `#line` PDB entries; requires project mode)
 
 ### Install
 
-1. Build or download `KSR.VisualStudio.vsix` (found in `vs-extension/KSR.VisualStudio/`).
+1. Build or download the Kestrel Visual Studio VSIX from `vs-extension/KSR.VisualStudio/`.
 2. Close Visual Studio.
-3. Double-click `KSR.VisualStudio.vsix` and follow the installer prompts.
+3. Double-click the generated VSIX and follow the installer prompts.
 4. Reopen Visual Studio — the extension is active immediately.
 
 Alternatively, install from the command line:
 
 ```powershell
 & "C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\VSIXInstaller.exe" `
-    KSR.VisualStudio.vsix
+    path\to\bin\Release\net472\KSR.VisualStudio.vsix
 ```
+
+The generated filename retains the internal project name `KSR.VisualStudio.vsix`.
 
 Adjust the path for your VS edition (Professional / Enterprise) and year (2022, 2026, …).
 
@@ -1057,7 +1059,7 @@ Adjust the path for your VS edition (Professional / Enterprise) and year (2022, 
 
 | Symptom | Fix |
 |---|---|
-| _"KSR executable not found"_ warning on startup | Install Kestrel or set the executable path at **Tools → Options → KSR → General** |
+| _"Kestrel executable not found"_ warning on startup | Install Kestrel or set the executable path at **Tools → Options → Kestrel → General** |
 | No IntelliSense in `.ksr` files | Verify `kestrel lsp` runs without error in a terminal |
 | Extension not listed after install | Ensure VS was closed before running the VSIX installer |
 

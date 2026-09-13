@@ -5,15 +5,15 @@ using KSR.Diagnostics;
 using KSR.Parser;
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  KSR — Kotlin-Style Runtime language
+//  Kestrel — Kotlin-style language for .NET
 //
 //  USAGE
-//    ksr <file.ksr> [--debug]     compile and run a single .ksr file
-//    ksr check <file>             output JSON diagnostics (for editors)
-//    ksr lsp                      start Language Server (JSON-RPC over stdio)
+//    kestrel <file.ksr> [--debug] compile and run a single .ksr file
+//    kestrel check <file>         output JSON diagnostics (for editors)
+//    kestrel lsp                  start Language Server (JSON-RPC over stdio)
 //
 //  PROJECT WORKFLOW  (standard .NET commands)
-//    dotnet new ksr-console -n MyApp
+//    dotnet new kestrel-console -n MyApp
 //    dotnet add package Raylib-cs
 //    dotnet run / dotnet build / dotnet publish
 // ─────────────────────────────────────────────────────────────────────────────
@@ -47,7 +47,7 @@ try
             var path = positional[0];
             if (!File.Exists(path))
             {
-                Console.Error.WriteLine($"ksr: file not found: {path}");
+                Console.Error.WriteLine($"kestrel: file not found: {path}");
                 PrintHelp();
                 Environment.Exit(1);
             }
@@ -137,19 +137,19 @@ static string FormatDiagnostics(IEnumerable<KsrDiagnostic> diagnostics) =>
 static void PrintHelp()
 {
     Console.WriteLine("""
-        KSR — Kotlin-Style Runtime language
+        Kestrel — Kotlin-style language for .NET
 
         SINGLE-FILE MODE
-          ksr <file.ksr>                        Compile and run a .ksr file
-          ksr <file.ksr> --debug                Also print the generated C# source
-          ksr <file.ksr> --async-return=valuetask  Use ValueTask for all async functions
+          kestrel <file.ksr>                    Compile and run a .ksr file
+          kestrel <file.ksr> --debug            Also print the generated C# source
+          kestrel <file.ksr> --async-return=valuetask  Use ValueTask for all async functions
 
         EDITOR INTEGRATION
-          ksr check <file>             Output JSON diagnostics
-          ksr lsp                      Language Server (JSON-RPC/stdio)
+          kestrel check <file>          Output JSON diagnostics
+          kestrel lsp                   Language Server (JSON-RPC/stdio)
 
         PROJECT WORKFLOW  (standard .NET)
-          dotnet new ksr-console -n MyApp
+          dotnet new kestrel-console -n MyApp
           cd MyApp
           dotnet add package Raylib-cs
           dotnet run

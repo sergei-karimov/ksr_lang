@@ -37,7 +37,7 @@ public class DiagnosticsTests
         Assert.Equal(11, lsp.Range.End.Character);
         Assert.Equal(2, lsp.Severity);
         Assert.Equal("Bad \u03c0\nsecond line", lsp.Message);
-        Assert.Equal("ksr", lsp.Source);
+        Assert.Equal("kestrel", lsp.Source);
     }
 
     [Fact]

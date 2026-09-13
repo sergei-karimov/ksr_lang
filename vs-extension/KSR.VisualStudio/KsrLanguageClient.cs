@@ -26,7 +26,7 @@ public sealed class KsrLanguageClient : ILanguageClient
 
     // ── ILanguageClient ───────────────────────────────────────────────────────
 
-    public string Name => "KSR Language Server";
+    public string Name => "Kestrel Language Server";
 
     /// <summary>
     /// VS uses these section names to forward workspace configuration to the
@@ -122,7 +122,7 @@ public sealed class KsrLanguageClient : ILanguageClient
         {
             FailureMessage = initializationFailureContext.StatusMessage
                 ?? initializationFailureContext.InitializationException?.Message
-                ?? "KSR language server failed to initialize."
+                ?? "Kestrel language server failed to initialize."
         });
 
     // ── Helpers ───────────────────────────────────────────────────────────────

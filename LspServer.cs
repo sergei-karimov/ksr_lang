@@ -179,7 +179,7 @@ public static class LspServer {
                         completionProvider = new { triggerCharacters = Array.Empty<string>() },
                         hoverProvider = true,
                     },
-                    serverInfo = new { name = "KSR Language Server", version = "0.1.0" },
+                    serverInfo = new { name = "Kestrel Language Server", version = "0.1.0" },
                 });
                 break;
 
@@ -318,7 +318,7 @@ public static class LspServer {
             _ => 3,
         },
         diagnostic.Message,
-        "ksr");
+        "kestrel");
 
     // ── hover ─────────────────────────────────────────────────────────────────
 
