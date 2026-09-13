@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.ComponentModel.Composition;
 using System.Diagnostics;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.LanguageServer.Client;
@@ -68,16 +69,12 @@ public sealed class KsrLanguageClient : ILanguageClient
             return null;
         }
 
-        var psi = new ProcessStartInfo
-        {
-            FileName               = exe,
-            Arguments              = "lsp",
-            UseShellExecute        = false,
-            RedirectStandardInput  = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError  = false,
-            CreateNoWindow         = true,
-        };
+        var psi = CreateStartInfo(exe, Path.DirectorySeparatorChar == '\\');
+        psi.UseShellExecute        = false;
+        psi.RedirectStandardInput  = true;
+        psi.RedirectStandardOutput = true;
+        psi.RedirectStandardError  = false;
+        psi.CreateNoWindow         = true;
 
         var process = new Process
         {
@@ -115,6 +112,32 @@ public sealed class KsrLanguageClient : ILanguageClient
     }
 
     public Task OnServerInitializedAsync() => Task.CompletedTask;
+
+    internal static ProcessStartInfo CreateStartInfo(
+        string executable,
+        bool isWindows,
+        string? commandProcessor = null,
+        string? powerShell = null)
+    {
+        if (!isWindows || !executable.EndsWith(".cmd", StringComparison.OrdinalIgnoreCase) &&
+            !executable.EndsWith(".ps1", StringComparison.OrdinalIgnoreCase))
+        {
+            return new ProcessStartInfo(executable, "lsp");
+        }
+
+        if (executable.EndsWith(".cmd", StringComparison.OrdinalIgnoreCase))
+        {
+            var shell = commandProcessor
+                ?? Environment.GetEnvironmentVariable("ComSpec")
+                ?? "cmd.exe";
+            return new ProcessStartInfo(shell, $"/d /s /c \"\"{executable}\" lsp\"");
+        }
+
+        var powershellPath = powerShell ?? "powershell.exe";
+        return new ProcessStartInfo(
+            powershellPath,
+            $"-NoLogo -NoProfile -ExecutionPolicy Bypass -File \"{executable}\" lsp");
+    }
 
     public Task<InitializationFailureContext?> OnServerInitializeFailedAsync(
         ILanguageClientInitializationInfo initializationFailureContext)
@@ -170,7 +193,7 @@ public sealed class KsrLanguageClient : ILanguageClient
             VsShellUtilities.ShowMessageBox(
                 ServiceProvider.GlobalProvider,
                 "Kestrel executable not found. Install Kestrel or set the path under " +
-                "Tools → Options → KSR → General → Kestrel Executable Path.",
+                "Tools → Options → Kestrel → General → Kestrel Executable Path.",
                 "Kestrel Language Server",
                 Microsoft.VisualStudio.Shell.Interop.OLEMSGICON.OLEMSGICON_WARNING,
                 Microsoft.VisualStudio.Shell.Interop.OLEMSGBUTTON.OLEMSGBUTTON_OK,

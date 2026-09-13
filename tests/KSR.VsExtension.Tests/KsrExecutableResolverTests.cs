@@ -106,6 +106,48 @@ public sealed class KsrExecutableResolverTests
     }
 
     [Fact]
+    public void Resolve_DotnetToolsDirectoryFindsLegacyCmdAlias()
+    {
+        var expected = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            ".dotnet", "tools", "ksr.cmd");
+
+        var result = KSR.VisualStudio.KsrExecutableResolver.Resolve(
+            "kestrel",
+            path => path == expected);
+
+        Assert.Equal(expected, result);
+    }
+
+    [Fact]
+    public void Resolve_DotnetToolsDirectoryFindsCanonicalTool()
+    {
+        var expected = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            ".dotnet", "tools", "kestrel.exe");
+
+        var result = KSR.VisualStudio.KsrExecutableResolver.Resolve(
+            "kestrel",
+            path => path == expected);
+
+        Assert.Equal(expected, result);
+    }
+
+    [Fact]
+    public void Resolve_PathFindsLegacyPowerShellAlias()
+    {
+        var pathDirectory = Path.Combine(Path.GetTempPath(), "kestrel-tools");
+        var expected = Path.Combine(pathDirectory, "ksr.ps1");
+
+        var result = KSR.VisualStudio.KsrExecutableResolver.Resolve(
+            "kestrel",
+            path => path == expected,
+            pathDirectory);
+
+        Assert.Equal(expected, result);
+    }
+
+    [Fact]
     public void Resolve_CanonicalProgramFilesCandidatePrecedesLegacyProgramFiles()
     {
         var canonicalCandidate = Path.Combine(

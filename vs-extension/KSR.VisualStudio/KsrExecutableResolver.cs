@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 
 namespace KSR.VisualStudio;
@@ -16,7 +17,11 @@ internal static class KsrExecutableResolver
     /// <param name="fileExists">
     /// Optional override for <see cref="File.Exists"/> — injected in unit tests to avoid disk I/O.
     /// </param>
-    internal static string? Resolve(string configured, Func<string, bool>? fileExists = null)
+    /// <param name="pathValue">Optional PATH override for tests; defaults to the process PATH.</param>
+    internal static string? Resolve(
+        string configured,
+        Func<string, bool>? fileExists = null,
+        string? pathValue = null)
     {
         fileExists ??= File.Exists;
 
@@ -24,25 +29,42 @@ internal static class KsrExecutableResolver
             return fileExists(configured) ? configured : null;
 
         var userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        string[] candidates =
+        string[] installDirectories =
         [
-            Path.Combine(userProfile, ".kestrel", "kestrel.exe"),
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Kestrel", "kestrel.exe"),
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Kestrel", "kestrel.exe"),
-            Path.Combine(userProfile, ".ksr", "ksr.cmd"),
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "ksr", "ksr.cmd"),
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "ksr", "ksr.cmd"),
-            Path.Combine(userProfile, ".ksr", "ksr.ps1"),
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "ksr", "ksr.ps1"),
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "ksr", "ksr.ps1"),
-            Path.Combine(userProfile, ".ksr", "ksr.exe"),
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "ksr", "ksr.exe"),
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "ksr", "ksr.exe"),
+            Path.Combine(userProfile, ".dotnet", "tools"),
+            Path.Combine(userProfile, ".kestrel"),
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Kestrel"),
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Kestrel"),
+            Path.Combine(userProfile, ".ksr"),
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "ksr"),
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "ksr"),
         ];
 
-        foreach (var c in candidates)
-            if (fileExists(c)) return c;
+        string[] canonicalNames = ["kestrel.exe", "kestrel.cmd", "kestrel.ps1", "kestrel"];
+        string[] legacyNames = ["ksr.cmd", "ksr.ps1", "ksr.exe", "ksr"];
+
+        var candidates = new List<string>();
+        AddCandidates(candidates, installDirectories, canonicalNames);
+        AddCandidates(candidates, installDirectories, legacyNames);
+
+        var pathDirectories = (pathValue ?? Environment.GetEnvironmentVariable("PATH") ?? "")
+            .Split(new[] { Path.PathSeparator }, StringSplitOptions.RemoveEmptyEntries);
+        AddCandidates(candidates, pathDirectories, canonicalNames);
+        AddCandidates(candidates, pathDirectories, legacyNames);
+
+        foreach (var candidate in candidates)
+            if (fileExists(candidate)) return candidate;
 
         return configured;
+    }
+
+    private static void AddCandidates(
+        List<string> candidates,
+        IEnumerable<string> directories,
+        IEnumerable<string> names)
+    {
+        foreach (var directory in directories)
+        foreach (var name in names)
+            candidates.Add(Path.Combine(directory, name));
     }
 }

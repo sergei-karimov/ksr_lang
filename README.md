@@ -1051,9 +1051,11 @@ Adjust the path for your VS edition (Professional / Enterprise) and year (2022, 
 - `kestrel` installed and available on your `PATH` (`ksr` is installed as a compatibility alias)
 
   The extension resolves the executable in this order:
-  1. The path configured under **Tools → Options → KSR → General → KSR Executable Path**
-  2. `%USERPROFILE%\.kestrel\kestrel.exe`, then the legacy `%USERPROFILE%\.ksr\ksr.exe`
-  3. `kestrel` via `PATH`, then `ksr`
+  1. The path configured under **Tools → Options → Kestrel → General → Kestrel Executable Path**
+  2. The canonical global-tool shim in `%USERPROFILE%\.dotnet\tools\kestrel.exe`
+     (or `kestrel` on Unix), then the legacy `.dotnet\tools\ksr.cmd`/`ksr.ps1`
+     aliases and older `.ksr` locations
+  3. `kestrel` via `PATH`, then the legacy `ksr` aliases (`ksr.cmd`, `ksr.ps1`, or `ksr.exe`)
 
 ### Troubleshooting
 

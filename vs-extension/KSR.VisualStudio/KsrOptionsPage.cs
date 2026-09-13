@@ -4,8 +4,8 @@ using Microsoft.VisualStudio.Shell;
 namespace KSR.VisualStudio;
 
 /// <summary>
-/// Tools → Options → KSR → General
-/// Stores user-configurable settings for the KSR language extension.
+/// Tools → Options → Kestrel → General
+/// Stores user-configurable settings for the Kestrel language extension.
 /// </summary>
 [System.Runtime.InteropServices.ComVisible(true)]
 public sealed class KsrOptionsPage : DialogPage
