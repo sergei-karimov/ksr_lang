@@ -5,7 +5,7 @@
 
 This plan captures the next engineering improvements after the semantic diagnostics fixes.
 
-## 1. Introduce Structured Diagnostics
+## 1. Introduce Structured Diagnostics — completed
 
 Replace string-parsed diagnostics with a core diagnostic model, for example:
 
@@ -13,35 +13,63 @@ Replace string-parsed diagnostics with a core diagnostic model, for example:
 public record KsrDiagnostic(string Message, string SourceFile, int Line, int Col);
 ```
 
-Parser and semantic analysis should return structured diagnostics. String formatting should happen only at output boundaries such as CLI stderr, `ksr check` JSON, and LSP diagnostics.
+Parser and semantic analysis now return structured diagnostics. Formatting happens
+only at output boundaries such as CLI stderr, `kestrel check` JSON (with `ksr`
+compatibility alias), and LSP diagnostics.
 
-## 2. Strengthen Semantic Analysis
+## 2. Strengthen Semantic Analysis — completed
 
 Extend the semantic analyzer into a more complete type checker:
 
-- Check argument types, not only argument count.
-- Validate named arguments: unknown names, duplicates, and positional/named ordering.
-- Add return path analysis so non-Unit functions return on all paths.
-- Reject `await` outside async functions.
-- Check `when` exhaustiveness for sealed types.
-- Report unknown member access instead of falling back to `Any`.
+- [x] Check argument types, not only argument count.
+- [x] Validate named arguments: unknown names, duplicates, and positional/named ordering.
+- [x] Add return path analysis so non-Unit functions return on all paths.
+- [x] Reject `await` outside async functions.
+- [x] Check `when` exhaustiveness for sealed types.
+- [x] Report unknown member access instead of falling back to `Any`.
 
-## 3. Add CLI Integration Tests
+## 3. Add CLI Integration Tests — completed
 
 Cover the real CLI paths where regressions can hide:
 
-- `ksr check bad.ksr` returns semantic errors as JSON.
-- `ksr check syntax-bad.ksr` returns parser errors as JSON.
-- `ksr file.ksr` stops before code generation when semantic errors exist.
+- [x] `kestrel check bad.ksr` returns semantic errors as JSON.
+- [x] `kestrel check syntax-bad.ksr` returns parser errors as JSON.
+- [x] `kestrel file.ksr` stops before code generation when semantic errors exist.
 
-## 4. Share CLI and LSP Analysis Pipeline
+The legacy `ksr` command remains an alias for each path.
 
-Extract a shared facade, such as `KsrAnalyzer.Check(source, path)`, that returns the parsed program and diagnostics.
+## 4. Share CLI and LSP Analysis Pipeline — completed
 
-Use that facade from CLI, LSP, tests, and future editor integrations so diagnostics behavior stays consistent.
+`KsrAnalyzer.Check(source, path)` is the shared analysis facade used by the CLI,
+LSP, tests, and MSBuild path so diagnostics behavior stays consistent.
 
-## 5. Align Visual Studio SDK Dependencies
+## 5. Align Visual Studio SDK Dependencies — completed
 
-Clean up the current `NU1603` warnings by aligning package versions in the Visual Studio extension projects.
+Visual Studio SDK dependency versions are aligned, removing the prior `NU1603`
+version-resolution warnings. Package vulnerability warnings are tracked separately
+below and are not equivalent to version-resolution failures.
 
-Consider centralizing versions in `Directory.Packages.props` if dependency management keeps growing.
+## 6. Kestrel migration and verification status — completed with platform limits
+
+- [x] Public packages, CLI, templates, installer messaging, and VS Code metadata
+  use the Kestrel brand; internal `KSR.*` namespaces and `.ksr` remain intentional
+  compatibility surfaces.
+- [x] Solution build, all eight NuGet package packs, VS Code bundle/package, and
+  canonical plus legacy console-template instantiation have been exercised.
+- [x] Compiler tests pass on the available `net10.0` target. The `net8.0` target
+  must be run on a host with the .NET 8 runtime.
+- [ ] Run the Visual Studio VSIX build/test/install validation on Windows with
+  Visual Studio MSBuild. On macOS/Linux, the `net472` test target requires Mono.
+- [ ] Investigate representative examples that currently fail in the single-file
+  compiler path (`hello`, `async`, generic-interface, and sealed examples); the
+  standard-library example succeeds.
+- [ ] Investigate the CLI integration suite's package-metadata test, which can
+  hang after its first three passing tests in this environment.
+
+### Active dependency warnings
+
+- `NU1900` can occur when NuGet cannot fetch vulnerability metadata from
+  `api.nuget.org`; restore/build may otherwise succeed.
+- `NU1903` currently reports a high-severity advisory for
+  `Microsoft.Build.Utilities.Core` 17.11.4. This requires an intentional
+  dependency update and was not changed as part of the foundation migration.

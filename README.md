@@ -24,7 +24,11 @@ Kestrel sits in the middle: **Kotlin-style syntax, .NET runtime, zero JVM overhe
 
 ### Prerequisites
 
-- [.NET 8 SDK](https://dotnet.microsoft.com/download) or newer
+- [.NET 8 SDK](https://dotnet.microsoft.com/download) and the .NET 8 runtime
+
+Kestrel packages and generated projects target `net8.0`. A newer SDK can build the
+repository, but it does not install the .NET 8 runtime automatically; install that
+runtime as well to run Kestrel, generated projects, and the `net8.0` test targets.
 
 ### Install
 
@@ -39,6 +43,20 @@ Kestrel sits in the middle: **Kotlin-style syntax, .NET runtime, zero JVM overhe
 ```
 
 The installer builds all packages from source and installs the `kestrel` global tool, `dotnet new` templates, and the VS Code extension. It also creates the legacy `ksr` command alias; the `ksr-*` template aliases are installed alongside the canonical `kestrel-*` names.
+
+### Platform and verification notes
+
+- The Visual Studio VSIX is Windows-only. Build, test, and install it from a
+  Windows machine with Visual Studio and its MSBuild tooling; non-Windows hosts do
+  not validate the VSIX. The `net472` Visual Studio test target additionally
+  requires Mono when it is run outside Windows.
+- The creative camera template and `Kestrel.Vision` use
+  `OpenCvSharp4.runtime.win`; camera capture is a Windows MVP and also requires a
+  usable camera device. Run those examples on Windows rather than treating a
+  non-Windows failure as a compiler result.
+- NuGet may emit `NU1900` when it cannot download vulnerability metadata. Current
+  restores also emit `NU1903` for `Microsoft.Build.Utilities.Core` 17.11.4; this is
+  a known dependency advisory, not a successful vulnerability remediation.
 
 ### Create a project
 
@@ -1014,6 +1032,8 @@ Adjust the path for your VS edition (Professional / Enterprise) and year (2022, 
 ### Requirements
 
 - Visual Studio 2022 or later (Community, Professional, or Enterprise)
+- Windows; the VSIX and its `net472` test target are not verified on macOS/Linux
+  (Mono is required to run that test target outside Windows)
 - `kestrel` installed and available on your `PATH` (`ksr` is installed as a compatibility alias)
 
   The extension resolves the executable in this order:
