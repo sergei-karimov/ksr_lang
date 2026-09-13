@@ -973,7 +973,12 @@ Installed automatically by the installer scripts. After installation, reload VS 
 To install manually:
 
 ```bash
-code --install-extension vscode-extension/ksr-lang-0.1.0.vsix
+cd vscode-extension
+npm ci
+npm run compile
+npm run bundle
+npx vsce package --allow-missing-repository
+code --install-extension ./ksr-lang-0.1.0.vsix
 ```
 
 If the Language Server fails to start, verify `kestrel` is on your PATH:
