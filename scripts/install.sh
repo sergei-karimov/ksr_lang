@@ -131,8 +131,12 @@ done
 dotnet tool uninstall -g Kestrel 2>/dev/null || true
 TOOLS_PATH="${DOTNET_CLI_HOME:-$HOME}/.dotnet/tools"
 mkdir -p "$TOOLS_PATH"
+TOOL_CONFIG="$TOOLS_PATH/kestrel-artifacts.nuget.config"
+rm -f "$TOOL_CONFIG"
+printf '%s\n' '<?xml version="1.0" encoding="utf-8"?>' '<configuration><packageSources><clear /></packageSources></configuration>' > "$TOOL_CONFIG"
+dotnet nuget add source "$ARTIFACTS" --name kestrel-artifacts --configfile "$TOOL_CONFIG" >/dev/null
 pushd "$TOOLS_PATH" >/dev/null
-dotnet tool install -g Kestrel --version 0.1.0
+dotnet tool install -g Kestrel --version 0.1.0 --configfile "$TOOL_CONFIG"
 popd >/dev/null
 ok "kestrel tool installed"
 

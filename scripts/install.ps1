@@ -165,9 +165,13 @@ try { & dotnet tool uninstall -g Kestrel *>&1 | Out-Null } catch {}
 $dotnetCliHome = if ($env:DOTNET_CLI_HOME) { $env:DOTNET_CLI_HOME } else { $env:USERPROFILE }
 $toolsPath = Join-Path $dotnetCliHome '.dotnet\tools'
 New-Item -ItemType Directory -Force -Path $toolsPath | Out-Null
+$toolConfig = Join-Path $toolsPath 'kestrel-artifacts.nuget.config'
+Remove-Item -Force -ErrorAction SilentlyContinue $toolConfig
+Set-Content -Path $toolConfig -Encoding UTF8 -Value '<?xml version="1.0" encoding="utf-8"?>', '<configuration><packageSources><clear /></packageSources></configuration>'
+Invoke-Cmd dotnet @('nuget', 'add', 'source', $ArtifactsDir, '--name', 'kestrel-artifacts', '--configfile', $toolConfig)
 Push-Location $toolsPath
 try {
-    Invoke-Cmd dotnet @('tool', 'install', '-g', 'Kestrel', '--version', '0.1.0')
+    Invoke-Cmd dotnet @('tool', 'install', '-g', 'Kestrel', '--version', '0.1.0', '--configfile', $toolConfig)
 }
 finally {
     Pop-Location
