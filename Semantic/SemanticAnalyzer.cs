@@ -173,6 +173,8 @@ public class SemanticAnalyzer : IAstVisitor<object?>
     public object? Visit(ValDecl node)
     {
         var valueType = (TypeRef?)node.Value.Accept(this);
+        if (node.Value is ListLiteralExpr { Elements.Count: 0 } && node.Type is not null)
+            valueType = node.Type;
         if (node.Type != null && valueType != null)
         {
             if (!IsCompatible(node.Type, valueType))
@@ -188,6 +190,8 @@ public class SemanticAnalyzer : IAstVisitor<object?>
     public object? Visit(VarDecl node)
     {
         var valueType = (TypeRef?)node.Value.Accept(this);
+        if (node.Value is ListLiteralExpr { Elements.Count: 0 } && node.Type is not null)
+            valueType = node.Type;
         if (node.Type != null && valueType != null)
         {
             if (!IsCompatible(node.Type, valueType))
@@ -912,8 +916,30 @@ public class SemanticAnalyzer : IAstVisitor<object?>
             return true;
         }
         if (!target.Nullable && source.Nullable) return false;
+
+        var targetShape = TypeShape(target);
+        var sourceShape = TypeShape(source);
+        if (targetShape.Name == sourceShape.Name
+            && targetShape.Arguments.Count == sourceShape.Arguments.Count
+            && targetShape.Name == "List")
+        {
+            return targetShape.Arguments.Zip(sourceShape.Arguments)
+                .All(pair => IsCompatible(pair.First, pair.Second));
+        }
+
         if (_sealedBases.TryGetValue(source.Name, out var sealedBase) && sealedBase == target.Name) return true;
-        if (_implementations.Any(i => i.TypeName == source.Name && i.InterfaceName == target.Name)) return true;
+
+        if (_implementations.Any(i =>
+        {
+            if (i.TypeName != source.Name || i.InterfaceName != targetShape.Name)
+                return false;
+            if (i.InterfaceTypeArgs.Count == 0)
+                return targetShape.Arguments.Count == 0;
+            return i.InterfaceTypeArgs.Count == targetShape.Arguments.Count
+                && i.InterfaceTypeArgs.Zip(targetShape.Arguments)
+                    .All(pair => pair.First == DisplayType(pair.Second));
+        })) return true;
+
         return false;
     }
 }

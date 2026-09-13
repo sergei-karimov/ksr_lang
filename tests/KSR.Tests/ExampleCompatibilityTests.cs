@@ -27,12 +27,8 @@ public class ExampleCompatibilityTests
             "157:9 Condition must be Bool, but found 'Any'"],
         ["generic_funs.ksr"] = ["24:5 Type mismatch: cannot assign 'T' to 'U'"],
         ["raylib_demo.ksr"] = ["13:5 Condition must be Bool, but found 'Any'"],
-        ["sealed_demo.ksr"] = [
-            "101:5 Type mismatch: cannot assign 'List<Any>' to 'MutableList<Shape>'",
-            "129:5 Type mismatch: cannot assign 'List<Red>' to 'List<Color>'"],
-        ["text_processing.ksr"] = [
-            "57:5 Type mismatch: cannot assign 'List<Any>' to 'MutableList<LogEntry>'",
-            "108:5 Type mismatch: cannot assign 'List<Any>' to 'MutableList<String>'"],
+        ["sealed_demo.ksr"] = [],
+        ["text_processing.ksr"] = [],
     };
 
     public static IEnumerable<object[]> Examples => ExpectedDiagnostics.Keys.Select(file => new object[] { file });

@@ -37,4 +37,17 @@ public class CliProcessTests
         Assert.NotEqual(0, result.ExitCode);
         Assert.Contains("unknown", result.Stdout, StringComparison.OrdinalIgnoreCase);
     }
+
+    [Theory]
+    [InlineData("hello.ksr")]
+    [InlineData("async_demo.ksr")]
+    [InlineData("generic_interfaces.ksr")]
+    [InlineData("sealed_demo.ksr")]
+    public async Task SupportedExamplesCompileAndRun(string example)
+    {
+        var result = await CliTestHost.RunFileAsync(Path.Combine("examples", example));
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.DoesNotContain("error:", result.Stderr, StringComparison.OrdinalIgnoreCase);
+    }
 }

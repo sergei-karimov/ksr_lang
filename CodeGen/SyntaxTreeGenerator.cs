@@ -15,6 +15,7 @@ public class SyntaxTreeGenerator : IAstVisitor<CSharpSyntaxNode>
     private readonly HashSet<string> _structs     = new();
     private readonly HashSet<string> _interfaces  = new();
     private readonly HashSet<string> _sealedTypes = new();
+    private readonly HashSet<string> _topLevelFunctions = new();
     private readonly Dictionary<string, List<ImplBlock>> _implsByType = new();
 
     private bool             _inRecordMethod    = false;
@@ -49,6 +50,7 @@ public class SyntaxTreeGenerator : IAstVisitor<CSharpSyntaxNode>
                 foreach (var v in sd.Variants) _structs.Add(v.Name);
             }
             if (d is InterfaceDecl ifd) _interfaces.Add(ifd.Name);
+            if (d is FunctionDecl fd) _topLevelFunctions.Add(fd.Name);
             if (d is ImplBlock ib)
             {
                 if (!_implsByType.TryGetValue(ib.TypeName, out var list))
@@ -112,10 +114,12 @@ public class SyntaxTreeGenerator : IAstVisitor<CSharpSyntaxNode>
                 TypeParameterList(SeparatedList(id.TypeParams.Select(tp => TypeParameter(NameUtils.Escape(tp))))));
 
         if (id.Constraints.Count > 0)
-            decl = decl.WithConstraintClauses(List(id.Constraints.Select(c =>
-                TypeParameterConstraintClause(IdentifierName(NameUtils.Escape(c.TypeParam)))
+            decl = decl.WithConstraintClauses(List(id.Constraints
+                .GroupBy(c => c.TypeParam)
+                .Select(group => TypeParameterConstraintClause(IdentifierName(NameUtils.Escape(group.Key)))
                     .WithConstraints(SeparatedList<TypeParameterConstraintSyntax>(
-                        c.Bounds.Select(b => TypeConstraint(MapTypeSyntax(new TypeRef(b, false)))))))));
+                        group.SelectMany(c => c.Bounds)
+                            .Select(b => TypeConstraint(MapTypeSyntax(new TypeRef(b, false)))))))));
 
         var methods = id.Methods.Select(m =>
         {
@@ -516,7 +520,11 @@ public class SyntaxTreeGenerator : IAstVisitor<CSharpSyntaxNode>
                     SeparatedList(node.Arguments.Select(BuildCallArg))));
         }
 
-        return InvocationExpression((ExpressionSyntax)node.Callee.Accept(this))
+        var callee = node.Callee is IdentifierExpr functionId && _topLevelFunctions.Contains(functionId.Name)
+            ? (ExpressionSyntax)IdentifierName(Pascal(functionId.Name))
+            : (ExpressionSyntax)node.Callee.Accept(this);
+
+        return InvocationExpression(callee)
             .WithArgumentList(ArgumentList(
                 SeparatedList(node.Arguments.Select(BuildCallArg))));
     }
@@ -586,7 +594,7 @@ public class SyntaxTreeGenerator : IAstVisitor<CSharpSyntaxNode>
     }
 
     public CSharpSyntaxNode Visit(AwaitExpr node) =>
-        ParenthesizedExpression(AwaitExpression((ExpressionSyntax)node.Operand.Accept(this)));
+        AwaitExpression((ExpressionSyntax)node.Operand.Accept(this));
 
     public CSharpSyntaxNode Visit(NamedArgExpr node) =>
         (ExpressionSyntax)node.Value.Accept(this);
@@ -699,6 +707,17 @@ public class SyntaxTreeGenerator : IAstVisitor<CSharpSyntaxNode>
                         .WithArgumentList(ArgumentList())
                         .WithInitializer(InitializerExpression(
                             SyntaxKind.CollectionInitializerExpression,
+                            SeparatedList(ll.Elements.Select(e => (ExpressionSyntax)e.Accept(this)))));
+                }
+                else if (outerName == "List")
+                {
+                    var argStr = hint.Name[(hint.Name.IndexOf('<') + 1)..^1];
+                    var elementType = MapTypeSyntax(new TypeRef(argStr.Trim(), false));
+                    var arrayType = ArrayType(elementType).WithRankSpecifiers(SingletonList(
+                        ArrayRankSpecifier(SingletonSeparatedList<ExpressionSyntax>(OmittedArraySizeExpression()))));
+                    return ArrayCreationExpression(arrayType)
+                        .WithInitializer(InitializerExpression(
+                            SyntaxKind.ArrayInitializerExpression,
                             SeparatedList(ll.Elements.Select(e => (ExpressionSyntax)e.Accept(this)))));
                 }
             }
@@ -820,7 +839,7 @@ public class SyntaxTreeGenerator : IAstVisitor<CSharpSyntaxNode>
 
     private ParameterSyntax BuildParam(Parameter p, bool pascalName = false)
     {
-        var name  = pascalName ? Pascal(p.Name) : p.Name;
+        var name  = pascalName ? Pascal(p.Name) : NameUtils.Escape(p.Name);
         var param = Parameter(Identifier(name)).WithType(MapTypeSyntax(p.Type));
         if (p.Default is not null)
             param = param.WithDefault(EqualsValueClause((ExpressionSyntax)p.Default.Accept(this)));

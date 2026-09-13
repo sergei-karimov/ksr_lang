@@ -54,7 +54,7 @@ public class InstallerMetadataTests
         {
             foreach (var project in PublicProjects)
             {
-                var result = await RunDotnetAsync("pack", project, "-c", "Release", "-o", artifactDirectory, "--nologo");
+                var result = await RunDotnetAsync("pack", project, "-c", "Release", "-o", artifactDirectory, "--nologo", "--no-restore", "--disable-build-servers");
                 Assert.True(result.ExitCode == 0, result.Output);
             }
 
@@ -176,6 +176,20 @@ public class InstallerMetadataTests
         }
     }
 
+    [Fact]
+    public async Task ProcessHarness_TimesOutAndPreservesChildOutput()
+    {
+        var result = await RunProcessAsync(
+            "bash",
+            ["-c", "echo before-timeout; sleep 0.1"],
+            RepoRoot(),
+            new Dictionary<string, string?>(),
+            timeout: TimeSpan.FromMilliseconds(20));
+
+        Assert.Contains("before-timeout", result.Output);
+        Assert.Contains("timed out", result.Output, StringComparison.OrdinalIgnoreCase);
+    }
+
     private static readonly string[] PublicProjects =
     [
         "KSR.Core.csproj",
@@ -213,19 +227,15 @@ public class InstallerMetadataTests
         foreach (var argument in arguments)
             startInfo.ArgumentList.Add(argument);
 
-        using var process = Process.Start(startInfo)
-            ?? throw new InvalidOperationException("Could not start dotnet pack.");
-        var stdout = process.StandardOutput.ReadToEndAsync();
-        var stderr = process.StandardError.ReadToEndAsync();
-        await process.WaitForExitAsync();
-        return (process.ExitCode, await stdout + await stderr);
+        return await RunProcessAsync(startInfo, TimeSpan.FromMinutes(2));
     }
 
     private static async Task<(int ExitCode, string Output)> RunProcessAsync(
         string executable,
         IReadOnlyList<string> arguments,
         string workingDirectory,
-        IReadOnlyDictionary<string, string?> environment)
+        IReadOnlyDictionary<string, string?> environment,
+        TimeSpan? timeout = null)
     {
         var startInfo = new ProcessStartInfo(executable)
         {
@@ -239,12 +249,35 @@ public class InstallerMetadataTests
         foreach (var argument in arguments)
             startInfo.ArgumentList.Add(argument);
 
+        return await RunProcessAsync(startInfo, timeout ?? TimeSpan.FromMinutes(2));
+    }
+
+    private static async Task<(int ExitCode, string Output)> RunProcessAsync(
+        ProcessStartInfo startInfo,
+        TimeSpan timeout)
+    {
         using var process = Process.Start(startInfo)
-            ?? throw new InvalidOperationException($"Could not start {executable}.");
+            ?? throw new InvalidOperationException($"Could not start {startInfo.FileName}.");
         var stdout = process.StandardOutput.ReadToEndAsync();
         var stderr = process.StandardError.ReadToEndAsync();
-        await process.WaitForExitAsync();
-        return (process.ExitCode, await stdout + await stderr);
+        var waitTask = process.WaitForExitAsync();
+        var completed = await Task.WhenAny(waitTask, Task.Delay(timeout));
+        var timedOut = completed != waitTask;
+        if (timedOut)
+        {
+            try { process.Kill(entireProcessTree: true); }
+            catch (InvalidOperationException) { }
+            await process.WaitForExitAsync();
+        }
+
+        var output = await stdout + await stderr;
+        if (timedOut)
+        {
+            var command = string.Join(' ', new[] { startInfo.FileName }.Concat(startInfo.ArgumentList));
+            output += $"{Environment.NewLine}Process timed out after {timeout}: {command}";
+        }
+
+        return (timedOut ? -1 : process.ExitCode, output);
     }
 
     private static string RepoRoot()

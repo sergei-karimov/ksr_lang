@@ -910,7 +910,7 @@ kestrel hello.ksr
 kestrel hello.ksr --debug                  # also prints the generated C# source
 kestrel hello.ksr --async-return=valuetask # use ValueTask for all async functions
 
-# Planned legacy compatibility alias for Task 8:
+# Legacy compatibility alias:
 ksr hello.ksr
 ```
 
@@ -918,7 +918,14 @@ ksr hello.ksr
 
 ## Examples
 
-The `examples/` directory contains runnable `.ksr` files:
+The `examples/` directory contains compiler examples in different compatibility states. The following files are verified end-to-end by the CLI regression suite (analysis, generated C#, compilation, and execution):
+
+- `examples/hello.ksr`
+- `examples/async_demo.ksr`
+- `examples/generic_interfaces.ksr`
+- `examples/sealed_demo.ksr`
+
+The remaining examples cover optional packages or known semantic edge cases. Check one before running it:
 
 | File | Description |
 |---|---|
@@ -935,7 +942,7 @@ The `examples/` directory contains runnable `.ksr` files:
 | `examples/camera_demo.ksr` | Creative camera MVP using the `Kestrel.Creative` and `Kestrel.Vision` packages |
 | `examples/lifecycle_demo.ksr` | Generic Creative lifecycle demo with reusable per-app state |
 
-Run any example:
+Run a verified example:
 
 ```bash
 kestrel examples/hello.ksr
@@ -983,7 +990,7 @@ Kestrel projects support full breakpoint debugging in VS Code via the C# extensi
 - C# extension installed in VS Code
 - Project mode only (`dotnet new kestrel-console`) — single-file `kestrel file.ksr` mode does not produce a PDB
 
-**Setup:** every project created with `dotnet new kestrel-console` includes a `.vscode/launch.json` pre-configured for debugging (the legacy `ksr-console` alias is reserved for Task 8):
+**Setup:** every project created with `dotnet new kestrel-console` includes a `.vscode/launch.json` pre-configured for debugging (the legacy `ksr-console` alias remains available for compatibility):
 
 ```json
 {
