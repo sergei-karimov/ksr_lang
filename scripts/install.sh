@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────────────────────
-#  KSR language toolchain installer  (Linux / macOS)
+#  Kestrel language toolchain installer  (Linux / macOS)
 #
 #  Usage:
 #    ./install.sh              install everything
 #    ./install.sh --no-vscode  skip VS Code extension
-#    ./install.sh --uninstall  remove KSR
+#    ./install.sh --uninstall  remove Kestrel
 # ─────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
@@ -37,26 +37,31 @@ ARTIFACTS="$REPO_ROOT/artifacts"
 # ── uninstall ─────────────────────────────────────────────────────────────────
 if [[ $UNINSTALL -eq 1 ]]; then
     echo ""
-    echo -e "${CYAN}Uninstalling KSR...${NC}"
+    echo -e "${CYAN}Uninstalling Kestrel...${NC}"
     echo ""
 
-    step "Removing ksr global tool"
-    dotnet tool uninstall -g KSR 2>/dev/null && ok "ksr tool removed" || warn "ksr tool was not installed"
+    step "Removing kestrel global tool"
+    dotnet tool uninstall -g Kestrel 2>/dev/null && ok "kestrel tool removed" || warn "kestrel tool was not installed"
 
-    step "Removing KSR.Templates"
-    dotnet new uninstall KSR.Templates 2>/dev/null && ok "KSR.Templates removed" || warn "KSR.Templates were not installed"
+    TOOLS_PATH="${DOTNET_CLI_HOME:-$HOME}/.dotnet/tools"
+    step "Removing ksr compatibility alias"
+    rm -f "$TOOLS_PATH/ksr"
+    ok "ksr compatibility alias removed"
+
+    step "Removing Kestrel.Templates"
+    dotnet new uninstall Kestrel.Templates 2>/dev/null && ok "Kestrel.Templates removed" || warn "Kestrel.Templates were not installed"
 
     step "Removing VS Code extension"
     code --uninstall-extension ksr-lang 2>/dev/null && ok "VS Code extension removed" || warn "VS Code extension was not installed (or 'code' not found)"
 
     echo ""
-    echo -e "${GREEN}KSR uninstalled.${NC}"
+    echo -e "${GREEN}Kestrel uninstalled.${NC}"
     exit 0
 fi
 
 # ── install ───────────────────────────────────────────────────────────────────
 echo ""
-echo -e "${CYAN}Installing KSR language toolchain...${NC}"
+echo -e "${CYAN}Installing Kestrel language toolchain...${NC}"
 echo ""
 
 # ── 1. Check .NET SDK ─────────────────────────────────────────────────────────
@@ -75,41 +80,41 @@ ok ".NET $DOTNET_VERSION"
 # ── 2. Build NuGet packages ───────────────────────────────────────────────────
 mkdir -p "$ARTIFACTS"
 
-step "Building KSR.Core"
+step "Building Kestrel.Core"
 dotnet pack "$REPO_ROOT/KSR.Core.csproj" -c Release -o "$ARTIFACTS" -v q --nologo
-ok "KSR.Core packed"
+ok "Kestrel.Core packed"
 
-step "Building KSR.Build"
+step "Building Kestrel.Build"
 dotnet pack "$REPO_ROOT/sdk/KSR.Build/KSR.Build.csproj" -c Release -o "$ARTIFACTS" -v q --nologo
-ok "KSR.Build packed"
+ok "Kestrel.Build packed"
 
-step "Building KSR.Sdk"
+step "Building Kestrel.Sdk"
 dotnet pack "$REPO_ROOT/sdk/KSR.Sdk/KSR.Sdk.csproj" -c Release -o "$ARTIFACTS" -v q --nologo
-ok "KSR.Sdk packed"
+ok "Kestrel.Sdk packed"
 
-step "Building KSR.StdLib"
+step "Building Kestrel.StdLib"
 dotnet pack "$REPO_ROOT/sdk/KSR.StdLib/KSR.StdLib.csproj" -c Release -o "$ARTIFACTS" -v q --nologo
-ok "KSR.StdLib packed"
+ok "Kestrel.StdLib packed"
 
-step "Building KSR.Vision"
+step "Building Kestrel.Vision"
 dotnet pack "$REPO_ROOT/sdk/KSR.Vision/KSR.Vision.csproj" -c Release -o "$ARTIFACTS" -v q --nologo
-ok "KSR.Vision packed"
+ok "Kestrel.Vision packed"
 
-step "Building KSR.Creative"
+step "Building Kestrel.Creative"
 dotnet pack "$REPO_ROOT/sdk/KSR.Creative/KSR.Creative.csproj" -c Release -o "$ARTIFACTS" -v q --nologo
-ok "KSR.Creative packed"
+ok "Kestrel.Creative packed"
 
-step "Building KSR.Templates"
+step "Building Kestrel.Templates"
 dotnet pack "$REPO_ROOT/sdk/KSR.Templates/KSR.Templates.csproj" -c Release -o "$ARTIFACTS" -v q --nologo
-ok "KSR.Templates packed"
+ok "Kestrel.Templates packed"
 
-step "Building KSR CLI"
+step "Building Kestrel CLI"
 dotnet pack "$REPO_ROOT/KSR.csproj" -c Release -o "$ARTIFACTS" -v q --nologo
-ok "KSR CLI packed"
+ok "Kestrel CLI packed"
 
 # ── 3. Register local NuGet feed ──────────────────────────────────────────────
 step "Registering local NuGet feed"
-FEED_NAME="ksr-local"
+FEED_NAME="kestrel-local"
 if dotnet nuget list source | grep -q "$FEED_NAME"; then
     dotnet nuget update source "$FEED_NAME" --source "$ARTIFACTS" >/dev/null
 else
@@ -117,29 +122,38 @@ else
 fi
 ok "Feed '$FEED_NAME' → $ARTIFACTS"
 
-# ── 4. Install ksr global tool ────────────────────────────────────────────────
-step "Installing ksr global tool"
-# Remove all KSR packages from NuGet cache so fresh local builds are always used
-for pkg in ksr ksr.core ksr.build ksr.sdk ksr.stdlib ksr.vision ksr.creative ksr.templates; do
+# ── 4. Install kestrel global tool and ksr alias ──────────────────────────────
+step "Installing kestrel global tool"
+# Remove all Kestrel packages from NuGet cache so fresh local builds are always used
+for pkg in kestrel kestrel.core kestrel.build kestrel.sdk kestrel.stdlib kestrel.vision kestrel.creative kestrel.templates; do
     rm -rf "$HOME/.nuget/packages/$pkg/0.1.0" 2>/dev/null || true
 done
-dotnet tool uninstall -g KSR 2>/dev/null || true
-dotnet tool install -g KSR --add-source "$ARTIFACTS" --version 0.1.0
-ok "ksr tool installed"
+dotnet tool uninstall -g Kestrel 2>/dev/null || true
+TOOLS_PATH="${DOTNET_CLI_HOME:-$HOME}/.dotnet/tools"
+mkdir -p "$TOOLS_PATH"
+pushd "$TOOLS_PATH" >/dev/null
+dotnet tool install -g Kestrel --version 0.1.0
+popd >/dev/null
+ok "kestrel tool installed"
 
-# Remind user to add ~/.dotnet/tools to PATH if needed
-TOOLS_PATH="$HOME/.dotnet/tools"
+# Create the legacy command beside the canonical global-tool shim.
+step "Creating ksr compatibility alias"
+printf '%s\n' '#!/usr/bin/env bash' 'exec "$(dirname "$0")/kestrel" "$@"' > "$TOOLS_PATH/ksr"
+chmod +x "$TOOLS_PATH/ksr"
+ok "ksr compatibility alias created"
+
+# Remind user to add the global tools directory to PATH if needed
 if [[ ":$PATH:" != *":$TOOLS_PATH:"* ]]; then
-    warn "Add ~/.dotnet/tools to your PATH to use 'ksr' anywhere:"
-    warn "  echo 'export PATH=\"\$HOME/.dotnet/tools:\$PATH\"' >> ~/.bashrc"
+    warn "Add $TOOLS_PATH to your PATH to use 'kestrel' and 'ksr' anywhere:"
+    warn "  echo 'export PATH=\"$TOOLS_PATH:\$PATH\"' >> ~/.bashrc"
     warn "  source ~/.bashrc"
 fi
 
 # ── 5. Install dotnet new templates ──────────────────────────────────────────
 step "Installing dotnet new templates"
-dotnet new uninstall KSR.Templates 2>/dev/null || true
-dotnet new install "$ARTIFACTS/KSR.Templates.0.1.0.nupkg"
-ok "KSR templates installed  (dotnet new ksr-console | ksr-creative | ksr-creative-camera)"
+dotnet new uninstall Kestrel.Templates 2>/dev/null || true
+dotnet new install "$ARTIFACTS/Kestrel.Templates.0.1.0.nupkg"
+ok "Kestrel templates installed  (dotnet new kestrel-console | kestrel-creative | kestrel-creative-camera; ksr-* aliases available)"
 
 # ── 6. Build & install VS Code extension (optional) ─────────────────────────
 if [[ $SKIP_VSCODE -eq 0 ]]; then
@@ -173,17 +187,17 @@ fi
 
 # ── Done ──────────────────────────────────────────────────────────────────────
 echo ""
-echo -e "${GREEN}KSR installed successfully!${NC}"
+echo -e "${GREEN}Kestrel installed successfully!${NC}"
 echo ""
 echo "  Get started:"
-echo -e "    ${CYAN}dotnet new ksr-console -n MyApp${NC}"
+echo -e "    ${CYAN}dotnet new kestrel-console -n MyApp${NC}"
 echo -e "    ${CYAN}cd MyApp${NC}"
 echo -e "    ${CYAN}dotnet run${NC}"
 echo ""
 echo "  Creative coding:"
-echo -e "    ${CYAN}dotnet new ksr-creative -n Sketch${NC}"
-echo -e "    ${CYAN}dotnet new ksr-creative-camera -n CameraSketch${NC}"
+echo -e "    ${CYAN}dotnet new kestrel-creative -n Sketch${NC}"
+echo -e "    ${CYAN}dotnet new kestrel-creative-camera -n CameraSketch${NC}"
 echo ""
 echo "  Single-file mode:"
-echo -e "    ${CYAN}ksr hello.ksr${NC}"
+echo -e "    ${CYAN}kestrel hello.ksr${NC}  (or legacy alias: ksr hello.ksr)"
 echo ""

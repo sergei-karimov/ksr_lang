@@ -38,7 +38,7 @@ Kestrel sits in the middle: **Kotlin-style syntax, .NET runtime, zero JVM overhe
 ./scripts/install.sh
 ```
 
-The installer builds all packages from source and installs the `kestrel` global tool, `dotnet new` templates, and the VS Code extension. During the transition, `ksr` and the `ksr-*` names are reserved as compatibility aliases for the distribution layer; installer alias wiring is deferred to Task 8.
+The installer builds all packages from source and installs the `kestrel` global tool, `dotnet new` templates, and the VS Code extension. It also creates the legacy `ksr` command alias; the `ksr-*` template aliases are installed alongside the canonical `kestrel-*` names.
 
 ### Create a project
 
@@ -879,7 +879,7 @@ Creative projects add runtime packages:
 </ItemGroup>
 ```
 
-The `kestrel-creative` and `kestrel-creative-camera` templates include these references for you. The legacy `ksr-creative` and `ksr-creative-camera` names are reserved as aliases planned for Task 8; installer alias wiring is deferred. No boilerplate, no extra build steps.
+The `kestrel-creative` and `kestrel-creative-camera` templates include these references for you. The legacy `ksr-creative` and `ksr-creative-camera` names are available as aliases. No boilerplate, no extra build steps.
 
 ---
 
@@ -941,7 +941,7 @@ The `ksr-lang` extension provides Kestrel language support:
 - **Completions** — keywords (`val`, `var`, `fun`, `async`, `await`, …), built-in types (`Int`, `String`, `List`, `MutableList`, …), stdlib symbols (`IO`, `File`, `Text`, `Lst`, `Mp`, …), stdlib module names (`ksr.io`, `ksr.text`, `ksr.collections`), struct names, interface names, and top-level function names from the current file
 - **Hover documentation** — describes keywords, built-in types, stdlib symbols (`Lst`, `Mp`, `IO`, …), and identifiers on hover
 
-The extension connects to the Kestrel Language Server (`kestrel lsp`) via JSON-RPC over stdio using the standard Language Server Protocol. The legacy `ksr lsp` command is reserved as a distribution alias planned for Task 8. It works with VS Code and any other LSP-compatible editor.
+The extension connects to the Kestrel Language Server (`kestrel lsp`) via JSON-RPC over stdio using the standard Language Server Protocol. The legacy `ksr lsp` command is installed as a compatibility alias. It works with VS Code and any other LSP-compatible editor.
 
 Installed automatically by the installer scripts. After installation, reload VS Code (`Ctrl+Shift+P` → **Reload Window**) to activate the Language Server.
 
@@ -1014,7 +1014,7 @@ Adjust the path for your VS edition (Professional / Enterprise) and year (2022, 
 ### Requirements
 
 - Visual Studio 2022 or later (Community, Professional, or Enterprise)
-- `kestrel` installed and available on your `PATH` (`ksr` is a reserved compatibility alias planned for Task 8)
+- `kestrel` installed and available on your `PATH` (`ksr` is installed as a compatibility alias)
 
   The extension resolves the executable in this order:
   1. The path configured under **Tools → Options → KSR → General → KSR Executable Path**
@@ -1075,14 +1075,14 @@ This works in both single-file mode (`kestrel file.ksr`) and full project mode (
 
 | Package | Purpose |
 |---|---|
-| `Kestrel` | Global CLI — `kestrel <file.ksr>` single-file runner (`ksr` alias planned for Task 8) |
+| `Kestrel` | Global CLI — `kestrel <file.ksr>` single-file runner (`ksr` compatibility alias) |
 | `Kestrel.Core` | Compiler library — Lexer, Parser, AST, CodeGen |
 | `Kestrel.Build` | MSBuild task — hooks Kestrel into `dotnet build` |
 | `Kestrel.Sdk` | MSBuild SDK — `Sdk="Kestrel.Sdk/0.1.0"` |
 | `Kestrel.StdLib` | Standard library — `ksr.io`, `ksr.text`, and `ksr.collections` modules |
 | `Kestrel.Vision` | Webcam capture and OpenCV frame processing (`OpenCvSharp4`, Windows runtime MVP) |
 | `Kestrel.Creative` | Minimal Raylib creative-coding window and draw API |
-| `Kestrel.Templates` | `dotnet new` templates (`ksr-*` aliases planned for Task 8) |
+| `Kestrel.Templates` | `dotnet new` templates (canonical `kestrel-*` names with `ksr-*` aliases) |
 
 ---
 
