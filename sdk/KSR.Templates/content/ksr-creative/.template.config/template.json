@@ -1,13 +1,13 @@
 {
   "$schema": "http://json.schemastore.org/template",
-  "author": "KSR Authors",
-  "classifications": [ "KSR", "Creative", "Graphics" ],
-  "identity": "KSR.CreativeApp",
-  "name": "KSR Creative Application",
-  "shortName": "ksr-creative",
-  "description": "A KSR creative-coding app with a Raylib window and draw loop.",
+  "author": "Kestrel Authors",
+  "classifications": [ "Kestrel", "Creative", "Graphics" ],
+  "identity": "Kestrel.CreativeApp",
+  "name": "Kestrel Creative Application",
+  "shortName": [ "kestrel-creative", "ksr-creative" ],
+  "description": "A Kestrel creative-coding app with a Raylib window and draw loop.",
   "tags": {
-    "language": "KSR",
+    "language": "Kestrel",
     "type": "project"
   },
   "sourceName": "MyCreativeApp",

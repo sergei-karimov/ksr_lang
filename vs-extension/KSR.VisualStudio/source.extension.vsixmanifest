@@ -8,12 +8,12 @@
       Version="0.1.0"
       Language="en-US"
       Publisher="KSR Authors" />
-    <DisplayName>KSR Language Support</DisplayName>
+    <DisplayName>Kestrel Language Support</DisplayName>
     <Description xml:space="preserve">
       Syntax highlighting, IntelliSense (via Language Server Protocol),
-      and project templates for the KSR programming language.
+      and project templates for the Kestrel programming language.
     </Description>
-    <Tags>ksr;language;lsp</Tags>
+    <Tags>kestrel;ksr;language;lsp</Tags>
   </Metadata>
 
   <!-- Targets Visual Studio 2022 and later -->

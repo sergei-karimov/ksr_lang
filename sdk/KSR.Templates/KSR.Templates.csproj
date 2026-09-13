@@ -4,11 +4,11 @@
     <TargetFramework>net8.0</TargetFramework>
 
     <!-- NuGet metadata -->
-    <PackageId>KSR.Templates</PackageId>
+    <PackageId>Kestrel.Templates</PackageId>
     <Version>0.1.0</Version>
-    <Authors>KSR Authors</Authors>
-    <Description>dotnet new templates for KSR language projects.</Description>
-    <PackageTags>ksr;language;template;dotnet-new</PackageTags>
+    <Authors>Kestrel Authors</Authors>
+    <Description>dotnet new templates for Kestrel language projects.</Description>
+    <PackageTags>kestrel;ksr;language;template;dotnet-new</PackageTags>
 
     <!-- Templates package — no compiled output -->
     <PackageType>Template</PackageType>

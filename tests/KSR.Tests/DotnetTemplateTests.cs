@@ -143,22 +143,72 @@ public class DotnetTemplateTests
         Assert.Contains("auto-generated", File.ReadAllText(output));
     }
     [Theory]
-    [InlineData("ksr-console", "ksr-console", "KSR Console Application")]
-    [InlineData("ksr-creative", "ksr-creative", "KSR Creative Application")]
-    [InlineData("ksr-creative-camera", "ksr-creative-camera", "KSR Creative Camera Application")]
-    public void ProjectTemplates_HaveExpectedMetadata(string directory, string shortName, string name)
+    [InlineData("ksr-console", "kestrel-console", "ksr-console", "Kestrel Console Application", "Kestrel.Console")]
+    [InlineData("ksr-library", "kestrel-lib", "ksr-lib", "Kestrel Class Library", "Kestrel.Library")]
+    [InlineData("ksr-creative", "kestrel-creative", "ksr-creative", "Kestrel Creative Application", "Kestrel.CreativeApp")]
+    [InlineData("ksr-creative-camera", "kestrel-creative-camera", "ksr-creative-camera", "Kestrel Creative Camera Application", "Kestrel.CreativeCameraApp")]
+    public void ProjectTemplates_HaveExpectedMetadata(string directory, string shortName, string alias, string name, string identity)
     {
         var template = LoadTemplate(directory);
 
-        Assert.Equal(shortName, template.RootElement.GetProperty("shortName").GetString());
+        Assert.Equal(new[] { shortName, alias }, template.RootElement.GetProperty("shortName").EnumerateArray().Select(e => e.GetString()));
+        Assert.Equal(identity, template.RootElement.GetProperty("identity").GetString());
+        Assert.Equal("Kestrel", template.RootElement.GetProperty("tags").GetProperty("language").GetString());
         Assert.Equal(name, template.RootElement.GetProperty("name").GetString());
         Assert.Equal("project", template.RootElement.GetProperty("tags").GetProperty("type").GetString());
     }
 
+    [Fact]
+    public void PublicPackageMetadata_UsesKestrelNamesAndKeepsInternalAssemblies()
+    {
+        var expectedPackages = new Dictionary<string, string>
+        {
+            ["KSR.csproj"] = "Kestrel",
+            ["KSR.Core.csproj"] = "Kestrel.Core",
+            ["sdk/KSR.Build/KSR.Build.csproj"] = "Kestrel.Build",
+            ["sdk/KSR.Sdk/KSR.Sdk.csproj"] = "Kestrel.Sdk",
+            ["sdk/KSR.StdLib/KSR.StdLib.csproj"] = "Kestrel.StdLib",
+            ["sdk/KSR.Vision/KSR.Vision.csproj"] = "Kestrel.Vision",
+            ["sdk/KSR.Creative/KSR.Creative.csproj"] = "Kestrel.Creative",
+            ["sdk/KSR.Templates/KSR.Templates.csproj"] = "Kestrel.Templates"
+        };
+
+        foreach (var (relativePath, packageId) in expectedPackages)
+        {
+            var project = XDocument.Load(Path.Combine(RepoRoot(), relativePath));
+            Assert.Equal(packageId, project.Descendants("PackageId").Single().Value);
+        }
+
+        var cli = File.ReadAllText(Path.Combine(RepoRoot(), "KSR.csproj"));
+        Assert.Contains("<AssemblyName>kestrel</AssemblyName>", cli);
+        Assert.Contains("<ToolCommandName>kestrel</ToolCommandName>", cli);
+        Assert.Contains("ksr", cli);
+
+        var core = File.ReadAllText(Path.Combine(RepoRoot(), "KSR.Core.csproj"));
+        Assert.Contains("<AssemblyName>KSR.Core</AssemblyName>", core);
+        Assert.Contains("<RootNamespace>KSR</RootNamespace>", core);
+    }
+
+    [Fact]
+    public void SdkAndBuildMetadata_UseCanonicalPackageIdsWithoutRenamingTasks()
+    {
+        var sdkProps = File.ReadAllText(Path.Combine(RepoRoot(), "sdk/KSR.Sdk/Sdk/Sdk.props"));
+        Assert.Contains("PackageReference Include=\"Kestrel.Build\"", sdkProps);
+        Assert.Contains("PackageReference Include=\"Kestrel.StdLib\"", sdkProps);
+
+        var buildProject = File.ReadAllText(Path.Combine(RepoRoot(), "sdk/KSR.Build/KSR.Build.csproj"));
+        Assert.Contains("Kestrel.Build.props", buildProject);
+        Assert.Contains("Kestrel.Build.targets", buildProject);
+        Assert.Contains("<AssemblyName>KSR.Build</AssemblyName>", buildProject);
+
+        var buildTargets = File.ReadAllText(Path.Combine(RepoRoot(), "sdk/KSR.Build/build/Kestrel.Build.targets"));
+        Assert.Contains("TaskName=\"KSR.Build.KsrCompileTask\"", buildTargets);
+    }
+
     [Theory]
-    [InlineData("ksr-creative", "MyCreativeApp.csproj", "KSR.Creative")]
-    [InlineData("ksr-creative-camera", "MyCameraApp.csproj", "KSR.Creative")]
-    [InlineData("ksr-creative-camera", "MyCameraApp.csproj", "KSR.Vision")]
+    [InlineData("ksr-creative", "MyCreativeApp.csproj", "Kestrel.Creative")]
+    [InlineData("ksr-creative-camera", "MyCameraApp.csproj", "Kestrel.Creative")]
+    [InlineData("ksr-creative-camera", "MyCameraApp.csproj", "Kestrel.Vision")]
     public void CreativeTemplates_ReferenceRuntimePackages(string directory, string projectFile, string packageName)
     {
         var projectPath = Path.Combine(TemplatesRoot(), directory, projectFile);
@@ -212,6 +262,20 @@ public class DotnetTemplateTests
         }
 
         throw new DirectoryNotFoundException("Could not locate sdk/KSR.Templates/content.");
+    }
+
+    private static string RepoRoot()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null)
+        {
+            if (File.Exists(Path.Combine(dir.FullName, "KSR.sln")))
+                return dir.FullName;
+
+            dir = dir.Parent;
+        }
+
+        throw new DirectoryNotFoundException("Could not locate KSR.sln.");
     }
 
     private sealed class RecordingBuildEngine : IBuildEngine

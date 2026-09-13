@@ -9,9 +9,9 @@ import {
 } from 'vscode-languageclient/node';
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  KSR Language Extension
+//  Kestrel Language Extension
 //
-//  Starts `ksr lsp` as a child process and connects via the Language Server
+//  Starts `kestrel lsp` as a child process and connects via the Language Server
 //  Protocol (JSON-RPC over stdio). This gives us:
 //    • Real-time diagnostics (error squiggles as you type)
 //    • Keyword + symbol completions
@@ -24,7 +24,7 @@ export function activate(context: vscode.ExtensionContext): void {
     // ── Language Server ────────────────────────────────────────────────────────
 
     const cfg = vscode.workspace.getConfiguration('ksr');
-    const exe = resolveExecutable(cfg.get<string>('executablePath', 'ksr'));
+    const exe = resolveExecutable(cfg.get<string>('executablePath', 'kestrel'));
 
     if (exe) {
         const serverOptions: ServerOptions = {
@@ -43,7 +43,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
         client = new LanguageClient(
             'ksr',
-            'KSR Language Server',
+            'Kestrel Language Server',
             serverOptions,
             clientOptions,
         );
@@ -79,7 +79,7 @@ export function activate(context: vscode.ExtensionContext): void {
                     vscode.extensions.getExtension('ms-dotnettools.csdevkit');
                 if (!hasCsharp) {
                     vscode.window.showWarningMessage(
-                        'KSR debugging requires the C# extension. Please install "ms-dotnettools.csharp" from the Marketplace.',
+                        'Kestrel debugging requires the C# extension. Please install "ms-dotnettools.csharp" from the Marketplace.',
                         'Install',
                     ).then(choice => {
                         if (choice === 'Install') {
@@ -112,10 +112,10 @@ export function deactivate(): Thenable<void> | undefined {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Returns a default coreclr launch configuration for a KSR console project. */
+/** Returns a default coreclr launch configuration for a Kestrel console project. */
 function defaultLaunchConfig(): vscode.DebugConfiguration {
     return {
-        name: 'Debug KSR',
+        name: 'Debug Kestrel',
         type: 'coreclr',
         request: 'launch',
         preLaunchTask: 'build',
@@ -131,7 +131,7 @@ function defaultLaunchConfig(): vscode.DebugConfiguration {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Resolves the ksr executable path.
+ * Resolves the Kestrel executable path, with the legacy ksr name as a fallback.
  * Returns the path string to pass to child_process, or null if not found.
  */
 function resolveExecutable(configured: string): string | null {
@@ -142,8 +142,12 @@ function resolveExecutable(configured: string): string | null {
 
     // Well-known install locations
     const candidates = [
+        'C:\\Program Files\\Kestrel\\kestrel.exe',
         'C:\\Program Files\\ksr\\ksr.exe',
+        path.join(process.env['USERPROFILE'] ?? '', '.kestrel', 'kestrel.exe'),
         path.join(process.env['USERPROFILE'] ?? '', '.ksr', 'ksr.exe'),
+        '/usr/local/bin/kestrel',
+        '/usr/bin/kestrel',
         '/usr/local/bin/ksr',
         '/usr/bin/ksr',
     ];
@@ -152,6 +156,6 @@ function resolveExecutable(configured: string): string | null {
         if (fs.existsSync(c)) return c;
     }
 
-    // Fall back to PATH resolution ('ksr') — fails gracefully if absent
+    // Fall back to PATH resolution ('kestrel') — fails gracefully if absent.
     return configured;
 }

@@ -1,7 +1,7 @@
 {
   "name": "ksr-lang",
-  "displayName": "KSR Language",
-  "description": "Syntax highlighting and error reporting for the KSR language",
+  "displayName": "Kestrel Language",
+  "description": "Syntax highlighting and error reporting for the Kestrel language",
   "version": "0.1.0",
   "publisher": "ksr",
   "engines": {
@@ -42,8 +42,8 @@
       "properties": {
         "ksr.executablePath": {
           "type": "string",
-          "default": "ksr",
-          "description": "Path to the ksr executable used to start the Language Server. Defaults to 'ksr' (must be on PATH)."
+          "default": "kestrel",
+          "description": "Path to the Kestrel executable used to start the Language Server. Defaults to 'kestrel' (must be on PATH); 'ksr' remains a compatibility alias."
         }
       }
     },
@@ -53,14 +53,14 @@
     "debuggers": [
       {
         "type": "ksr",
-        "label": "KSR",
+        "label": "Kestrel",
         "languages": ["ksr"],
         "configurationSnippets": [
           {
-            "label": "KSR: Launch",
-            "description": "Launch and debug a KSR project (requires C# extension)",
+            "label": "Kestrel: Launch",
+            "description": "Launch and debug a Kestrel project (requires C# extension)",
             "body": {
-              "name": "Debug KSR",
+              "name": "Debug Kestrel",
               "type": "ksr",
               "request": "launch",
               "preLaunchTask": "build",

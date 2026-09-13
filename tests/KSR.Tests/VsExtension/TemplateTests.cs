@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Text.Json;
 using System.Xml.Linq;
 using Xunit;
 
@@ -10,6 +11,7 @@ public sealed class TemplateTests
 {
     private static readonly string RepoRoot = FindRepoRoot();
     private static readonly XNamespace Ns = "http://schemas.microsoft.com/developer/vstemplate/2005";
+    private static readonly XNamespace VsixNs = "http://schemas.microsoft.com/developer/vsx-schema/2011";
 
     private static string FindRepoRoot()
     {
@@ -24,6 +26,9 @@ public sealed class TemplateTests
 
     private static string ItemTemplateDir =>
         Path.Combine(RepoRoot, "vs-extension", "KSR.VisualStudio", "ItemTemplates", "KsrFile");
+
+    private static string VsCodePackageJson =>
+        Path.Combine(RepoRoot, "vscode-extension", "package.json");
 
     // ─── Project template ───────────────────────────────────────────────────
 
@@ -91,6 +96,15 @@ public sealed class TemplateTests
                 $"Project file '{projectFile}' referenced in vstemplate does not exist.");
     }
 
+    [Fact]
+    public void ProjectTemplate_UsesCanonicalKestrelSdk()
+    {
+        var project = File.ReadAllText(Path.Combine(ProjectTemplateDir, "$projectname$.csproj"));
+
+        Assert.Contains("Project Sdk=\"Kestrel.Sdk/0.1.0\"", project);
+        Assert.DoesNotContain("Project Sdk=\"KSR.Sdk/", project);
+    }
+
     // ─── Item template ──────────────────────────────────────────────────────
 
     [Fact]
@@ -146,5 +160,40 @@ public sealed class TemplateTests
             Assert.True(File.Exists(Path.Combine(ItemTemplateDir, fileName)),
                 $"Template file '{fileName}' referenced in vstemplate does not exist.");
         }
+    }
+
+    [Fact]
+    public void VisualStudioManifest_UsesKestrelBranding()
+    {
+        var doc = XDocument.Load(Path.Combine(RepoRoot, "vs-extension", "KSR.VisualStudio", "source.extension.vsixmanifest"));
+        var metadata = doc.Root!.Element(VsixNs + "Metadata")!;
+
+        Assert.Equal("Kestrel Language Support", metadata.Element(VsixNs + "DisplayName")?.Value.Trim());
+        Assert.Contains("Kestrel programming language", metadata.Element(VsixNs + "Description")?.Value ?? "");
+        Assert.Contains("kestrel", metadata.Element(VsixNs + "Tags")?.Value ?? "");
+        Assert.Contains("ksr", metadata.Element(VsixNs + "Tags")?.Value ?? "");
+    }
+
+    [Fact]
+    public void VsCodePackage_UsesKestrelBrandingAndPreservesKsrLanguageCompatibility()
+    {
+        using var document = JsonDocument.Parse(File.ReadAllText(VsCodePackageJson));
+        var root = document.RootElement;
+
+        Assert.Equal("Kestrel Language", root.GetProperty("displayName").GetString());
+        Assert.Contains("Kestrel language", root.GetProperty("description").GetString());
+
+        var language = root.GetProperty("contributes").GetProperty("languages")[0];
+        Assert.Equal("ksr", language.GetProperty("id").GetString());
+        Assert.Contains(".ksr", language.GetProperty("extensions").EnumerateArray().Select(value => value.GetString()));
+
+        var executable = root.GetProperty("contributes").GetProperty("configuration")
+            .GetProperty("properties").GetProperty("ksr.executablePath");
+        Assert.Equal("kestrel", executable.GetProperty("default").GetString());
+
+        var debugger = root.GetProperty("contributes").GetProperty("debuggers")[0];
+        Assert.Equal("Kestrel", debugger.GetProperty("label").GetString());
+        Assert.Equal("Kestrel: Launch", debugger.GetProperty("configurationSnippets")[0].GetProperty("label").GetString());
+        Assert.Equal("ksr", debugger.GetProperty("type").GetString());
     }
 }

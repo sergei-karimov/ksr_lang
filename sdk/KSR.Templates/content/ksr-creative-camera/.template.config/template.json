@@ -1,13 +1,13 @@
 {
   "$schema": "http://json.schemastore.org/template",
-  "author": "KSR Authors",
-  "classifications": [ "KSR", "Creative", "Camera", "OpenCV" ],
-  "identity": "KSR.CreativeCameraApp",
-  "name": "KSR Creative Camera Application",
-  "shortName": "ksr-creative-camera",
-  "description": "A KSR creative-coding camera app with webcam capture and frame processing.",
+  "author": "Kestrel Authors",
+  "classifications": [ "Kestrel", "Creative", "Camera", "OpenCV" ],
+  "identity": "Kestrel.CreativeCameraApp",
+  "name": "Kestrel Creative Camera Application",
+  "shortName": [ "kestrel-creative-camera", "ksr-creative-camera" ],
+  "description": "A Kestrel creative-coding camera app with webcam capture and frame processing.",
   "tags": {
-    "language": "KSR",
+    "language": "Kestrel",
     "type": "project"
   },
   "sourceName": "MyCameraApp",

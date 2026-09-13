@@ -1,4 +1,7 @@
-# KSR Improvement Plan
+# Kestrel Improvement Plan
+
+> Kestrel is the canonical public brand. Internal `KSR.*` namespaces, the `.ksr`
+> source extension, and the transitional `ksr`/`ksr-*` aliases remain unchanged.
 
 This plan captures the next engineering improvements after the semantic diagnostics fixes.
 
@@ -42,4 +45,3 @@ Use that facade from CLI, LSP, tests, and future editor integrations so diagnost
 Clean up the current `NU1603` warnings by aligning package versions in the Visual Studio extension projects.
 
 Consider centralizing versions in `Directory.Packages.props` if dependency management keeps growing.
-
