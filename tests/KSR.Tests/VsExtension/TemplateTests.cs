@@ -168,6 +168,9 @@ public sealed class TemplateTests
         var doc = XDocument.Load(Path.Combine(RepoRoot, "vs-extension", "KSR.VisualStudio", "source.extension.vsixmanifest"));
         var metadata = doc.Root!.Element(VsixNs + "Metadata")!;
 
+        var identity = metadata.Element(VsixNs + "Identity")!;
+        Assert.Equal("Kestrel.VisualStudio", identity.Attribute("Id")?.Value);
+        Assert.Equal("Kestrel Authors", identity.Attribute("Publisher")?.Value);
         Assert.Equal("Kestrel Language Support", metadata.Element(VsixNs + "DisplayName")?.Value.Trim());
         Assert.Contains("Kestrel programming language", metadata.Element(VsixNs + "Description")?.Value ?? "");
         Assert.Contains("kestrel", metadata.Element(VsixNs + "Tags")?.Value ?? "");
@@ -189,11 +192,26 @@ public sealed class TemplateTests
 
         var executable = root.GetProperty("contributes").GetProperty("configuration")
             .GetProperty("properties").GetProperty("ksr.executablePath");
+        Assert.Equal("Kestrel", root.GetProperty("contributes").GetProperty("configuration")
+            .GetProperty("title").GetString());
         Assert.Equal("kestrel", executable.GetProperty("default").GetString());
 
         var debugger = root.GetProperty("contributes").GetProperty("debuggers")[0];
         Assert.Equal("Kestrel", debugger.GetProperty("label").GetString());
         Assert.Equal("Kestrel: Launch", debugger.GetProperty("configurationSnippets")[0].GetProperty("label").GetString());
         Assert.Equal("ksr", debugger.GetProperty("type").GetString());
+    }
+
+    [Fact]
+    public void VsCodeExecutableResolution_IsCanonicalFirstWithLegacyFallback()
+    {
+        var source = File.ReadAllText(Path.Combine(RepoRoot, "vscode-extension", "src", "extension.ts"));
+
+        Assert.Contains("if (isExplicitPath(configured) && fs.existsSync(configured))", source);
+        Assert.Contains("return configured;", source);
+        var canonicalIndex = source.IndexOf("findOnPath('kestrel')", StringComparison.Ordinal);
+        var legacyIndex = source.IndexOf("findOnPath('ksr')", StringComparison.Ordinal);
+        Assert.True(canonicalIndex >= 0);
+        Assert.True(legacyIndex > canonicalIndex);
     }
 }

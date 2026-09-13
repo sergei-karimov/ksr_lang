@@ -14,7 +14,7 @@ using Microsoft.VisualStudio.Utilities;
 namespace KSR.VisualStudio;
 
 /// <summary>
-/// Starts `ksr lsp` as a child process and exposes it to Visual Studio
+/// Starts `kestrel lsp` as a child process and exposes it to Visual Studio
 /// as an LSP language client.  VS routes all .ksr documents through this
 /// client, which provides diagnostics, completions, and hover.
 /// </summary>
@@ -57,7 +57,7 @@ public sealed class KsrLanguageClient : ILanguageClient
 
     /// <summary>
     /// Called by VS to launch the LSP server.
-    /// Resolves the ksr executable, starts `ksr lsp`, and returns stdio streams.
+    /// Resolves the Kestrel executable, starts `kestrel lsp`, and returns stdio streams.
     /// </summary>
     public async Task<Connection?> ActivateAsync(CancellationToken token)
     {
@@ -130,12 +130,13 @@ public sealed class KsrLanguageClient : ILanguageClient
     /// <summary>
     /// Reads the configured executable path from the options page, then searches:
     ///   1. The path as-is (if absolute)
-    ///   2. %USERPROFILE%\.ksr\ksr.exe
-    ///   3. Falls back to just "ksr" (relies on PATH — returns it even if not confirmed)
+    ///   2. Kestrel install locations
+    ///   3. Legacy ksr install locations
+    ///   4. Falls back to the configured name for PATH resolution
     /// </summary>
     private static async Task<string?> ResolveExecutableAsync(CancellationToken token)
     {
-        var configured = "ksr";
+        var configured = KsrPathSettings.DefaultExecutableName;
         try
         {
             await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync(token);
@@ -168,9 +169,9 @@ public sealed class KsrLanguageClient : ILanguageClient
             await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
             VsShellUtilities.ShowMessageBox(
                 ServiceProvider.GlobalProvider,
-                "KSR executable not found. Install KSR or set the path under " +
-                "Tools → Options → KSR → General → KSR Executable Path.",
-                "KSR Language Server",
+                "Kestrel executable not found. Install Kestrel or set the path under " +
+                "Tools → Options → KSR → General → Kestrel Executable Path.",
+                "Kestrel Language Server",
                 Microsoft.VisualStudio.Shell.Interop.OLEMSGICON.OLEMSGICON_WARNING,
                 Microsoft.VisualStudio.Shell.Interop.OLEMSGBUTTON.OLEMSGBUTTON_OK,
                 Microsoft.VisualStudio.Shell.Interop.OLEMSGDEFBUTTON.OLEMSGDEFBUTTON_FIRST);

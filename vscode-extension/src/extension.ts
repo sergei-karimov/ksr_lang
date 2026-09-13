@@ -136,26 +136,36 @@ function defaultLaunchConfig(): vscode.DebugConfiguration {
  */
 function resolveExecutable(configured: string): string | null {
     // Absolute or relative path configured by user
-    if (path.isAbsolute(configured) || configured.includes(path.sep)) {
-        return fs.existsSync(configured) ? configured : null;
+    if (isExplicitPath(configured) && fs.existsSync(configured)) return configured;
+
+    // Resolve through PATH in canonical-first order. The explicit configured
+    // path above remains untouched, including legacy workspace settings.
+    const canonical = findOnPath('kestrel');
+    if (canonical) return canonical;
+
+    const legacy = findOnPath('ksr');
+    if (legacy) return legacy;
+
+    // Let child_process perform the final PATH lookup so a shell-managed
+    // environment still works even when PATH is not visible to this process.
+    return isExplicitPath(configured) ? null : configured;
+}
+
+function isExplicitPath(value: string): boolean {
+    return path.isAbsolute(value) || value.includes(path.sep) || value.includes('/');
+}
+
+function findOnPath(command: string): string | null {
+    const pathValue = process.env['PATH'] ?? '';
+    const candidates = pathValue.split(path.delimiter).filter(Boolean);
+    const names = process.platform === 'win32' ? [command, `${command}.exe`] : [command];
+
+    for (const directory of candidates) {
+        for (const name of names) {
+            const candidate = path.join(directory, name);
+            if (fs.existsSync(candidate)) return candidate;
+        }
     }
 
-    // Well-known install locations
-    const candidates = [
-        'C:\\Program Files\\Kestrel\\kestrel.exe',
-        'C:\\Program Files\\ksr\\ksr.exe',
-        path.join(process.env['USERPROFILE'] ?? '', '.kestrel', 'kestrel.exe'),
-        path.join(process.env['USERPROFILE'] ?? '', '.ksr', 'ksr.exe'),
-        '/usr/local/bin/kestrel',
-        '/usr/bin/kestrel',
-        '/usr/local/bin/ksr',
-        '/usr/bin/ksr',
-    ];
-
-    for (const c of candidates) {
-        if (fs.existsSync(c)) return c;
-    }
-
-    // Fall back to PATH resolution ('kestrel') — fails gracefully if absent.
-    return configured;
+    return null;
 }

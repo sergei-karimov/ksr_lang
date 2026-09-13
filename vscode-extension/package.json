@@ -38,7 +38,7 @@
       }
     ],
     "configuration": {
-      "title": "KSR",
+      "title": "Kestrel",
       "properties": {
         "ksr.executablePath": {
           "type": "string",

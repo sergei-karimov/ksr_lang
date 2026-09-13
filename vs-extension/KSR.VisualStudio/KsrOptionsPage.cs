@@ -10,14 +10,14 @@ namespace KSR.VisualStudio;
 [System.Runtime.InteropServices.ComVisible(true)]
 public sealed class KsrOptionsPage : DialogPage
 {
-    private string _executablePath = "ksr";
+    private string _executablePath = KsrPathSettings.DefaultExecutableName;
 
     [Category("Language Server")]
-    [DisplayName("KSR Executable Path")]
+    [DisplayName("Kestrel Executable Path")]
     [Description(
-        "Path to the ksr executable used to start the Language Server. " +
-        "Defaults to 'ksr' (resolved via PATH). " +
-        "Example: C:\\Users\\you\\.ksr\\ksr.exe")]
+        "Path to the Kestrel executable used to start the Language Server. " +
+        "Defaults to 'kestrel' (resolved via PATH), with 'ksr' as a legacy fallback. " +
+        "Example: C:\\Users\\you\\.kestrel\\kestrel.exe")]
     public string ExecutablePath
     {
         get => _executablePath;

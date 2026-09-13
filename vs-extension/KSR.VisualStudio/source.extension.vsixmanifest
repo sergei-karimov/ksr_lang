@@ -4,10 +4,10 @@
     xmlns:d="http://schemas.microsoft.com/developer/vsx-schema-design/2011">
   <Metadata>
     <Identity
-      Id="KSR.VisualStudio"
+      Id="Kestrel.VisualStudio"
       Version="0.1.0"
       Language="en-US"
-      Publisher="KSR Authors" />
+      Publisher="Kestrel Authors" />
     <DisplayName>Kestrel Language Support</DisplayName>
     <Description xml:space="preserve">
       Syntax highlighting, IntelliSense (via Language Server Protocol),

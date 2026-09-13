@@ -25,37 +25,67 @@ public sealed class KsrExecutableResolverTests
     [Fact]
     public void Resolve_RelativeNameNoCandidates_FallsBackToConfigured()
     {
-        var result = KSR.VisualStudio.KsrExecutableResolver.Resolve("ksr", _ => false);
-        Assert.Equal("ksr", result);
+        var result = KSR.VisualStudio.KsrExecutableResolver.Resolve("kestrel", _ => false);
+        Assert.Equal("kestrel", result);
     }
 
     [Fact]
-    public void Resolve_RelativeNameWithUserProfileCandidateAvailable_ReturnsThatCandidate()
+    public void Resolve_CanonicalUserProfileCandidateAvailable_ReturnsThatCandidate()
     {
         var expected = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-            ".ksr", "ksr.exe");
+            ".kestrel", "kestrel.exe");
 
-        var result = KSR.VisualStudio.KsrExecutableResolver.Resolve("ksr", path => path == expected);
+        var result = KSR.VisualStudio.KsrExecutableResolver.Resolve("kestrel", path => path == expected);
         Assert.Equal(expected, result);
     }
 
     [Fact]
-    public void Resolve_UserProfileCandidateTakesPrecedenceOverProgramFiles()
+    public void Resolve_LegacyCandidateIsFallbackAfterCanonicalCandidates()
     {
-        var userProfileCandidate = Path.Combine(
+        var canonicalCandidate = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            ".kestrel", "kestrel.exe");
+        var legacyCandidate = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
             ".ksr", "ksr.exe");
-        var programFilesCandidate = Path.Combine(
+
+        var result = KSR.VisualStudio.KsrExecutableResolver.Resolve(
+            "kestrel",
+            path => path == canonicalCandidate || path == legacyCandidate);
+
+        Assert.Equal(canonicalCandidate, result);
+    }
+
+    [Fact]
+    public void Resolve_LegacyCandidateIsUsedWhenCanonicalCandidateIsAbsent()
+    {
+        var legacyCandidate = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            ".ksr", "ksr.exe");
+
+        var result = KSR.VisualStudio.KsrExecutableResolver.Resolve(
+            "kestrel",
+            path => path == legacyCandidate);
+
+        Assert.Equal(legacyCandidate, result);
+    }
+
+    [Fact]
+    public void Resolve_CanonicalProgramFilesCandidatePrecedesLegacyProgramFiles()
+    {
+        var canonicalCandidate = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+            "Kestrel", "kestrel.exe");
+        var legacyCandidate = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
             "ksr", "ksr.exe");
 
-        // Both candidates "exist" — resolver must return the first (user profile) one.
         var result = KSR.VisualStudio.KsrExecutableResolver.Resolve(
-            "ksr",
-            path => path == userProfileCandidate || path == programFilesCandidate);
+            "kestrel",
+            path => path == canonicalCandidate || path == legacyCandidate);
 
-        Assert.Equal(userProfileCandidate, result);
+        Assert.Equal(canonicalCandidate, result);
     }
 
     [Fact]

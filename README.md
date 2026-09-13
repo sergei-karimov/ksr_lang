@@ -879,7 +879,7 @@ Creative projects add runtime packages:
 </ItemGroup>
 ```
 
-The `kestrel-creative` and `kestrel-creative-camera` templates include these references for you. The legacy `ksr-creative` and `ksr-creative-camera` names are aliases. No boilerplate, no extra build steps.
+The `kestrel-creative` and `kestrel-creative-camera` templates include these references for you. The legacy `ksr-creative` and `ksr-creative-camera` names are reserved as aliases planned for Task 8; installer alias wiring is deferred. No boilerplate, no extra build steps.
 
 ---
 
@@ -892,7 +892,7 @@ kestrel hello.ksr
 kestrel hello.ksr --debug                  # also prints the generated C# source
 kestrel hello.ksr --async-return=valuetask # use ValueTask for all async functions
 
-# Legacy compatibility alias:
+# Planned legacy compatibility alias for Task 8:
 ksr hello.ksr
 ```
 
@@ -941,7 +941,7 @@ The `ksr-lang` extension provides Kestrel language support:
 - **Completions** — keywords (`val`, `var`, `fun`, `async`, `await`, …), built-in types (`Int`, `String`, `List`, `MutableList`, …), stdlib symbols (`IO`, `File`, `Text`, `Lst`, `Mp`, …), stdlib module names (`ksr.io`, `ksr.text`, `ksr.collections`), struct names, interface names, and top-level function names from the current file
 - **Hover documentation** — describes keywords, built-in types, stdlib symbols (`Lst`, `Mp`, `IO`, …), and identifiers on hover
 
-The extension connects to the Kestrel Language Server (`kestrel lsp`) via JSON-RPC over stdio using the standard Language Server Protocol. The legacy `ksr lsp` command remains a compatibility alias. It works with VS Code and any other LSP-compatible editor.
+The extension connects to the Kestrel Language Server (`kestrel lsp`) via JSON-RPC over stdio using the standard Language Server Protocol. The legacy `ksr lsp` command is reserved as a distribution alias planned for Task 8. It works with VS Code and any other LSP-compatible editor.
 
 Installed automatically by the installer scripts. After installation, reload VS Code (`Ctrl+Shift+P` → **Reload Window**) to activate the Language Server.
 
@@ -965,7 +965,7 @@ Kestrel projects support full breakpoint debugging in VS Code via the C# extensi
 - C# extension installed in VS Code
 - Project mode only (`dotnet new kestrel-console`) — single-file `kestrel file.ksr` mode does not produce a PDB
 
-**Setup:** every project created with `dotnet new kestrel-console` includes a `.vscode/launch.json` pre-configured for debugging (the legacy `ksr-console` alias is also supported):
+**Setup:** every project created with `dotnet new kestrel-console` includes a `.vscode/launch.json` pre-configured for debugging (the legacy `ksr-console` alias is reserved for Task 8):
 
 ```json
 {
@@ -1014,7 +1014,7 @@ Adjust the path for your VS edition (Professional / Enterprise) and year (2022, 
 ### Requirements
 
 - Visual Studio 2022 or later (Community, Professional, or Enterprise)
-- `kestrel` installed and available on your `PATH` (`ksr` is a temporary compatibility alias)
+- `kestrel` installed and available on your `PATH` (`ksr` is a reserved compatibility alias planned for Task 8)
 
   The extension resolves the executable in this order:
   1. The path configured under **Tools → Options → KSR → General → KSR Executable Path**
@@ -1075,14 +1075,14 @@ This works in both single-file mode (`kestrel file.ksr`) and full project mode (
 
 | Package | Purpose |
 |---|---|
-| `Kestrel` | Global CLI — `kestrel <file.ksr>` single-file runner (`ksr` alias) |
+| `Kestrel` | Global CLI — `kestrel <file.ksr>` single-file runner (`ksr` alias planned for Task 8) |
 | `Kestrel.Core` | Compiler library — Lexer, Parser, AST, CodeGen |
 | `Kestrel.Build` | MSBuild task — hooks Kestrel into `dotnet build` |
 | `Kestrel.Sdk` | MSBuild SDK — `Sdk="Kestrel.Sdk/0.1.0"` |
 | `Kestrel.StdLib` | Standard library — `ksr.io`, `ksr.text`, and `ksr.collections` modules |
 | `Kestrel.Vision` | Webcam capture and OpenCV frame processing (`OpenCvSharp4`, Windows runtime MVP) |
 | `Kestrel.Creative` | Minimal Raylib creative-coding window and draw API |
-| `Kestrel.Templates` | `dotnet new` templates (`ksr-*` aliases) |
+| `Kestrel.Templates` | `dotnet new` templates (`ksr-*` aliases planned for Task 8) |
 
 ---
 
@@ -1112,7 +1112,7 @@ This works in both single-file mode (`kestrel file.ksr`) and full project mode (
 - [x] `List<T>` and `Map<K, V>` collection literals
 - [x] Interfaces / trait-style polymorphism (`interface` + `implement … for …`)
 - [x] Pattern matching — `when` expression (switch expr / ternary / if-else)
-- [x] Language server (LSP) — real-time diagnostics, completion, hover (`ksr lsp`)
+- [x] Language server (LSP) — real-time diagnostics, completion, hover (`kestrel lsp`)
 - [x] Standard library — `ksr.io` (file/console I/O) and `ksr.text` (string utilities)
 - [x] Async/await — `async fun`, `await`, `@ValueTask`, `--async-return=valuetask`
 - [x] Standard library — `ksr.collections` (`Lst` and `Mp` higher-order operations)

@@ -3,11 +3,11 @@ using System.IO;
 
 namespace KSR.VisualStudio;
 
-/// <summary>Resolves the path to the ksr executable.</summary>
+/// <summary>Resolves the path to the Kestrel executable.</summary>
 internal static class KsrExecutableResolver
 {
     /// <summary>
-    /// Returns the best absolute path to the ksr executable, or <paramref name="configured"/>
+    /// Returns the best absolute path to the Kestrel executable, or <paramref name="configured"/>
     /// if no absolute path can be verified (caller relies on PATH resolution).
     /// Returns <see langword="null"/> only when <paramref name="configured"/> is an absolute
     /// path that does not exist on disk.
@@ -26,6 +26,9 @@ internal static class KsrExecutableResolver
         var userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         string[] candidates =
         [
+            Path.Combine(userProfile, ".kestrel", "kestrel.exe"),
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Kestrel", "kestrel.exe"),
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Kestrel", "kestrel.exe"),
             Path.Combine(userProfile, ".ksr", "ksr.exe"),
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "ksr", "ksr.exe"),
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "ksr", "ksr.exe"),

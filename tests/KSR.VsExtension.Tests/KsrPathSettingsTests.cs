@@ -7,19 +7,19 @@ public sealed class KsrPathSettingsTests
     [Fact]
     public void NormalizePath_Null_ReturnsDefault()
     {
-        Assert.Equal("ksr", KSR.VisualStudio.KsrPathSettings.NormalizePath(null));
+        Assert.Equal("kestrel", KSR.VisualStudio.KsrPathSettings.NormalizePath(null));
     }
 
     [Fact]
     public void NormalizePath_Empty_ReturnsDefault()
     {
-        Assert.Equal("ksr", KSR.VisualStudio.KsrPathSettings.NormalizePath(""));
+        Assert.Equal("kestrel", KSR.VisualStudio.KsrPathSettings.NormalizePath(""));
     }
 
     [Fact]
     public void NormalizePath_Whitespace_ReturnsDefault()
     {
-        Assert.Equal("ksr", KSR.VisualStudio.KsrPathSettings.NormalizePath("   "));
+        Assert.Equal("kestrel", KSR.VisualStudio.KsrPathSettings.NormalizePath("   "));
     }
 
     [Fact]
@@ -32,6 +32,6 @@ public sealed class KsrPathSettingsTests
     [Fact]
     public void NormalizePath_ValidRelativeName_ReturnsValueUnchanged()
     {
-        Assert.Equal("ksr", KSR.VisualStudio.KsrPathSettings.NormalizePath("ksr"));
+        Assert.Equal("kestrel", KSR.VisualStudio.KsrPathSettings.NormalizePath("kestrel"));
     }
 }

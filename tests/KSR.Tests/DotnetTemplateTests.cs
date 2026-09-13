@@ -205,6 +205,20 @@ public class DotnetTemplateTests
         Assert.Contains("TaskName=\"KSR.Build.KsrCompileTask\"", buildTargets);
     }
 
+    [Fact]
+    public void RootNuGetConfig_MapsRootAndDottedKestrelPackagesToLocalArtifacts()
+    {
+        var config = XDocument.Load(Path.Combine(RepoRoot(), "nuget.config"));
+        var localSource = config.Descendants("packageSource")
+            .Single(element => (string?)element.Attribute("key") == "local-artifacts");
+        var patterns = localSource.Elements("package")
+            .Select(element => (string?)element.Attribute("pattern"))
+            .ToArray();
+
+        Assert.Contains("Kestrel", patterns);
+        Assert.Contains("Kestrel.*", patterns);
+    }
+
     [Theory]
     [InlineData("ksr-creative", "MyCreativeApp.csproj", "Kestrel.Creative")]
     [InlineData("ksr-creative-camera", "MyCameraApp.csproj", "Kestrel.Creative")]
