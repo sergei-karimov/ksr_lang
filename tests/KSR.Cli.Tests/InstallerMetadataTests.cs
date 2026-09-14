@@ -134,6 +134,28 @@ public class InstallerMetadataTests
         Assert.Contains("ksr-console", verifier, StringComparison.Ordinal);
         Assert.Contains("net10.0", verifier, StringComparison.Ordinal);
         Assert.Contains("KSR.", verifier, StringComparison.Ordinal);
+        Assert.DoesNotContain("nuget.org", verifier, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task LocalPackageVerifier_RunsCanonicalAndLegacyTemplateMatrix()
+    {
+        if (OperatingSystem.IsWindows())
+            return;
+
+        var verifier = Path.Combine(RepoRoot(), "tests", "verify-kestrel-local-packages.sh");
+        var result = await RunProcessAsync(
+            "bash",
+            [verifier],
+            RepoRoot(),
+            new Dictionary<string, string?>
+            {
+                ["DOTNET_CLI_TELEMETRY_OPTOUT"] = "1",
+                ["DOTNET_SKIP_FIRST_TIME_EXPERIENCE"] = "1"
+            },
+            timeout: TimeSpan.FromMinutes(3));
+
+        Assert.True(result.ExitCode == 0, result.Output);
     }
 
     [Fact]

@@ -59,9 +59,11 @@ below and are not equivalent to version-resolution failures.
 - [x] All eight canonical `Kestrel.*` packages pack successfully and no
   `KSR.*.nupkg` is produced by the ordinary package verifier.
 - [x] Compiler and CLI suites pass on the available `net10.0` target. The
-  canonical tool package installs and canonical/legacy template metadata is
-  verified; the bounded all-template restore/build smoke remains unfinished
-  when external package restore is unavailable.
+  canonical tool package installs and the console, library, creative, and
+  camera templates build through both canonical and legacy names from an
+  isolated temporary local feed. The verifier seeds that feed from the host's
+  already-restored third-party Raylib/OpenCV packages and never uses
+  `nuget.org`.
 - [ ] Run the Visual Studio VSIX build/test/install validation on Windows with
   Visual Studio MSBuild. On macOS/Linux, the `net472` test target requires Mono.
 - [x] Verify representative single-file examples end-to-end: `hello`, `async`,
