@@ -162,7 +162,7 @@ public static class KsrCompiler {
         if (paths.Count == 0)
             throw new KsrCompileException(
                 "No framework assemblies found for Roslyn.\n" +
-                "Ensure .NET 8+ runtime is installed.\n" +
+                "Ensure .NET 10+ runtime is installed.\n" +
                 "Set the DOTNET_ROOT environment variable if .NET is in a non-standard location.");
 
         return paths
