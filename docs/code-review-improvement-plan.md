@@ -49,15 +49,19 @@ Visual Studio SDK dependency versions are aligned, removing the prior `NU1603`
 version-resolution warnings. Package vulnerability warnings are tracked separately
 below and are not equivalent to version-resolution failures.
 
-## 6. Kestrel migration and verification status — completed with platform limits
+## 6. Kestrel .NET 10 migration and verification status — completed with platform limits
 
 - [x] Public packages, CLI, templates, installer messaging, and VS Code metadata
   use the Kestrel brand; internal `KSR.*` namespaces and `.ksr` remain intentional
   compatibility surfaces.
-- [x] Solution build, all eight NuGet package packs, VS Code bundle/package, and
-  canonical plus legacy console-template instantiation have been exercised.
-- [x] Compiler tests pass on the available `net10.0` target. The `net8.0` target
-  must be run on a host with the .NET 8 runtime.
+- [x] Ordinary compiler, CLI, SDK, package, template, and test projects target
+  `net10.0`; the Visual Studio extension remains the separate `net472` surface.
+- [x] All eight canonical `Kestrel.*` packages pack successfully and no
+  `KSR.*.nupkg` is produced by the ordinary package verifier.
+- [x] Compiler and CLI suites pass on the available `net10.0` target. The
+  canonical tool package installs and canonical/legacy template metadata is
+  verified; the bounded all-template restore/build smoke remains unfinished
+  when external package restore is unavailable.
 - [ ] Run the Visual Studio VSIX build/test/install validation on Windows with
   Visual Studio MSBuild. On macOS/Linux, the `net472` test target requires Mono.
 - [x] Verify representative single-file examples end-to-end: `hello`, `async`,
