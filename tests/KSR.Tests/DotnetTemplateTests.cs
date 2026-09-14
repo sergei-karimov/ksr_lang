@@ -208,6 +208,30 @@ public class DotnetTemplateTests
     }
 
     [Fact]
+    public void ProjectTargetMatrix_UsesNet10ForOrdinaryProjectsAndNet472ForVisualStudioProjects()
+    {
+        var ordinaryProjects = new[]
+        {
+            "KSR.csproj",
+            "KSR.Core.csproj",
+            "sdk/KSR.Build/KSR.Build.csproj",
+            "sdk/KSR.Sdk/KSR.Sdk.csproj",
+            "sdk/KSR.StdLib/KSR.StdLib.csproj",
+            "sdk/KSR.Vision/KSR.Vision.csproj",
+            "sdk/KSR.Creative/KSR.Creative.csproj",
+            "sdk/KSR.Templates/KSR.Templates.csproj",
+            "tests/KSR.Tests/KSR.Tests.csproj",
+            "tests/KSR.Cli.Tests/KSR.Cli.Tests.csproj"
+        };
+
+        foreach (var relativePath in ordinaryProjects)
+            AssertProjectTargetFramework(relativePath, "net10.0");
+
+        AssertProjectTargetFramework("vs-extension/KSR.VisualStudio/KSR.VisualStudio.csproj", "net472");
+        AssertProjectTargetFramework("tests/KSR.VsExtension.Tests/KSR.VsExtension.Tests.csproj", "net472");
+    }
+
+    [Fact]
     public void SdkAndBuildMetadata_UseCanonicalPackageIdsWithoutRenamingTasks()
     {
         var sdkProps = File.ReadAllText(Path.Combine(RepoRoot(), "sdk/KSR.Sdk/Sdk/Sdk.props"));
@@ -308,6 +332,15 @@ public class DotnetTemplateTests
         }
 
         throw new DirectoryNotFoundException("Could not locate KSR.sln.");
+    }
+
+    private static void AssertProjectTargetFramework(string relativePath, string expectedTargetFramework)
+    {
+        var project = XDocument.Load(Path.Combine(RepoRoot(), relativePath));
+        var targetFramework = project.Descendants("TargetFramework").SingleOrDefault()?.Value
+            ?? project.Descendants("TargetFrameworks").SingleOrDefault()?.Value;
+
+        Assert.Equal(expectedTargetFramework, targetFramework);
     }
 
     private sealed class RecordingBuildEngine : IBuildEngine
