@@ -37,6 +37,64 @@ public class InstallerMetadataTests
     }
 
     [Fact]
+    public async Task UnixInstaller_RejectsDotnet9BeforePackaging()
+    {
+        // This behavioral check is Unix-only; Windows coverage remains source-level below.
+        if (OperatingSystem.IsWindows())
+            return;
+
+        var temporaryDirectory = Path.Combine(Path.GetTempPath(), "kestrel-installer-prerequisite-tests", Guid.NewGuid().ToString("N"));
+        var fakeBin = Path.Combine(temporaryDirectory, "bin");
+        var cliHome = Path.Combine(temporaryDirectory, "cli");
+        var packagingMarker = Path.Combine(temporaryDirectory, "pack-invoked");
+        Directory.CreateDirectory(fakeBin);
+
+        try
+        {
+            var fakeDotnet = Path.Combine(fakeBin, "dotnet");
+            await File.WriteAllTextAsync(fakeDotnet, """
+                #!/usr/bin/env bash
+                set -euo pipefail
+                case "${1:-}" in
+                  --version) echo 9.0.999 ;;
+                  pack) touch "$FAKE_DOTNET_PACK_MARKER" ;;
+                  *) exit 0 ;;
+                esac
+                """);
+
+            var chmod = await RunProcessAsync(
+                "chmod",
+                ["+x", fakeDotnet],
+                temporaryDirectory,
+                new Dictionary<string, string?>());
+            Assert.Equal(0, chmod.ExitCode);
+
+            var environment = new Dictionary<string, string?>
+            {
+                ["DOTNET_CLI_HOME"] = cliHome,
+                ["HOME"] = Path.Combine(temporaryDirectory, "home"),
+                ["FAKE_DOTNET_PACK_MARKER"] = packagingMarker,
+                ["PATH"] = fakeBin + Path.PathSeparator + Environment.GetEnvironmentVariable("PATH")
+            };
+            var installer = Path.Combine(RepoRoot(), "scripts", "install.sh");
+
+            var result = await RunProcessAsync(
+                "bash",
+                [installer, "--no-vscode"],
+                RepoRoot(),
+                environment);
+
+            Assert.NotEqual(0, result.ExitCode);
+            Assert.Contains(".NET 10 or later is required", result.Output, StringComparison.Ordinal);
+            Assert.False(File.Exists(packagingMarker), result.Output);
+        }
+        finally
+        {
+            Directory.Delete(temporaryDirectory, recursive: true);
+        }
+    }
+
+    [Fact]
     public void WindowsInstaller_InstallsCanonicalArtifactsAndManagesKsrAliases()
     {
         var script = File.ReadAllText(Path.Combine(RepoRoot(), "scripts/install.ps1"));
