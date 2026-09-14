@@ -8,7 +8,7 @@ namespace KSR.Cli.Tests;
 public sealed class LspTransportTests
 {
     [Fact]
-    public async Task DidOpenAndDidChangePublishDiagnosticsThroughJsonRpc()
+    public async Task DidOpenAndDidChangePublishDiagnosticsThroughJsonRpcWithoutRollForwardOverride()
     {
         using var process = StartServer();
         var input = process.StandardInput.BaseStream;
@@ -70,7 +70,7 @@ public sealed class LspTransportTests
             RedirectStandardError = true,
             UseShellExecute = false
         };
-        startInfo.Environment["DOTNET_ROLL_FORWARD"] = "Major";
+        startInfo.Environment.Remove("DOTNET_ROLL_FORWARD");
         startInfo.ArgumentList.Add("run");
         startInfo.ArgumentList.Add("--project");
         startInfo.ArgumentList.Add(Path.Combine(root, "KSR.csproj"));

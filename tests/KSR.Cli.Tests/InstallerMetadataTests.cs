@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.IO.Compression;
+using System.Text.Json;
 using System.Xml.Linq;
 using Xunit;
 
@@ -27,6 +28,15 @@ public class InstallerMetadataTests
     }
 
     [Fact]
+    public void UnixInstaller_RequiresDotnet10OrLater()
+    {
+        var script = File.ReadAllText(Path.Combine(RepoRoot(), "scripts/install.sh"));
+
+        Assert.Contains("if [[ $MAJOR -lt 10 ]]; then", script, StringComparison.Ordinal);
+        Assert.Contains(".NET 10 or later is required", script, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void WindowsInstaller_InstallsCanonicalArtifactsAndManagesKsrAliases()
     {
         var script = File.ReadAllText(Path.Combine(RepoRoot(), "scripts/install.ps1"));
@@ -43,6 +53,60 @@ public class InstallerMetadataTests
         Assert.Contains("'kestrel-artifacts'", script, StringComparison.Ordinal);
         Assert.Contains("<clear />", script, StringComparison.Ordinal);
         Assert.DoesNotContain("'--add-source'", script, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void WindowsInstaller_RequiresDotnet10OrLater()
+    {
+        var script = File.ReadAllText(Path.Combine(RepoRoot(), "scripts/install.ps1"));
+
+        Assert.Contains("if ($major -lt 10)", script, StringComparison.Ordinal);
+        Assert.Contains(".NET 10 or later is required", script, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task PackedTool_RuntimeConfigTargetsNet10()
+    {
+        var artifactDirectory = Path.Combine(Path.GetTempPath(), "kestrel-tool-runtimeconfig-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(artifactDirectory);
+
+        try
+        {
+            var result = await RunDotnetAsync(
+                "pack",
+                "KSR.csproj",
+                "-c",
+                "Release",
+                "-o",
+                artifactDirectory,
+                "--nologo",
+                "--no-restore",
+                "--disable-build-servers");
+
+            Assert.Equal(0, result.ExitCode);
+
+            var packagePath = Path.Combine(artifactDirectory, "Kestrel.0.1.0.nupkg");
+            Assert.True(File.Exists(packagePath), result.Output);
+
+            using var archive = ZipFile.OpenRead(packagePath);
+            var runtimeConfig = archive.GetEntry("tools/net10.0/any/kestrel.runtimeconfig.json");
+            Assert.NotNull(runtimeConfig);
+
+            using var document = JsonDocument.Parse(runtimeConfig!.Open());
+            var runtimeOptions = document.RootElement.GetProperty("runtimeOptions");
+            Assert.Equal("net10.0", runtimeOptions.GetProperty("tfm").GetString());
+
+            var frameworkVersion = runtimeOptions
+                .GetProperty("framework")
+                .GetProperty("version")
+                .GetString();
+
+            Assert.StartsWith("10.", frameworkVersion, StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(artifactDirectory, recursive: true);
+        }
     }
 
     [Fact]
