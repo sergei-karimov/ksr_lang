@@ -14,7 +14,7 @@
   <PropertyGroup>
     <!-- KSR projects are executables by default (override in the project if needed) -->
     <OutputType Condition="'$(OutputType)' == ''">Exe</OutputType>
-    <TargetFramework Condition="'$(TargetFramework)' == ''">net8.0</TargetFramework>
+    <TargetFramework Condition="'$(TargetFramework)' == ''">net10.0</TargetFramework>
     <Nullable Condition="'$(Nullable)' == ''">enable</Nullable>
     <ImplicitUsings Condition="'$(ImplicitUsings)' == ''">enable</ImplicitUsings>
 

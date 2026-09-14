@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.IO.Compression;
 using System.Xml.Linq;
 using Xunit;
 
@@ -65,6 +66,51 @@ public class InstallerMetadataTests
 
             Assert.Equal(ExpectedPackages.OrderBy(name => name, StringComparer.Ordinal), packages);
             Assert.DoesNotContain(packages, package => package!.StartsWith("KSR.", StringComparison.Ordinal));
+        }
+        finally
+        {
+            Directory.Delete(artifactDirectory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task BuildPackage_ContainsNet10BuildAssetsAndImports()
+    {
+        var artifactDirectory = Path.Combine(Path.GetTempPath(), "kestrel-build-package-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(artifactDirectory);
+
+        try
+        {
+            var result = await RunDotnetAsync(
+                "pack",
+                "sdk/KSR.Build/KSR.Build.csproj",
+                "-c",
+                "Release",
+                "-o",
+                artifactDirectory,
+                "--nologo",
+                "--no-restore",
+                "--disable-build-servers");
+
+            Assert.Equal(0, result.ExitCode);
+
+            var packagePath = Path.Combine(artifactDirectory, "Kestrel.Build.0.1.0.nupkg");
+            Assert.True(File.Exists(packagePath), result.Output);
+
+            using var archive = ZipFile.OpenRead(packagePath);
+            var entries = archive.Entries.Select(entry => entry.FullName).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            Assert.Contains("build/net10.0/KSR.Build.dll", entries);
+            Assert.Contains("build/net10.0/KSR.Core.dll", entries);
+            Assert.Contains("build/Kestrel.Build.props", entries);
+            Assert.Contains("build/Kestrel.Build.targets", entries);
+            Assert.DoesNotContain(entries, entry => entry.StartsWith("build/net8.0/", StringComparison.OrdinalIgnoreCase));
+
+            var targets = archive.GetEntry("build/Kestrel.Build.targets");
+            Assert.NotNull(targets);
+            using var reader = new StreamReader(targets!.Open());
+            var targetsText = await reader.ReadToEndAsync();
+            Assert.Contains("$(KsrBuildTargetFramework)\\KSR.Build.dll", targetsText, StringComparison.Ordinal);
         }
         finally
         {

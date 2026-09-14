@@ -232,6 +232,14 @@ public class DotnetTemplateTests
     }
 
     [Fact]
+    public void KestrelSdk_DefaultTargetFrameworkIsNet10()
+    {
+        var sdkProps = File.ReadAllText(Path.Combine(RepoRoot(), "sdk/KSR.Sdk/Sdk/Sdk.props"));
+
+        Assert.Contains("<TargetFramework Condition=\"'$(TargetFramework)' == ''\">net10.0</TargetFramework>", sdkProps);
+    }
+
+    [Fact]
     public void SdkAndBuildMetadata_UseCanonicalPackageIdsWithoutRenamingTasks()
     {
         var sdkProps = File.ReadAllText(Path.Combine(RepoRoot(), "sdk/KSR.Sdk/Sdk/Sdk.props"));
