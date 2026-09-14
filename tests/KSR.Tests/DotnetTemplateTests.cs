@@ -176,6 +176,23 @@ public class DotnetTemplateTests
         Assert.Equal("project", template.RootElement.GetProperty("tags").GetProperty("type").GetString());
     }
 
+    [Theory]
+    [InlineData("ksr-console", "MyApp.csproj")]
+    [InlineData("ksr-library", "MyLibrary.csproj")]
+    [InlineData("ksr-creative", "MyCreativeApp.csproj")]
+    [InlineData("ksr-creative-camera", "MyCameraApp.csproj")]
+    public void ProjectTemplateContent_DefaultsToNet10ForCanonicalAndAliasNames(string directory, string projectFile)
+    {
+        var projectPath = Path.Combine(TemplatesRoot(), directory, projectFile);
+        var project = XDocument.Load(projectPath);
+        var template = LoadTemplate(directory).RootElement;
+
+        Assert.Equal("net10.0", project.Descendants("TargetFramework").Single().Value);
+        var framework = template.GetProperty("symbols").GetProperty("Framework");
+        Assert.Equal("net10.0", framework.GetProperty("defaultValue").GetString());
+        Assert.Equal("net10.0", framework.GetProperty("choices")[0].GetProperty("choice").GetString());
+    }
+
     [Fact]
     public void PublicPackageMetadata_UsesKestrelNamesAndKeepsInternalAssemblies()
     {

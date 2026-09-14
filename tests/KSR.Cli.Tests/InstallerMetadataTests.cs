@@ -153,6 +153,7 @@ public class InstallerMetadataTests
             var projectFile = Assert.Single(Directory.GetFiles(projectDirectory, "*.csproj"));
             var project = XDocument.Load(projectFile);
             Assert.Equal("Kestrel.Sdk/0.1.0", project.Root?.Attribute("Sdk")?.Value);
+            Assert.Equal("net10.0", project.Descendants("TargetFramework").Single().Value);
             Assert.DoesNotContain(project.Descendants().Attributes("Include").Select(attribute => attribute.Value),
                 packageId => packageId.StartsWith("KSR.", StringComparison.Ordinal));
             Assert.All(project.Descendants("PackageReference"), reference =>

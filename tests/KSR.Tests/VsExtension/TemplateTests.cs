@@ -105,6 +105,14 @@ public sealed class TemplateTests
         Assert.DoesNotContain("Project Sdk=\"KSR.Sdk/", project);
     }
 
+    [Fact]
+    public void ProjectTemplate_TargetsNet10()
+    {
+        var project = XDocument.Load(Path.Combine(ProjectTemplateDir, "$projectname$.csproj"));
+
+        Assert.Equal("net10.0", project.Descendants("TargetFramework").Single().Value);
+    }
+
     // ─── Item template ──────────────────────────────────────────────────────
 
     [Fact]
@@ -200,6 +208,10 @@ public sealed class TemplateTests
         Assert.Equal("Kestrel", debugger.GetProperty("label").GetString());
         Assert.Equal("Kestrel: Launch", debugger.GetProperty("configurationSnippets")[0].GetProperty("label").GetString());
         Assert.Equal("ksr", debugger.GetProperty("type").GetString());
+        var program = debugger.GetProperty("configurationSnippets")[0]
+            .GetProperty("body").GetProperty("program").GetString();
+        Assert.Contains("bin/Debug/net10.0/", program);
+        Assert.DoesNotContain("bin/Debug/net8.0/", program);
     }
 
     [Fact]
