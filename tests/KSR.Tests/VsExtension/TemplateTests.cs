@@ -230,6 +230,29 @@ public sealed class TemplateTests
     }
 
     [Fact]
+    public void VsCodeDefaultLaunchConfig_UsesNet10OutputPath()
+    {
+        var source = File.ReadAllText(Path.Combine(RepoRoot, "vscode-extension", "src", "extension.ts"));
+
+        Assert.Contains("bin/Debug/net10.0/", source);
+        Assert.DoesNotContain("bin/Debug/net8.0/", source);
+    }
+
+    [Theory]
+    [InlineData("ksr-console", "${workspaceFolder}/bin/Debug/net10.0/${workspaceFolderBasename}.dll")]
+    [InlineData("ksr-creative", "${workspaceFolder}/bin/Debug/net10.0/MyCreativeApp.dll")]
+    [InlineData("ksr-creative-camera", "${workspaceFolder}/bin/Debug/net10.0/MyCameraApp.dll")]
+    public void TemplateLaunchConfigs_UseNet10OutputPath(string directory, string expectedProgram)
+    {
+        var path = Path.Combine(RepoRoot, "sdk", "KSR.Templates", "content", directory, ".vscode", "launch.json");
+        using var document = JsonDocument.Parse(File.ReadAllText(path));
+        var program = document.RootElement.GetProperty("configurations")[0].GetProperty("program").GetString();
+
+        Assert.Equal(expectedProgram, program);
+        Assert.DoesNotContain("net8.0", program, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void VisualStudioLanguageClient_UsesKestrelBranding()
     {
         var source = File.ReadAllText(Path.Combine(
