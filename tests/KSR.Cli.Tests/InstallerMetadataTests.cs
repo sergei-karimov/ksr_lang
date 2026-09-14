@@ -123,6 +123,20 @@ public class InstallerMetadataTests
     }
 
     [Fact]
+    public void LocalPackageVerifier_CoversCanonicalPackagesAndBothTemplateNames()
+    {
+        var verifier = File.ReadAllText(Path.Combine(RepoRoot(), "tests", "verify-kestrel-local-packages.sh"));
+
+        foreach (var package in ExpectedPackages)
+            Assert.Contains($"{package}", verifier, StringComparison.Ordinal);
+
+        Assert.Contains("kestrel-console", verifier, StringComparison.Ordinal);
+        Assert.Contains("ksr-console", verifier, StringComparison.Ordinal);
+        Assert.Contains("net10.0", verifier, StringComparison.Ordinal);
+        Assert.Contains("KSR.", verifier, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task PackedTool_RuntimeConfigTargetsNet10()
     {
         var artifactDirectory = Path.Combine(Path.GetTempPath(), "kestrel-tool-runtimeconfig-tests", Guid.NewGuid().ToString("N"));
