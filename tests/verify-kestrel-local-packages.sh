@@ -31,7 +31,7 @@ public_projects=(
 )
 
 for project in "${public_projects[@]}"; do
-  dotnet pack "$repo_root/$project" --no-restore -c Release -o "$artifact_dir" -m:1 --nologo >/dev/null
+  dotnet pack "$repo_root/$project" --no-restore -c Release -o "$artifact_dir" -m:1 --nologo
 done
 
 expected_packages=(
@@ -88,11 +88,11 @@ printf '%s\n' \
 
 (cd "$artifact_dir" && DOTNET_CLI_HOME="$cli_home" dotnet tool install \
   --tool-path "$tool_dir" Kestrel --version 0.1.0 \
-  --configfile "$config_file" --ignore-failed-sources --verbosity minimal >/dev/null)
+  --configfile "$config_file" --ignore-failed-sources --verbosity minimal)
 test -x "$tool_dir/kestrel" || test -x "$tool_dir/kestrel.exe"
 
 DOTNET_CLI_HOME="$cli_home" dotnet new install \
-  "$artifact_dir/Kestrel.Templates.0.1.0.nupkg" --force >/dev/null
+  "$artifact_dir/Kestrel.Templates.0.1.0.nupkg" --force
 
 template_specs=(
   "kestrel-console|KestrelConsoleSmoke"
@@ -109,7 +109,8 @@ for spec in "${template_specs[@]}"; do
   IFS='|' read -r template project_name <<< "$spec"
   project_dir="$smoke_root/$project_name"
 
-  DOTNET_CLI_HOME="$cli_home" dotnet new "$template" -n "$project_name" -o "$project_dir" --force >/dev/null
+  DOTNET_CLI_HOME="$cli_home" dotnet new "$template" \
+    -n "$project_name" -o "$project_dir" --force --no-update-check
   project_file="$(find "$project_dir" -maxdepth 1 -name '*.csproj' -print -quit)"
   test -n "$project_file"
   # The template carries a developer-facing nuget.config for normal projects.

@@ -135,6 +135,7 @@ public class InstallerMetadataTests
         Assert.Contains("net10.0", verifier, StringComparison.Ordinal);
         Assert.Contains("KSR.", verifier, StringComparison.Ordinal);
         Assert.DoesNotContain("nuget.org", verifier, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("--no-update-check", verifier, StringComparison.Ordinal);
     }
 
     [Fact]
