@@ -124,10 +124,6 @@ Write-Step "Building Kestrel.StdLib"
 Invoke-Cmd dotnet @('pack', (Join-Path $RepoRoot 'sdk\KSR.StdLib\KSR.StdLib.csproj'), '-c', 'Release', '-o', $ArtifactsDir, '-v', 'q', '--nologo')
 Write-Ok "Kestrel.StdLib packed"
 
-Write-Step "Building Kestrel.Vision"
-Invoke-Cmd dotnet @('pack', (Join-Path $RepoRoot 'sdk\KSR.Vision\KSR.Vision.csproj'), '-c', 'Release', '-o', $ArtifactsDir, '-v', 'q', '--nologo')
-Write-Ok "Kestrel.Vision packed"
-
 Write-Step "Building Kestrel.Creative"
 Invoke-Cmd dotnet @('pack', (Join-Path $RepoRoot 'sdk\KSR.Creative\KSR.Creative.csproj'), '-c', 'Release', '-o', $ArtifactsDir, '-v', 'q', '--nologo')
 Write-Ok "Kestrel.Creative packed"
@@ -156,7 +152,7 @@ Write-Ok "Feed '$feedName' → $ArtifactsDir"
 
 Write-Step "Installing kestrel global tool"
 # Remove all Kestrel packages from NuGet cache so fresh local builds are always used
-foreach ($pkg in @('kestrel', 'kestrel.core', 'kestrel.build', 'kestrel.sdk', 'kestrel.stdlib', 'kestrel.vision', 'kestrel.creative', 'kestrel.templates')) {
+foreach ($pkg in @('kestrel', 'kestrel.core', 'kestrel.build', 'kestrel.sdk', 'kestrel.stdlib', 'kestrel.creative', 'kestrel.templates')) {
     $cacheDir = Join-Path $env:USERPROFILE ".nuget\packages\$pkg\0.1.0"
     if (Test-Path $cacheDir) { Remove-Item -Recurse -Force $cacheDir }
 }
@@ -188,7 +184,7 @@ Write-Step "Installing dotnet new templates"
 try { & dotnet new uninstall Kestrel.Templates *>&1 | Out-Null } catch {}
 $templatePkg = Join-Path $ArtifactsDir "Kestrel.Templates.0.1.0.nupkg"
 Invoke-Cmd dotnet @('new', 'install', $templatePkg)
-Write-Ok "Kestrel templates installed  (dotnet new kestrel-console | kestrel-creative | kestrel-creative-camera; ksr-* aliases available)"
+Write-Ok "Kestrel templates installed  (dotnet new kestrel-console | kestrel-creative; ksr-* aliases available)"
 
 # ── 6. Build & install VS Code extension (optional) ─────────────────────────
 
@@ -235,7 +231,6 @@ Write-Host "    dotnet run" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "  Creative coding:" -ForegroundColor White
 Write-Host "    dotnet new kestrel-creative -n Sketch" -ForegroundColor Cyan
-Write-Host "    dotnet new kestrel-creative-camera -n CameraSketch" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "  Single-file mode:" -ForegroundColor White
 Write-Host "    kestrel hello.ksr  (or legacy alias: ksr hello.ksr)" -ForegroundColor Cyan

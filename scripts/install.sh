@@ -96,10 +96,6 @@ step "Building Kestrel.StdLib"
 dotnet pack "$REPO_ROOT/sdk/KSR.StdLib/KSR.StdLib.csproj" -c Release -o "$ARTIFACTS" -v q --nologo
 ok "Kestrel.StdLib packed"
 
-step "Building Kestrel.Vision"
-dotnet pack "$REPO_ROOT/sdk/KSR.Vision/KSR.Vision.csproj" -c Release -o "$ARTIFACTS" -v q --nologo
-ok "Kestrel.Vision packed"
-
 step "Building Kestrel.Creative"
 dotnet pack "$REPO_ROOT/sdk/KSR.Creative/KSR.Creative.csproj" -c Release -o "$ARTIFACTS" -v q --nologo
 ok "Kestrel.Creative packed"
@@ -125,7 +121,7 @@ ok "Feed '$FEED_NAME' → $ARTIFACTS"
 # ── 4. Install kestrel global tool and ksr alias ──────────────────────────────
 step "Installing kestrel global tool"
 # Remove all Kestrel packages from NuGet cache so fresh local builds are always used
-for pkg in kestrel kestrel.core kestrel.build kestrel.sdk kestrel.stdlib kestrel.vision kestrel.creative kestrel.templates; do
+for pkg in kestrel kestrel.core kestrel.build kestrel.sdk kestrel.stdlib kestrel.creative kestrel.templates; do
     rm -rf "$HOME/.nuget/packages/$pkg/0.1.0" 2>/dev/null || true
 done
 dotnet tool uninstall -g Kestrel 2>/dev/null || true
@@ -157,7 +153,7 @@ fi
 step "Installing dotnet new templates"
 dotnet new uninstall Kestrel.Templates 2>/dev/null || true
 dotnet new install "$ARTIFACTS/Kestrel.Templates.0.1.0.nupkg"
-ok "Kestrel templates installed  (dotnet new kestrel-console | kestrel-creative | kestrel-creative-camera; ksr-* aliases available)"
+ok "Kestrel templates installed  (dotnet new kestrel-console | kestrel-creative; ksr-* aliases available)"
 
 # ── 6. Build & install VS Code extension (optional) ─────────────────────────
 if [[ $SKIP_VSCODE -eq 0 ]]; then
@@ -200,7 +196,6 @@ echo -e "    ${CYAN}dotnet run${NC}"
 echo ""
 echo "  Creative coding:"
 echo -e "    ${CYAN}dotnet new kestrel-creative -n Sketch${NC}"
-echo -e "    ${CYAN}dotnet new kestrel-creative-camera -n CameraSketch${NC}"
 echo ""
 echo "  Single-file mode:"
 echo -e "    ${CYAN}kestrel hello.ksr${NC}  (or legacy alias: ksr hello.ksr)"

@@ -12,13 +12,9 @@
     <PackageId>Kestrel.Creative</PackageId>
     <Version>0.1.0</Version>
     <Authors>Kestrel Authors</Authors>
-    <Description>Kestrel creative-coding runtime: minimal Raylib window, draw loop, and VideoFrame rendering.</Description>
+    <Description>Kestrel creative-coding runtime: minimal Raylib window, draw loop, and FPS display.</Description>
     <PackageTags>kestrel;ksr;creative-coding;raylib;graphics</PackageTags>
   </PropertyGroup>
-
-  <ItemGroup>
-    <ProjectReference Include="..\KSR.Vision\KSR.Vision.csproj" />
-  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Raylib-cs" Version="7.0.2" />

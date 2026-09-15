@@ -164,7 +164,6 @@ public class DotnetTemplateTests
     [InlineData("ksr-console", "kestrel-console", "ksr-console", "Kestrel Console Application", "Kestrel.Console")]
     [InlineData("ksr-library", "kestrel-lib", "ksr-lib", "Kestrel Class Library", "Kestrel.Library")]
     [InlineData("ksr-creative", "kestrel-creative", "ksr-creative", "Kestrel Creative Application", "Kestrel.CreativeApp")]
-    [InlineData("ksr-creative-camera", "kestrel-creative-camera", "ksr-creative-camera", "Kestrel Creative Camera Application", "Kestrel.CreativeCameraApp")]
     public void ProjectTemplates_HaveExpectedMetadata(string directory, string shortName, string alias, string name, string identity)
     {
         var template = LoadTemplate(directory);
@@ -180,7 +179,6 @@ public class DotnetTemplateTests
     [InlineData("ksr-console", "MyApp.csproj")]
     [InlineData("ksr-library", "MyLibrary.csproj")]
     [InlineData("ksr-creative", "MyCreativeApp.csproj")]
-    [InlineData("ksr-creative-camera", "MyCameraApp.csproj")]
     public void ProjectTemplateContent_DefaultsToNet10ForCanonicalAndAliasNames(string directory, string projectFile)
     {
         var projectPath = Path.Combine(TemplatesRoot(), directory, projectFile);
@@ -193,6 +191,32 @@ public class DotnetTemplateTests
         Assert.Equal("net10.0", framework.GetProperty("choices")[0].GetProperty("choice").GetString());
     }
 
+    [Theory]
+    [InlineData("ksr-console", "MyApp.csproj")]
+    [InlineData("ksr-creative", "MyCreativeApp.csproj")]
+    public void ProjectTemplates_ExposeAotSymbolDefaultingToDisabled(string directory, string projectFile)
+    {
+        var template = LoadTemplate(directory).RootElement;
+        var aot = template.GetProperty("symbols").GetProperty("Aot");
+
+        Assert.Equal("bool", aot.GetProperty("datatype").GetString());
+        Assert.Equal("false", aot.GetProperty("defaultValue").GetString());
+
+        var projectPath = Path.Combine(TemplatesRoot(), directory, projectFile);
+        var projectSource = File.ReadAllText(projectPath);
+        Assert.Contains("<!--#if (Aot) -->", projectSource, StringComparison.Ordinal);
+        Assert.Contains("<PublishAot>true</PublishAot>", projectSource, StringComparison.Ordinal);
+        Assert.Contains("<!--#endif -->", projectSource, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ProjectTemplates_LibraryHasNoAotSymbol()
+    {
+        var template = LoadTemplate("ksr-library").RootElement;
+
+        Assert.False(template.GetProperty("symbols").TryGetProperty("Aot", out _));
+    }
+
     [Fact]
     public void PublicPackageMetadata_UsesKestrelNamesAndKeepsInternalAssemblies()
     {
@@ -203,7 +227,6 @@ public class DotnetTemplateTests
             ["sdk/KSR.Build/KSR.Build.csproj"] = "Kestrel.Build",
             ["sdk/KSR.Sdk/KSR.Sdk.csproj"] = "Kestrel.Sdk",
             ["sdk/KSR.StdLib/KSR.StdLib.csproj"] = "Kestrel.StdLib",
-            ["sdk/KSR.Vision/KSR.Vision.csproj"] = "Kestrel.Vision",
             ["sdk/KSR.Creative/KSR.Creative.csproj"] = "Kestrel.Creative",
             ["sdk/KSR.Templates/KSR.Templates.csproj"] = "Kestrel.Templates"
         };
@@ -225,7 +248,7 @@ public class DotnetTemplateTests
     }
 
     [Fact]
-    public void ProjectTargetMatrix_UsesNet10ForOrdinaryProjectsAndNet472ForVisualStudioProjects()
+    public void ProjectTargetMatrix_UsesNet10ForAllProjects()
     {
         var ordinaryProjects = new[]
         {
@@ -234,7 +257,6 @@ public class DotnetTemplateTests
             "sdk/KSR.Build/KSR.Build.csproj",
             "sdk/KSR.Sdk/KSR.Sdk.csproj",
             "sdk/KSR.StdLib/KSR.StdLib.csproj",
-            "sdk/KSR.Vision/KSR.Vision.csproj",
             "sdk/KSR.Creative/KSR.Creative.csproj",
             "sdk/KSR.Templates/KSR.Templates.csproj",
             "tests/KSR.Tests/KSR.Tests.csproj",
@@ -243,9 +265,6 @@ public class DotnetTemplateTests
 
         foreach (var relativePath in ordinaryProjects)
             AssertProjectTargetFramework(relativePath, "net10.0");
-
-        AssertProjectTargetFramework("vs-extension/KSR.VisualStudio/KSR.VisualStudio.csproj", "net472");
-        AssertProjectTargetFramework("tests/KSR.VsExtension.Tests/KSR.VsExtension.Tests.csproj", "net472");
     }
 
     [Fact]
@@ -288,8 +307,6 @@ public class DotnetTemplateTests
 
     [Theory]
     [InlineData("ksr-creative", "MyCreativeApp.csproj", "Kestrel.Creative")]
-    [InlineData("ksr-creative-camera", "MyCameraApp.csproj", "Kestrel.Creative")]
-    [InlineData("ksr-creative-camera", "MyCameraApp.csproj", "Kestrel.Vision")]
     public void CreativeTemplates_ReferenceRuntimePackages(string directory, string projectFile, string packageName)
     {
         var projectPath = Path.Combine(TemplatesRoot(), directory, projectFile);
@@ -300,7 +317,6 @@ public class DotnetTemplateTests
 
     [Theory]
     [InlineData("ksr-creative")]
-    [InlineData("ksr-creative-camera")]
     public void CreativeTemplates_IncludeProgramAndEditorFiles(string directory)
     {
         var root = Path.Combine(TemplatesRoot(), directory);
@@ -314,7 +330,6 @@ public class DotnetTemplateTests
     [Theory]
     [InlineData("ksr-console")]
     [InlineData("ksr-creative")]
-    [InlineData("ksr-creative-camera")]
     public void ProjectTemplates_IncludeValidNuGetConfig(string directory)
     {
         var path = Path.Combine(TemplatesRoot(), directory, "nuget.config");

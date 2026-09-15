@@ -41,9 +41,6 @@ public static class draw
     public static void Clear(Raylib_cs.Color color) =>
         Creative.Draw.Clear(color);
 
-    public static void Image(KSR.Vision.VideoFrame frame, int x, int y) =>
-        Creative.Draw.Image(frame, x, y);
-
     public static void Fps(int x, int y) =>
         Creative.Draw.Fps(x, y);
 }

@@ -98,9 +98,8 @@ static void RunSingleFile(
     // Ensure KSR.StdLib assembly is loaded into the AppDomain so that Roslyn
     // (strategy 3 in ResolveReferences) can find it when compiling ksr.io / ksr.text.
     _ = typeof(KSR.Io.IO).Assembly;
-    // Same for the creative-coding MVP libraries used by examples/camera_demo.ksr.
+    // Same for the creative-coding MVP library used by the kestrel-creative template.
     _ = typeof(KSR.Creative.CreativeApp).Assembly;
-    _ = typeof(KSR.Vision.Camera).Assembly;
 
     var source = File.ReadAllText(path);
     var fullPath = Path.GetFullPath(path);

@@ -24,7 +24,6 @@ public_projects=(
   "sdk/KSR.Build/KSR.Build.csproj"
   "sdk/KSR.Sdk/KSR.Sdk.csproj"
   "sdk/KSR.StdLib/KSR.StdLib.csproj"
-  "sdk/KSR.Vision/KSR.Vision.csproj"
   "sdk/KSR.Creative/KSR.Creative.csproj"
   "sdk/KSR.Templates/KSR.Templates.csproj"
   "KSR.csproj"
@@ -42,22 +41,18 @@ expected_packages=(
   "Kestrel.Sdk.0.1.0.nupkg"
   "Kestrel.StdLib.0.1.0.nupkg"
   "Kestrel.Templates.0.1.0.nupkg"
-  "Kestrel.Vision.0.1.0.nupkg"
 )
 
 for package in "${expected_packages[@]}"; do
   test -f "$artifact_dir/$package"
 done
 
-# Creative and camera packages intentionally keep their upstream runtime
-# dependencies. Copy the exact already-restored nupkgs into this temporary
-# feed so the matrix remains completely offline and reproducible on the host.
+# Creative package intentionally keeps its upstream runtime dependency.
+# Copy the exact already-restored nupkg into this temporary feed so the
+# matrix remains completely offline and reproducible on the host.
 nuget_cache="${NUGET_PACKAGES_SOURCE:-$HOME/.nuget/packages}"
 third_party_packages=(
   "raylib-cs/7.0.2/raylib-cs.7.0.2.nupkg"
-  "opencvsharp4/4.13.0.20260302/opencvsharp4.4.13.0.20260302.nupkg"
-  "opencvsharp4.runtime.win/4.13.0.20260302/opencvsharp4.runtime.win.4.13.0.20260302.nupkg"
-  "system.memory/4.6.3/system.memory.4.6.3.nupkg"
 )
 
 for package in "${third_party_packages[@]}"; do
@@ -101,8 +96,6 @@ template_specs=(
   "ksr-lib|KsrLibrarySmoke"
   "kestrel-creative|KestrelCreativeSmoke"
   "ksr-creative|KsrCreativeSmoke"
-  "kestrel-creative-camera|KestrelCameraSmoke"
-  "ksr-creative-camera|KsrCameraSmoke"
 )
 
 for spec in "${template_specs[@]}"; do

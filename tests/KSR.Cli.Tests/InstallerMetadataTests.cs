@@ -284,8 +284,6 @@ public class InstallerMetadataTests
     [InlineData("ksr-lib", "KsrAliasLibrary")]
     [InlineData("kestrel-creative", "KestrelCreativeApp")]
     [InlineData("ksr-creative", "KsrAliasCreativeApp")]
-    [InlineData("kestrel-creative-camera", "KestrelCameraApp")]
-    [InlineData("ksr-creative-camera", "KsrAliasCameraApp")]
     public async Task TemplateAliases_GenerateProjectsWithCanonicalPackageReferences(string template, string projectName)
     {
         var temporaryDirectory = Path.Combine(Path.GetTempPath(), "kestrel-template-tests", Guid.NewGuid().ToString("N"));
@@ -317,6 +315,53 @@ public class InstallerMetadataTests
                 packageId => packageId.StartsWith("KSR.", StringComparison.Ordinal));
             Assert.All(project.Descendants("PackageReference"), reference =>
                 Assert.StartsWith("Kestrel.", reference.Attribute("Include")?.Value));
+        }
+        finally
+        {
+            Directory.Delete(temporaryDirectory, recursive: true);
+        }
+    }
+
+    [Theory]
+    [InlineData("kestrel-console", "KestrelAotSmokeApp")]
+    [InlineData("kestrel-creative", "KestrelAotCreativeApp")]
+    public async Task TemplateAliases_SupportAotPublishSwitch(string template, string projectName)
+    {
+        var temporaryDirectory = Path.Combine(Path.GetTempPath(), "kestrel-template-aot-tests", Guid.NewGuid().ToString("N"));
+        var cliHome = Path.Combine(temporaryDirectory, "cli");
+        var defaultDirectory = Path.Combine(temporaryDirectory, projectName + "Default");
+        var aotDirectory = Path.Combine(temporaryDirectory, projectName + "Aot");
+        Directory.CreateDirectory(temporaryDirectory);
+
+        try
+        {
+            var environment = new Dictionary<string, string?>
+            {
+                ["DOTNET_CLI_HOME"] = cliHome,
+                ["HOME"] = Path.Combine(temporaryDirectory, "home")
+            };
+            var templatePackage = Path.Combine(RepoRoot(), "artifacts", "Kestrel.Templates.0.1.0.nupkg");
+            Assert.True(File.Exists(templatePackage), "Kestrel templates package must be packed before template validation.");
+
+            var install = await RunProcessAsync("dotnet", ["new", "install", templatePackage], RepoRoot(), environment);
+            Assert.Equal(0, install.ExitCode);
+
+            var createDefault = await RunProcessAsync(
+                "dotnet", ["new", template, "-n", projectName, "-o", defaultDirectory], RepoRoot(), environment);
+            Assert.Equal(0, createDefault.ExitCode);
+
+            var createAot = await RunProcessAsync(
+                "dotnet", ["new", template, "-n", projectName, "-o", aotDirectory, "--Aot"], RepoRoot(), environment);
+            Assert.Equal(0, createAot.ExitCode);
+
+            var defaultProjectFile = Assert.Single(Directory.GetFiles(defaultDirectory, "*.csproj"));
+            var defaultProject = File.ReadAllText(defaultProjectFile);
+            Assert.DoesNotContain("PublishAot", defaultProject, StringComparison.Ordinal);
+
+            var aotProjectFile = Assert.Single(Directory.GetFiles(aotDirectory, "*.csproj"));
+            var aotProject = XDocument.Load(aotProjectFile);
+            Assert.Equal("true", aotProject.Descendants("PublishAot").Single().Value);
+            Assert.Equal("net10.0", aotProject.Descendants("TargetFramework").Single().Value);
         }
         finally
         {
@@ -402,7 +447,6 @@ public class InstallerMetadataTests
         "sdk/KSR.Build/KSR.Build.csproj",
         "sdk/KSR.Sdk/KSR.Sdk.csproj",
         "sdk/KSR.StdLib/KSR.StdLib.csproj",
-        "sdk/KSR.Vision/KSR.Vision.csproj",
         "sdk/KSR.Creative/KSR.Creative.csproj",
         "sdk/KSR.Templates/KSR.Templates.csproj",
         "KSR.csproj"
@@ -416,8 +460,7 @@ public class InstallerMetadataTests
         "Kestrel.Creative.0.1.0.nupkg",
         "Kestrel.Sdk.0.1.0.nupkg",
         "Kestrel.StdLib.0.1.0.nupkg",
-        "Kestrel.Templates.0.1.0.nupkg",
-        "Kestrel.Vision.0.1.0.nupkg"
+        "Kestrel.Templates.0.1.0.nupkg"
     ];
 
     private static async Task<(int ExitCode, string Output)> RunDotnetAsync(params string[] arguments)

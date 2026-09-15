@@ -11,7 +11,6 @@ public class ExampleCompatibilityTests
     private static readonly Dictionary<string, string[]> ExpectedDiagnostics = new()
     {
         ["async_demo.ksr"] = [],
-        ["camera_demo.ksr"] = [],
         ["generic_interfaces.ksr"] = [],
         ["hello.ksr"] = [],
         ["lifecycle_demo.ksr"] = [],

@@ -49,7 +49,6 @@
     <Compile Remove="Semantic\**\*.cs" />
     <!-- sdk/ and all obj/ sub-dirs are built separately; exclude them entirely -->
     <Compile Remove="sdk\**\*.cs" />
-    <Compile Remove="vs-extension\**\*.cs" />
     <Compile Remove="vscode-extension\**\*.cs" />
     <Compile Remove="obj\**\*.cs" />
     <Compile Remove="tests\**\*.cs" />
