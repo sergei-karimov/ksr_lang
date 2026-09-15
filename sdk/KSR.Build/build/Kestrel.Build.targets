@@ -10,12 +10,12 @@
   <!--
     AssemblyFile points to the task DLL inside the NuGet package cache.
     $(MSBuildThisFileDirectory) resolves to the build\ folder in the package,
-    so build\net8.0\KSR.Build.dll is the compiled task assembly. The assembly
+    so build\$(KsrBuildTargetFramework)\KSR.Build.dll is the compiled task assembly. The assembly
     name remains internal for source compatibility.
   -->
   <UsingTask
     TaskName="KSR.Build.KsrCompileTask"
-    AssemblyFile="$(MSBuildThisFileDirectory)net8.0\KSR.Build.dll" />
+    AssemblyFile="$(MSBuildThisFileDirectory)$(KsrBuildTargetFramework)\KSR.Build.dll" />
 
   <!-- ── Main compile target ───────────────────────────────────────────────── -->
 

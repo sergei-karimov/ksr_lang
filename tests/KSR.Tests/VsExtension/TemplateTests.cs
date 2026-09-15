@@ -105,6 +105,14 @@ public sealed class TemplateTests
         Assert.DoesNotContain("Project Sdk=\"KSR.Sdk/", project);
     }
 
+    [Fact]
+    public void ProjectTemplate_TargetsNet10()
+    {
+        var project = XDocument.Load(Path.Combine(ProjectTemplateDir, "$projectname$.csproj"));
+
+        Assert.Equal("net10.0", project.Descendants("TargetFramework").Single().Value);
+    }
+
     // ─── Item template ──────────────────────────────────────────────────────
 
     [Fact]
@@ -200,6 +208,10 @@ public sealed class TemplateTests
         Assert.Equal("Kestrel", debugger.GetProperty("label").GetString());
         Assert.Equal("Kestrel: Launch", debugger.GetProperty("configurationSnippets")[0].GetProperty("label").GetString());
         Assert.Equal("ksr", debugger.GetProperty("type").GetString());
+        var program = debugger.GetProperty("configurationSnippets")[0]
+            .GetProperty("body").GetProperty("program").GetString();
+        Assert.Contains("bin/Debug/net10.0/", program);
+        Assert.DoesNotContain("bin/Debug/net8.0/", program);
     }
 
     [Fact]
@@ -215,6 +227,29 @@ public sealed class TemplateTests
         var legacyIndex = source.IndexOf("findOnPath('ksr'", StringComparison.Ordinal);
         Assert.True(canonicalIndex >= 0);
         Assert.True(legacyIndex > canonicalIndex);
+    }
+
+    [Fact]
+    public void VsCodeDefaultLaunchConfig_UsesNet10OutputPath()
+    {
+        var source = File.ReadAllText(Path.Combine(RepoRoot, "vscode-extension", "src", "extension.ts"));
+
+        Assert.Contains("bin/Debug/net10.0/", source);
+        Assert.DoesNotContain("bin/Debug/net8.0/", source);
+    }
+
+    [Theory]
+    [InlineData("ksr-console", "${workspaceFolder}/bin/Debug/net10.0/${workspaceFolderBasename}.dll")]
+    [InlineData("ksr-creative", "${workspaceFolder}/bin/Debug/net10.0/MyCreativeApp.dll")]
+    [InlineData("ksr-creative-camera", "${workspaceFolder}/bin/Debug/net10.0/MyCameraApp.dll")]
+    public void TemplateLaunchConfigs_UseNet10OutputPath(string directory, string expectedProgram)
+    {
+        var path = Path.Combine(RepoRoot, "sdk", "KSR.Templates", "content", directory, ".vscode", "launch.json");
+        using var document = JsonDocument.Parse(File.ReadAllText(path));
+        var program = document.RootElement.GetProperty("configurations")[0].GetProperty("program").GetString();
+
+        Assert.Equal(expectedProgram, program);
+        Assert.DoesNotContain("net8.0", program, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -176,6 +176,23 @@ public class DotnetTemplateTests
         Assert.Equal("project", template.RootElement.GetProperty("tags").GetProperty("type").GetString());
     }
 
+    [Theory]
+    [InlineData("ksr-console", "MyApp.csproj")]
+    [InlineData("ksr-library", "MyLibrary.csproj")]
+    [InlineData("ksr-creative", "MyCreativeApp.csproj")]
+    [InlineData("ksr-creative-camera", "MyCameraApp.csproj")]
+    public void ProjectTemplateContent_DefaultsToNet10ForCanonicalAndAliasNames(string directory, string projectFile)
+    {
+        var projectPath = Path.Combine(TemplatesRoot(), directory, projectFile);
+        var project = XDocument.Load(projectPath);
+        var template = LoadTemplate(directory).RootElement;
+
+        Assert.Equal("net10.0", project.Descendants("TargetFramework").Single().Value);
+        var framework = template.GetProperty("symbols").GetProperty("Framework");
+        Assert.Equal("net10.0", framework.GetProperty("defaultValue").GetString());
+        Assert.Equal("net10.0", framework.GetProperty("choices")[0].GetProperty("choice").GetString());
+    }
+
     [Fact]
     public void PublicPackageMetadata_UsesKestrelNamesAndKeepsInternalAssemblies()
     {
@@ -205,6 +222,38 @@ public class DotnetTemplateTests
         var core = File.ReadAllText(Path.Combine(RepoRoot(), "KSR.Core.csproj"));
         Assert.Contains("<AssemblyName>KSR.Core</AssemblyName>", core);
         Assert.Contains("<RootNamespace>KSR</RootNamespace>", core);
+    }
+
+    [Fact]
+    public void ProjectTargetMatrix_UsesNet10ForOrdinaryProjectsAndNet472ForVisualStudioProjects()
+    {
+        var ordinaryProjects = new[]
+        {
+            "KSR.csproj",
+            "KSR.Core.csproj",
+            "sdk/KSR.Build/KSR.Build.csproj",
+            "sdk/KSR.Sdk/KSR.Sdk.csproj",
+            "sdk/KSR.StdLib/KSR.StdLib.csproj",
+            "sdk/KSR.Vision/KSR.Vision.csproj",
+            "sdk/KSR.Creative/KSR.Creative.csproj",
+            "sdk/KSR.Templates/KSR.Templates.csproj",
+            "tests/KSR.Tests/KSR.Tests.csproj",
+            "tests/KSR.Cli.Tests/KSR.Cli.Tests.csproj"
+        };
+
+        foreach (var relativePath in ordinaryProjects)
+            AssertProjectTargetFramework(relativePath, "net10.0");
+
+        AssertProjectTargetFramework("vs-extension/KSR.VisualStudio/KSR.VisualStudio.csproj", "net472");
+        AssertProjectTargetFramework("tests/KSR.VsExtension.Tests/KSR.VsExtension.Tests.csproj", "net472");
+    }
+
+    [Fact]
+    public void KestrelSdk_DefaultTargetFrameworkIsNet10()
+    {
+        var sdkProps = File.ReadAllText(Path.Combine(RepoRoot(), "sdk/KSR.Sdk/Sdk/Sdk.props"));
+
+        Assert.Contains("<TargetFramework Condition=\"'$(TargetFramework)' == ''\">net10.0</TargetFramework>", sdkProps);
     }
 
     [Fact]
@@ -308,6 +357,15 @@ public class DotnetTemplateTests
         }
 
         throw new DirectoryNotFoundException("Could not locate KSR.sln.");
+    }
+
+    private static void AssertProjectTargetFramework(string relativePath, string expectedTargetFramework)
+    {
+        var project = XDocument.Load(Path.Combine(RepoRoot(), relativePath));
+        var targetFramework = project.Descendants("TargetFramework").SingleOrDefault()?.Value
+            ?? project.Descendants("TargetFrameworks").SingleOrDefault()?.Value;
+
+        Assert.Equal(expectedTargetFramework, targetFramework);
     }
 
     private sealed class RecordingBuildEngine : IBuildEngine

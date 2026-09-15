@@ -98,8 +98,8 @@ if (-not $dotnetVersion) {
 }
 
 $major = [int]($dotnetVersion -split '\.')[0]
-if ($major -lt 8) {
-    Write-Fail ".NET 8 or later is required (found $dotnetVersion). Install from https://dotnet.microsoft.com/download"
+if ($major -lt 10) {
+    Write-Fail ".NET 10 or later is required (found $dotnetVersion). Install from https://dotnet.microsoft.com/download"
 }
 Write-Ok ".NET $dotnetVersion"
 

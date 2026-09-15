@@ -24,11 +24,10 @@ Kestrel sits in the middle: **Kotlin-style syntax, .NET runtime, zero JVM overhe
 
 ### Prerequisites
 
-- [.NET 8 SDK](https://dotnet.microsoft.com/download) and the .NET 8 runtime
+- [.NET 10 SDK](https://dotnet.microsoft.com/download) and the .NET 10 runtime
 
-Kestrel packages and generated projects target `net8.0`. A newer SDK can build the
-repository, but it does not install the .NET 8 runtime automatically; install that
-runtime as well to run Kestrel, generated projects, and the `net8.0` test targets.
+Kestrel packages and generated projects target `net10.0`. Install the .NET 10
+runtime as well to run Kestrel, generated projects, and the ordinary test suites.
 
 ### Install
 
@@ -883,7 +882,7 @@ A Kestrel project is a standard `.csproj` using the Kestrel SDK:
 <Project Sdk="Kestrel.Sdk/0.1.0">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
   </PropertyGroup>
 </Project>
 ```
@@ -1003,7 +1002,7 @@ Kestrel projects support full breakpoint debugging in VS Code via the C# extensi
     "type": "coreclr",
     "request": "launch",
     "preLaunchTask": "build",
-    "program": "${workspaceFolder}/bin/Debug/net8.0/${workspaceFolderBasename}.dll",
+    "program": "${workspaceFolder}/bin/Debug/net10.0/${workspaceFolderBasename}.dll",
     "requireExactSource": false
 }
 ```

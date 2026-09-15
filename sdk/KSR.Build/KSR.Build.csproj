@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
@@ -16,7 +16,7 @@
     <PackageTags>kestrel;ksr;language;msbuild;task</PackageTags>
 
     <!--
-      Place the DLL in build/net8.0/ so MSBuild can load the task.
+      Place the DLL in build/net10.0/ so MSBuild can load the task.
       "lib/" would make it a compile reference, which we do NOT want.
     -->
     <BuildOutputTargetFolder>build</BuildOutputTargetFolder>
@@ -57,7 +57,7 @@
   </ItemGroup>
 
   <!--
-    Bundle KSR.Core.dll alongside KSR.Build.dll in build/net8.0/ so the
+    Bundle KSR.Core.dll alongside KSR.Build.dll in build/net10.0/ so the
     MSBuild task can load it at runtime without any extra setup in the
     user's project.
   -->
@@ -65,7 +65,7 @@
     <ItemGroup>
       <None Include="$(OutputPath)KSR.Core.dll"
             Pack="true"
-            PackagePath="build/net8.0/KSR.Core.dll"
+            PackagePath="build/net10.0/KSR.Core.dll"
             Visible="false" />
     </ItemGroup>
   </Target>

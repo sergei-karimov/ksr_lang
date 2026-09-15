@@ -72,8 +72,8 @@ fi
 
 DOTNET_VERSION=$(dotnet --version)
 MAJOR="${DOTNET_VERSION%%.*}"
-if [[ $MAJOR -lt 8 ]]; then
-    fail ".NET 8 or later is required (found $DOTNET_VERSION). Install from https://dotnet.microsoft.com/download"
+if [[ $MAJOR -lt 10 ]]; then
+    fail ".NET 10 or later is required (found $DOTNET_VERSION). Install from https://dotnet.microsoft.com/download"
 fi
 ok ".NET $DOTNET_VERSION"
 
