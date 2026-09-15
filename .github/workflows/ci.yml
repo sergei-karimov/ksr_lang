@@ -28,12 +28,16 @@ jobs:
       - name: Restore
         run: dotnet restore KSR.sln
 
+      # Debug (the default dotnet build/test configuration) — KSR.Cli.Tests
+      # shells out to `dotnet run --project KSR.csproj --no-build` (no -c, so
+      # it always resolves the Debug output), so a Debug build must exist.
       - name: Build
-        run: dotnet build KSR.sln -c Release --no-restore
+        run: dotnet build KSR.sln --no-restore
 
       # tests/KSR.Cli.Tests expects artifacts/Kestrel.Templates.0.1.0.nupkg (and the
       # packages it depends on) to already exist — mirrors the pack step in
-      # scripts/install.sh / scripts/install.ps1.
+      # scripts/install.sh / scripts/install.ps1. Packing is independent of the
+      # Debug build above and uses Release, matching the install scripts.
       - name: Pack public packages
         shell: bash
         run: |
@@ -46,11 +50,11 @@ jobs:
             sdk/KSR.Creative/KSR.Creative.csproj \
             sdk/KSR.Templates/KSR.Templates.csproj \
             KSR.csproj; do
-            dotnet pack "$project" -c Release -o artifacts --no-restore --nologo
+            dotnet pack "$project" -c Release -o artifacts --nologo
           done
 
       - name: Test KSR.Tests
-        run: dotnet test tests/KSR.Tests/KSR.Tests.csproj -c Release --no-build --nologo
+        run: dotnet test tests/KSR.Tests/KSR.Tests.csproj --no-build --nologo
 
       - name: Test KSR.Cli.Tests
-        run: dotnet test tests/KSR.Cli.Tests/KSR.Cli.Tests.csproj -c Release --no-build --nologo
+        run: dotnet test tests/KSR.Cli.Tests/KSR.Cli.Tests.csproj --no-build --nologo
