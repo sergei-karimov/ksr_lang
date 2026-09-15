@@ -372,6 +372,12 @@ public class InstallerMetadataTests
     [Fact]
     public async Task UnixInstaller_AliasLifecycleIsIdempotentAndDelegatesToKestrel()
     {
+        // This behavioral check is Unix-only; Windows coverage remains source-level above
+        // (WindowsInstaller_InstallsCanonicalArtifactsAndManagesKsrAliases). scripts/install.sh's
+        // path handling assumes a POSIX shell and doesn't behave correctly under Git Bash on Windows.
+        if (OperatingSystem.IsWindows())
+            return;
+
         var temporaryDirectory = Path.Combine(Path.GetTempPath(), "kestrel-installer-tests", Guid.NewGuid().ToString("N"));
         var fakeBin = Path.Combine(temporaryDirectory, "bin");
         var cliHome = Path.Combine(temporaryDirectory, "cli");
