@@ -1,5 +1,7 @@
 # Kestrel
 
+[![CI](https://github.com/sergei-karimov/ksr_lang/actions/workflows/ci.yml/badge.svg)](https://github.com/sergei-karimov/ksr_lang/actions/workflows/ci.yml)
+
 **Kestrel** is a statically-typed, Kotlin-inspired language that compiles to C# and runs on the .NET runtime.
 It is designed to feel like Kotlin — concise, expressive, null-safe — while giving you full access to the entire .NET and NuGet ecosystem out of the box.
 
