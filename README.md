@@ -830,6 +830,12 @@ dotnet publish -r <RID> -c Release
 
 **Single-file mode is the one exception.** `kestrel file.ksr` compiles and runs the file in memory via Roslyn (see [CodeGen/Compiler.cs](CodeGen/Compiler.cs)) — a convenient script runner, but inherently JIT-based and not AOT-publishable. For a native binary, use project mode.
 
+### WebAssembly (investigated, not yet usable)
+
+The same project-mode pipeline that makes Native AOT work out of the box was tried against .NET's WASI target (`dotnet publish -r wasi-wasm`, via the `wasi-experimental` SDK workload) — no Kestrel-side changes were needed to *build*: the Kestrel-generated C# compiles, links against `wasi-sdk`, and produces a valid `dotnet.wasm` component.
+
+It doesn't run yet, though — under `wasmtime` (the reference WASI runtime) the resulting binary crashes on startup inside the Mono runtime's own initialization (`mono_jit_parse_options` aborts with a wasm `unreachable` trap) before any Kestrel- or even user-generated code executes. A control test with a plain, hand-written `dotnet new console` project targeting the same `wasi-wasm` RID hits the **identical** crash, confirming this is a current incompatibility between .NET 10's experimental WASI workload and `wasmtime`, not anything specific to Kestrel. Revisit once that upstream combination stabilizes — no action needed on the Kestrel side when it does.
+
 ### Project file
 
 A Kestrel project is a standard `.csproj` using the Kestrel SDK:
@@ -1057,6 +1063,7 @@ This works in both single-file mode (`kestrel file.ksr`) and full project mode (
 - [x] Raw / multiline strings — `"""..."""` with no escape processing; `${...}` templates still work
 - [x] Breakpoint debugging — F5 in VS Code hits breakpoints in `.ksr` files via `#line` PDB source mapping (requires C# extension)
 - [x] Native AOT — `dotnet new kestrel-console --Aot` + `dotnet publish -r <RID>` produces a self-contained native executable
+- [ ] WebAssembly (WASI) target — builds cleanly today, but crashes at Mono runtime startup under `wasmtime`; blocked on the upstream `wasi-experimental` workload / wasmtime pairing, not on Kestrel (see "WebAssembly" above)
 
 ---
 
